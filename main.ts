@@ -94,6 +94,69 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// TEST Command: Access obsidian-tasks getTasks()
+		this.addCommand({
+			id: 'test-obsidian-tasks-access',
+			name: '[TEST] Access obsidian-tasks cache',
+			callback: () => {
+				console.log('=== Testing obsidian-tasks access ===');
+
+				// Try to access obsidian-tasks plugin
+				const tasksPlugin = (this.app as any).plugins.plugins['obsidian-tasks-plugin'];
+
+				if (!tasksPlugin) {
+					new Notice('❌ obsidian-tasks plugin not found');
+					console.error('obsidian-tasks plugin not available');
+					return;
+				}
+
+				console.log('✅ obsidian-tasks plugin found:', tasksPlugin);
+
+				// Check if getTasks method exists
+				if (typeof tasksPlugin.getTasks !== 'function') {
+					new Notice('❌ getTasks() method not found on plugin');
+					console.error('getTasks method not available. Available methods:', Object.keys(tasksPlugin));
+					return;
+				}
+
+				console.log('✅ getTasks() method exists');
+
+				// Try to get tasks
+				try {
+					const allTasks = tasksPlugin.getTasks();
+					console.log('✅ getTasks() returned:', allTasks);
+					console.log('Total tasks found:', allTasks.length);
+
+					if (allTasks.length === 0) {
+						new Notice('✅ getTasks() works but no tasks found');
+						return;
+					}
+
+					// Log first task details
+					const firstTask = allTasks[0];
+					console.log('First task sample:', {
+						description: firstTask.description,
+						status: firstTask.status,
+						isDone: firstTask.isDone,
+						priority: firstTask.priority,
+						tags: firstTask.tags,
+						path: firstTask.taskLocation?.path,
+						lineNumber: firstTask.taskLocation?.lineNumber,
+						originalMarkdown: firstTask.originalMarkdown,
+						dueDate: firstTask.dueDate,
+						scheduledDate: firstTask.scheduledDate,
+						availableProperties: Object.keys(firstTask)
+					});
+
+					new Notice(`✅ Found ${allTasks.length} tasks! Check console for details.`);
+
+				} catch (error) {
+					new Notice('❌ Error calling getTasks()');
+					console.error('Error accessing getTasks():', error);
+				}
+			}
+		});
+
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
