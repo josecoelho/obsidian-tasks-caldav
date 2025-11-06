@@ -3,9 +3,9 @@
 **Date:** 2025-11-06
 **Source:** https://github.com/obsidian-tasks-group/obsidian-tasks
 
-## API v1 Interface
+## API v1 Interface (Public)
 
-The obsidian-tasks plugin exposes a minimal API via `apiV1`:
+The obsidian-tasks plugin exposes a minimal public API via `apiV1`:
 
 ```typescript
 interface TasksApiV1 {
@@ -33,70 +33,195 @@ interface TasksApiV1 {
    - Returns updated line (may be two lines for recurring tasks)
    - Requires the file path
 
-### Accessing the API
+## Internal Cache Access (Undocumented but Available)
+
+**IMPORTANT:** obsidian-tasks maintains an internal cache of ALL parsed tasks!
+
+### Accessing the Task Cache
 
 ```typescript
 const tasksPlugin = app.plugins.plugins['obsidian-tasks-plugin'];
-const api = tasksPlugin?.apiV1;
 
-if (api) {
-    // API is available
-    const newTask = await api.createTaskLineModal();
+// Check if plugin is loaded and has cache
+if (tasksPlugin && typeof tasksPlugin.getTasks === 'function') {
+    const allTasks: Task[] = tasksPlugin.getTasks();
+    // Now we have all tasks parsed by obsidian-tasks!
 }
 ```
 
-## Key Finding: No Search/Query API
+### Task Object Structure
 
-**Important:** The obsidian-tasks API does **NOT** expose any search or query functionality programmatically.
+Each Task object has these properties:
 
-### What This Means for Our Plugin
+```typescript
+interface Task {
+    // Core properties
+    status: Status;              // Task status (respects custom statuses)
+    description: string;         // Task text
+    tags: string[];             // Hashtags
+    priority: Priority;         // Priority (respects emoji config)
 
-Our original design assumed we could use `apiV1.search()` or similar to query tasks matching a sync query. This is **not possible**.
+    // Dates (using Moment.js)
+    createdDate: Moment | null;
+    startDate: Moment | null;
+    scheduledDate: Moment | null;
+    dueDate: Moment | null;
+    doneDate: Moment | null;
+    cancelledDate: Moment | null;
 
-### Alternative Approaches
+    // Recurrence & dependencies
+    recurrence: Recurrence | null;
+    onCompletion: OnCompletion;
+    dependsOn: string[];
+    id: string;
 
-1. **Direct Markdown Parsing** (Recommended)
-   - Parse markdown files ourselves to find tasks
-   - Use regex to match task format: `- [ ] Task text`
-   - Implement our own filtering based on sync query
-   - Pros: Full control, no dependency on obsidian-tasks being installed
-   - Cons: Need to implement task parsing ourselves
+    // Location in vault
+    taskLocation: TaskLocation;  // { path: string, lineNumber: number }
+    originalMarkdown: string;    // Full markdown line
 
-2. **Use obsidian-tasks Data** (If Available)
-   - Look for internal data structures in obsidian-tasks plugin
-   - Access cached task data if exposed
-   - Pros: Leverage their parsing work
-   - Cons: Relies on internal implementation details, may break
+    // Formatting
+    indentation: string;
+    listMarker: string;
+    blockLink: string;
+    heading: string | null;      // Preceding header
 
-3. **Hybrid Approach**
-   - Use obsidian-tasks modals for UI (createTaskLineModal, editTaskLineModal)
-   - Parse markdown ourselves for searching/syncing
-   - Pros: Best UX + reliability
-   - Cons: More implementation work
+    // Computed
+    isDone: boolean;
+    isRecurring: boolean;
+    urgency: number;
+    happens: TasksDate;          // Earliest relevant date
+}
+```
 
-## Recommendation
+## Why This Matters
 
-**Use Direct Markdown Parsing**
+**Using `getTasks()` respects obsidian-tasks configuration:**
+- ✅ Custom task statuses (not just `[ ]` and `[x]`)
+- ✅ Custom emoji priorities
+- ✅ Custom date formats
+- ✅ Recurrence rules
+- ✅ Task dependencies
+- ✅ All other obsidian-tasks extensions
 
-For our CalDAV sync plugin:
-- Parse markdown files in vault to find tasks
-- Implement task matching logic ourselves
-- Use obsidian-tasks API only for:
-  - Creating tasks via UI (optional, nice-to-have)
-  - Editing tasks via UI (optional, nice-to-have)
-  - Toggling task completion (if we want to respect recurring task logic)
+**If we parsed markdown ourselves, we would:**
+- ❌ Only support basic `- [ ]` format
+- ❌ Miss custom statuses
+- ❌ Not understand priority emojis
+- ❌ Not parse dates correctly
+- ❌ Duplicate their parsing work
 
-This approach:
-- Works whether obsidian-tasks is installed or not
-- Gives us full control over sync logic
-- More reliable long-term
+## Recommended Approach for CalDAV Sync
 
-## Implementation Impact
+### Option 1: Require obsidian-tasks (Recommended)
 
-Need to create a `TaskParser` class that:
-- Scans vault files for tasks
-- Matches task format: `- [ ] Task text`
-- Extracts task properties (description, status, dates, tags, priority)
-- Filters tasks based on sync query (initially simple, can enhance later)
+Make obsidian-tasks a **required dependency**:
 
-This replaces the original `TaskManager` that was going to use obsidian-tasks API for querying.
+```typescript
+async onload() {
+    // Check if obsidian-tasks is installed
+    const tasksPlugin = this.app.plugins.plugins['obsidian-tasks-plugin'];
+    if (!tasksPlugin) {
+        new Notice('CalDAV Sync requires the obsidian-tasks plugin to be installed');
+        return;
+    }
+
+    // Use their cache
+    const allTasks = tasksPlugin.getTasks();
+    const tasksToSync = this.filterTasksForSync(allTasks);
+}
+```
+
+**Pros:**
+- Respects all obsidian-tasks configuration
+- No duplicate parsing logic
+- Users already have obsidian-tasks if they want task sync
+- More reliable
+
+**Cons:**
+- Adds a dependency
+- Plugin won't work without obsidian-tasks
+
+### Option 2: Fallback to Basic Parsing
+
+Support both obsidian-tasks and basic parsing:
+
+```typescript
+async getTasks(): Promise<Task[]> {
+    const tasksPlugin = this.app.plugins.plugins['obsidian-tasks-plugin'];
+
+    if (tasksPlugin && typeof tasksPlugin.getTasks === 'function') {
+        // Use obsidian-tasks cache (respects config)
+        return tasksPlugin.getTasks();
+    } else {
+        // Fall back to basic markdown parsing
+        return this.parseTasksManually();
+    }
+}
+```
+
+**Pros:**
+- Works without obsidian-tasks
+- Best of both worlds
+
+**Cons:**
+- More complex
+- Manual parsing won't support advanced features
+- Need to maintain two code paths
+
+## Final Recommendation
+
+**Use Option 1: Require obsidian-tasks**
+
+Reasoning:
+- Users wanting CalDAV sync for tasks already have obsidian-tasks installed
+- We get full feature support for free
+- Less code to maintain
+- More reliable sync (respects all task configurations)
+
+## Implementation
+
+```typescript
+// In main.ts
+import { Task } from 'obsidian-tasks'; // If we add as dependency
+
+interface ObsidianTasksPlugin {
+    getTasks(): Task[];
+    apiV1?: TasksApiV1;
+}
+
+class CalDAVSyncPlugin extends Plugin {
+    private tasksPlugin: ObsidianTasksPlugin | null = null;
+
+    async onload() {
+        // Verify obsidian-tasks is available
+        this.tasksPlugin = this.app.plugins.plugins['obsidian-tasks-plugin'] as ObsidianTasksPlugin;
+
+        if (!this.tasksPlugin || typeof this.tasksPlugin.getTasks !== 'function') {
+            new Notice('⚠️ CalDAV Sync requires the obsidian-tasks plugin.\nPlease install and enable it first.');
+            return;
+        }
+
+        // Continue with plugin initialization
+    }
+
+    async syncTasks() {
+        if (!this.tasksPlugin) return;
+
+        // Get all tasks from obsidian-tasks cache
+        const allTasks = this.tasksPlugin.getTasks();
+
+        // Filter based on sync query
+        const tasksToSync = this.filterTasks(allTasks, this.settings.syncQuery);
+
+        // Sync with CalDAV
+        await this.syncWithCalDAV(tasksToSync);
+    }
+}
+```
+
+## Notes
+
+- The `getTasks()` method is **undocumented** but exists in the plugin source
+- It may change in future versions of obsidian-tasks
+- Consider using TypeScript `any` type for the plugin access to avoid compilation issues
+- Monitor obsidian-tasks releases for API changes
