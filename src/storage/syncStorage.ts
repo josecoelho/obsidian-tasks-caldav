@@ -2,6 +2,28 @@ import { App, TFile, normalizePath } from 'obsidian';
 import { MappingData, SyncState } from '../types';
 
 /**
+ * FIXME: Performance issue - loads and saves on every operation
+ *
+ * Issue: tasks-caldav-28
+ *
+ * Current implementation loads/saves JSON files on every method call.
+ * This causes excessive disk I/O during bulk operations (e.g., syncing 2,811 tasks).
+ *
+ * TODO: Refactor to use in-memory cache pattern:
+ * - Load files once on initialization
+ * - Keep data in memory (_mappingCache, _stateCache)
+ * - Modify cache in memory
+ * - Add flush() method to save when needed
+ * - Only write to disk when necessary
+ *
+ * Example improvement:
+ * Before: Each addTaskMapping() → load file → modify → save file
+ * After:  Bulk operations → modify cache → flush() once
+ *
+ * See beads issue tasks-caldav-28 for full design.
+ */
+
+/**
  * Manages persistence of sync-related data in .caldav-sync/ directory
  * Handles mapping.json (task<->CalDAV relationships) and state.json (sync metadata)
  */
