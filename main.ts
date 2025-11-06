@@ -2,9 +2,11 @@ import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } 
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { TaskManager } from './src/tasks/taskManager';
+import { SyncEngine } from './src/sync/syncEngine';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
+	syncEngine: SyncEngine | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -203,6 +205,43 @@ export default class CalDAVSyncPlugin extends Plugin {
 				}
 
 				new Notice(`✅ TaskManager test complete! ${allTasks.length} tasks found. Check console for details.`);
+			}
+		});
+
+		// Command: Sync Now - Manual sync with CalDAV
+		this.addCommand({
+			id: 'sync-now',
+			name: 'Sync with CalDAV now',
+			callback: async () => {
+				// Initialize sync engine if not already done
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					const initialized = await this.syncEngine.initialize();
+
+					if (!initialized) {
+						new Notice('❌ Failed to initialize sync engine');
+						return;
+					}
+				}
+
+				// Perform sync
+				await this.syncEngine.sync();
+			}
+		});
+
+		// Command: View Sync Status
+		this.addCommand({
+			id: 'view-sync-status',
+			name: 'View sync status',
+			callback: async () => {
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					await this.syncEngine.initialize();
+				}
+
+				const status = await this.syncEngine.getStatus();
+				new Notice(status, 8000);
+				console.log('Sync Status:', status);
 			}
 		});
 
