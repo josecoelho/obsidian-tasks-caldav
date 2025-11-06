@@ -1,4 +1,14 @@
 import { TaskManager, ObsidianTask } from './taskManager';
+import { TFile } from 'obsidian';
+
+// Mock TFile class
+class MockTFile extends TFile {
+    constructor(path: string) {
+        // @ts-ignore - minimal mock for testing
+        super();
+        this.path = path;
+    }
+}
 
 // Mock App for testing
 const mockApp = {
@@ -246,6 +256,177 @@ describe('TaskManager', () => {
         it('should return empty array if not initialized', () => {
             const tasks = taskManager.getAllTasks();
             expect(tasks).toEqual([]);
+        });
+    });
+
+    describe('updateTaskInVault', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+        });
+
+        it('should find task by exact markdown text and update it', async () => {
+            const fileContent = `# Header
+
+Some text
+
+- [ ] First task
+- [ ] Target task to update
+- [ ] Another task
+
+More text`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Target task to update',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 6 // Intentionally wrong line number (simulating stale cache)
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Target task to update [id::20251107-abc]');
+
+            // Should find task at line 5 (index 5) not line 6
+            expect(mockApp.vault.modify).toHaveBeenCalledWith(
+                mockFile,
+                expect.stringContaining('- [ ] Target task to update [id::20251107-abc]')
+            );
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[5]).toBe('- [ ] Target task to update [id::20251107-abc]');
+            expect(lines[4]).toBe('- [ ] First task');
+            expect(lines[6]).toBe('- [ ] Another task');
+        });
+
+        it('should update task even when cached line number is stale', async () => {
+            // Simulate scenario where file was modified after cache was built
+            const fileContent = `- [ ] Task A
+- [ ] Task B
+- [ ] Task C
+- [ ] Target task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Target task',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 10 // Stale line number - file has changed
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Target task [id::xyz]');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+
+            // Should find and update at actual line 3 (index 3), not line 10
+            expect(lines[3]).toBe('- [ ] Target task [id::xyz]');
+            expect(lines[0]).toBe('- [ ] Task A');
+            expect(lines[1]).toBe('- [ ] Task B');
+            expect(lines[2]).toBe('- [ ] Task C');
+        });
+
+        it('should handle tasks with whitespace differences', async () => {
+            const fileContent = `- [ ] Task with spaces    `;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task with spaces',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task with spaces [id::abc]');
+
+            expect(mockApp.vault.modify).toHaveBeenCalled();
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            expect(updatedContent).toBe('- [ ] Task with spaces [id::abc]');
+        });
+
+        it('should throw error if task not found in file', async () => {
+            const fileContent = `- [ ] Different task
+- [ ] Another different task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task that does not exist',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            await expect(
+                taskManager.updateTaskInVault(task, '- [ ] Task that does not exist [id::abc]')
+            ).rejects.toThrow('Could not find task in file: - [ ] Task that does not exist');
+        });
+
+        it('should throw error if file not found', async () => {
+            const task = createMockTask({
+                taskLocation: {
+                    _tasksFile: { _path: 'nonexistent.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+
+            await expect(
+                taskManager.updateTaskInVault(task, '- [ ] Task [id::abc]')
+            ).rejects.toThrow('File not found: nonexistent.md');
+        });
+
+        it('should not create duplicate tasks when adding ID', async () => {
+            // This test simulates the bug that was fixed
+            const fileContent = `# Tasks
+
+- [ ] Task without ID #sync
+
+More content`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task without ID #sync',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 5 // Wrong line - file has changed
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task without ID #sync [id::20251107-abc]');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+
+            // Should have exactly one task with ID, not duplicate
+            const tasksWithId = lines.filter(line => line.includes('[id::20251107-abc]'));
+            expect(tasksWithId).toHaveLength(1);
+
+            // Original task should be replaced, not remain
+            const tasksWithoutId = lines.filter(line =>
+                line.trim() === '- [ ] Task without ID #sync'
+            );
+            expect(tasksWithoutId).toHaveLength(0);
         });
     });
 });
