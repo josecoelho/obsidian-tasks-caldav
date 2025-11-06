@@ -1,6 +1,7 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
+import { TaskManager } from './src/tasks/taskManager';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
@@ -154,6 +155,54 @@ export default class CalDAVSyncPlugin extends Plugin {
 					new Notice('❌ Error calling getTasks()');
 					console.error('Error accessing getTasks():', error);
 				}
+			}
+		});
+
+		// TEST Command: Test TaskManager
+		this.addCommand({
+			id: 'test-task-manager',
+			name: '[TEST] Test TaskManager functionality',
+			callback: async () => {
+				console.log('=== Testing TaskManager ===');
+
+				const taskManager = new TaskManager(this.app);
+
+				// Initialize
+				const initialized = await taskManager.initialize();
+
+				if (!initialized) {
+					new Notice('❌ TaskManager failed to initialize - obsidian-tasks plugin required');
+					console.error('TaskManager initialization failed');
+					return;
+				}
+
+				new Notice('✅ TaskManager initialized');
+				console.log('✅ TaskManager initialized');
+
+				// Get all tasks
+				const allTasks = taskManager.getAllTasks();
+				console.log(`Found ${allTasks.length} total tasks`);
+
+				// Test filtering
+				const notDoneTasks = taskManager.getTasksToSync('not done');
+				const doneTasks = taskManager.getTasksToSync('done');
+
+				console.log(`Not done tasks: ${notDoneTasks.length}`);
+				console.log(`Done tasks: ${doneTasks.length}`);
+
+				// Get stats
+				const stats = taskManager.getTaskStats(allTasks);
+				console.log('Task statistics:', stats);
+
+				// Check for tasks without IDs
+				const tasksWithoutIds = allTasks.filter(t => !taskManager.taskHasId(t));
+				console.log(`Tasks without IDs: ${tasksWithoutIds.length}`);
+
+				if (tasksWithoutIds.length > 0) {
+					console.log('Sample task without ID:', tasksWithoutIds[0]);
+				}
+
+				new Notice(`✅ TaskManager test complete! ${allTasks.length} tasks found. Check console for details.`);
 			}
 		});
 
