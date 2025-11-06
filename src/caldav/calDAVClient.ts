@@ -1,6 +1,50 @@
-import { createDAVClient, DAVClient, DAVCalendar, DAVCalendarObject } from 'tsdav';
+import { requestUrl } from 'obsidian';
 import { CalDAVSettings } from '../types';
 import { VTODOMapper } from './vtodoMapper';
+
+/**
+ * Custom fetch function that uses Obsidian's requestUrl to bypass CORS
+ * This MUST be installed before importing tsdav
+ */
+async function obsidianFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const url = input.toString();
+    const method = init?.method || 'GET';
+    const headers = init?.headers as Record<string, string> || {};
+    const body = init?.body as string;
+
+    console.log('[obsidianFetch] Called with:', { url, method });
+
+    try {
+        const response = await requestUrl({
+            url,
+            method,
+            headers,
+            body,
+            throw: false
+        });
+
+        console.log('[obsidianFetch] Response:', { status: response.status });
+
+        // Convert Obsidian response to fetch Response
+        return new Response(response.text, {
+            status: response.status,
+            headers: response.headers as any
+        });
+    } catch (error) {
+        console.error('[obsidianFetch] Error:', error);
+        throw error;
+    }
+}
+
+// Patch fetch BEFORE importing tsdav
+console.log('[CalDAV] Patching global fetch before tsdav import');
+const originalFetch = globalThis.fetch;
+(globalThis as any).fetch = obsidianFetch;
+
+// NOW import tsdav (after fetch is patched)
+import { createDAVClient, DAVClient, DAVCalendar, DAVCalendarObject } from 'tsdav';
+
+console.log('[CalDAV] tsdav imported with patched fetch');
 
 /**
  * Wrapper around tsdav for CalDAV operations
@@ -22,7 +66,7 @@ export class CalDAVClient {
    */
   async connect(): Promise<void> {
     try {
-      // Create DAV client
+      // Create DAV client (fetch already patched at module load)
       const client = await createDAVClient({
         serverUrl: this.settings.serverUrl,
         credentials: {

@@ -245,6 +245,50 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// Command: Add sync tag to all mapped tasks
+		this.addCommand({
+			id: 'add-sync-tag-to-mapped-tasks',
+			name: 'Add sync tag to all mapped CalDAV tasks',
+			callback: async () => {
+				const taskManager = new TaskManager(this.app);
+				await taskManager.initialize();
+
+				// Load mapping
+				const { SyncStorage } = require('./src/storage/syncStorage');
+				const storage = new SyncStorage(this.app);
+				await storage.initialize();
+				const mapping = await storage.loadMapping();
+
+				let updated = 0;
+				const allTasks = taskManager.getAllTasks();
+
+				for (const task of allTasks) {
+					const taskId = taskManager.getTaskId(task);
+					if (!taskId) continue;
+
+					// Check if this task is mapped to CalDAV
+					const caldavUID = mapping.tasks[taskId]?.caldavUID;
+					if (!caldavUID) continue;
+
+					// Check if task already has the sync tag
+					const syncTag = this.settings.syncTag.toLowerCase().replace(/^#/, '');
+					const hasSyncTag = task.tags?.some((t: string) =>
+						t.toLowerCase().replace(/^#/, '') === syncTag
+					);
+
+					if (!hasSyncTag) {
+						// Add the sync tag
+						const tag = this.settings.syncTag.startsWith('#') ? this.settings.syncTag : `#${this.settings.syncTag}`;
+						const newLine = task.originalMarkdown + ` ${tag}`;
+						await taskManager.updateTaskInVault(task, newLine);
+						updated++;
+					}
+				}
+
+				new Notice(`Added #${this.settings.syncTag} tag to ${updated} tasks`);
+			}
+		});
+
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
@@ -332,13 +376,13 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Sync query')
-			.setDesc('obsidian-tasks query string (e.g., "not done" or "tags include #sync")')
+			.setName('Sync tag')
+			.setDesc('Tag to filter tasks for sync (e.g., "sync" for #sync). Leave empty to sync all tasks.')
 			.addText(text => text
-				.setPlaceholder('not done')
-				.setValue(this.plugin.settings.syncQuery)
+				.setPlaceholder('sync')
+				.setValue(this.plugin.settings.syncTag)
 				.onChange(async (value) => {
-					this.plugin.settings.syncQuery = value;
+					this.plugin.settings.syncTag = value;
 					await this.plugin.saveSettings();
 				}));
 

@@ -191,7 +191,6 @@ export class TaskManager {
      */
     async updateTaskInVault(task: ObsidianTask, newContent: string): Promise<void> {
         const filePath = task.taskLocation._tasksFile._path;
-        const lineNumber = task.taskLocation._lineNumber;
 
         // Get the file
         const file = this.app.vault.getAbstractFileByPath(filePath);
@@ -203,15 +202,16 @@ export class TaskManager {
         const content = await this.app.vault.read(file);
         const lines = content.split('\n');
 
-        // Line numbers are 1-indexed in obsidian-tasks
-        const arrayIndex = lineNumber - 1;
+        // Find the task by its original markdown (don't trust line numbers from cache)
+        const originalMarkdown = task.originalMarkdown;
+        const taskIndex = lines.findIndex(line => line.trim() === originalMarkdown.trim());
 
-        if (arrayIndex < 0 || arrayIndex >= lines.length) {
-            throw new Error(`Invalid line number ${lineNumber} in file ${filePath}`);
+        if (taskIndex === -1) {
+            throw new Error(`Could not find task in file: ${originalMarkdown}`);
         }
 
         // Update the line
-        lines[arrayIndex] = newContent;
+        lines[taskIndex] = newContent;
 
         // Write back to file
         await this.app.vault.modify(file, lines.join('\n'));

@@ -4,7 +4,7 @@ export interface CalDAVSettings {
   username: string;
   password: string;
   calendarName: string;
-  syncQuery: string;
+  syncTag: string; // Tag for sync filtering (e.g., "sync"). Empty = sync all tasks.
   syncInterval: number; // minutes
   newTasksDestination: string;
   newTasksSection?: string;
@@ -19,7 +19,7 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   username: '',
   password: '',
   calendarName: '',
-  syncQuery: 'not done',
+  syncTag: 'sync', // Default to #sync tag
   syncInterval: 5,
   newTasksDestination: 'Inbox.md',
   newTasksSection: undefined,

@@ -1,9 +1,10 @@
 import { App, Notice } from 'obsidian';
 import { TaskManager, ObsidianTask } from '../tasks/taskManager';
-import { CalDAVClient } from '../caldav/calDAVClient';
+import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { VTODOMapper } from '../caldav/vtodoMapper';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
+import { generateTaskId } from '../utils/taskIdGenerator';
 
 /**
  * Minimal Sync Engine - MVP implementation
@@ -23,7 +24,7 @@ export class SyncEngine {
     private app: App;
     private settings: CalDAVSettings;
     private taskManager: TaskManager;
-    private caldavClient: CalDAVClient;
+    private caldavClient: CalDAVClientDirect;
     private mapper: VTODOMapper;
     private storage: SyncStorage;
 
@@ -31,7 +32,7 @@ export class SyncEngine {
         this.app = app;
         this.settings = settings;
         this.taskManager = new TaskManager(app);
-        this.caldavClient = new CalDAVClient(settings);
+        this.caldavClient = new CalDAVClientDirect(settings);
         this.mapper = new VTODOMapper();
         this.storage = new SyncStorage(app);
     }
@@ -125,7 +126,10 @@ export class SyncEngine {
             } else {
                 // Create new task in Obsidian
                 const task = this.mapper.vtodoToTask(vtodo);
-                const taskLine = this.createTaskMarkdown(task);
+
+                // Generate a new task ID for this task
+                const taskId = generateTaskId();
+                const taskLine = this.createTaskMarkdown(task, taskId, this.settings.syncTag);
 
                 // Create task in destination file
                 await this.taskManager.createTask(
@@ -134,11 +138,11 @@ export class SyncEngine {
                     this.settings.newTasksSection
                 );
 
-                console.log(`Created new task from VTODO ${caldavUID}: ${task.description}`);
+                console.log(`Created new task from VTODO ${caldavUID}: ${task.description} with ID ${taskId}`);
                 created++;
 
-                // TODO: Add mapping (need task ID from created task)
-                // For MVP, we'll map on next sync when task has ID
+                // Add mapping so we don't duplicate on next sync
+                await this.storage.addTaskMapping(taskId, caldavUID, this.settings.newTasksDestination);
             }
         }
 
@@ -152,32 +156,36 @@ export class SyncEngine {
         let created = 0;
         let updated = 0;
 
-        // Get tasks to sync from Obsidian
-        const tasksToSync = this.taskManager.getTasksToSync(this.settings.syncQuery);
-        console.log(`Found ${tasksToSync.length} tasks to sync (query: "${this.settings.syncQuery}")`);
+        // Get tasks to sync from Obsidian based on tag
+        const allTasks = this.taskManager.getAllTasks();
+        const tasksToSync = this.filterTasksByTag(allTasks, this.settings.syncTag);
+        console.log(`Found ${tasksToSync.length} tasks to sync (tag: #${this.settings.syncTag})`);
 
-        // Filter: only sync tasks that don't have CalDAV mapping yet (for MVP)
+        // Process each task: ensure ID, check if already synced
         const newTasks = [];
-        for (const task of tasksToSync) {
-            const taskId = this.taskManager.getTaskId(task);
-            if (!taskId) {
-                // Task has no ID, skip for now
-                continue;
-            }
+        const alreadySynced = [];
 
+        for (const task of tasksToSync) {
+            // Ensure task has ID (will add if missing, writes to file immediately)
+            const taskId = await this.taskManager.ensureTaskHasId(task);
+
+            // Check if already synced to CalDAV
             const caldavUID = await this.storage.getCalDAVFromTaskId(taskId);
             if (!caldavUID) {
                 // Not yet synced to CalDAV
-                newTasks.push(task);
+                newTasks.push({ task, taskId });
+            } else {
+                alreadySynced.push({ taskId, caldavUID, description: task.description });
             }
         }
 
         console.log(`${newTasks.length} tasks need to be pushed to CalDAV`);
+        if (alreadySynced.length > 0) {
+            console.log(`${alreadySynced.length} tasks already synced:`, alreadySynced);
+        }
 
-        for (const task of newTasks) {
+        for (const { task, taskId } of newTasks) {
             try {
-                // Ensure task has ID
-                const taskId = await this.taskManager.ensureTaskHasId(task);
 
                 // Generate CalDAV UID (use task ID as basis)
                 const caldavUID = `obsidian-${taskId}`;
@@ -238,9 +246,30 @@ export class SyncEngine {
     }
 
     /**
+     * Filter tasks by sync tag
+     */
+    private filterTasksByTag(tasks: any[], syncTag: string): any[] {
+        if (!syncTag || syncTag.trim() === '') {
+            // No tag filter, sync all tasks
+            return tasks;
+        }
+
+        // Filter tasks that have the sync tag
+        const tagLower = syncTag.toLowerCase().replace(/^#/, ''); // Remove leading # if present
+        return tasks.filter(task => {
+            if (!task.tags || task.tags.length === 0) {
+                return false;
+            }
+            return task.tags.some((tag: string) =>
+                tag.toLowerCase().replace(/^#/, '') === tagLower
+            );
+        });
+    }
+
+    /**
      * Create markdown task line from VTODO task
      */
-    private createTaskMarkdown(task: any): string {
+    private createTaskMarkdown(task: any, taskId: string, syncTag?: string): string {
         let line = '- [ ] ';
 
         if (task.status === 'DONE') {
@@ -249,16 +278,28 @@ export class SyncEngine {
 
         line += task.description;
 
-        // Add dates if present
+        // Add dates if present (use date-only format, not timestamp)
         if (task.scheduledDate) {
-            line += ` ⏳ ${task.scheduledDate}`;
+            const dateOnly = task.scheduledDate.split('T')[0];
+            line += ` ⏳ ${dateOnly}`;
         }
         if (task.dueDate) {
-            line += ` 📅 ${task.dueDate}`;
+            const dateOnly = task.dueDate.split('T')[0];
+            line += ` 📅 ${dateOnly}`;
         }
         if (task.completedDate) {
-            line += ` ✅ ${task.completedDate}`;
+            const dateOnly = task.completedDate.split('T')[0];
+            line += ` ✅ ${dateOnly}`;
         }
+
+        // Add sync tag if specified
+        if (syncTag && syncTag.trim() !== '') {
+            const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
+            line += ` ${tag}`;
+        }
+
+        // Add task ID
+        line += ` [id::${taskId}]`;
 
         return line;
     }
