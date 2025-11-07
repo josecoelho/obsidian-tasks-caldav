@@ -419,11 +419,11 @@ More content`;
             const lines = updatedContent.split('\n');
 
             // Should have exactly one task with ID, not duplicate
-            const tasksWithId = lines.filter(line => line.includes('[id::20251107-abc]'));
+            const tasksWithId = lines.filter((line: string) => line.includes('[id::20251107-abc]'));
             expect(tasksWithId).toHaveLength(1);
 
             // Original task should be replaced, not remain
-            const tasksWithoutId = lines.filter(line =>
+            const tasksWithoutId = lines.filter((line: string) =>
                 line.trim() === '- [ ] Task without ID #sync'
             );
             expect(tasksWithoutId).toHaveLength(0);

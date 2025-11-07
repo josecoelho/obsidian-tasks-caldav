@@ -1,6 +1,6 @@
 import { requestUrl } from 'obsidian';
 import { CalDAVSettings } from '../types';
-import { VTODOMapper } from './vtodoMapper';
+import { VTODOMapper, CalendarObject } from './vtodoMapper';
 
 /**
  * Direct CalDAV client implementation using Obsidian's requestUrl
@@ -259,7 +259,7 @@ export class CalDAVClientDirect {
   /**
    * Fetch all VTODOs from the calendar
    */
-  async fetchVTODOs(): Promise<Array<{ data: string; url: string; etag?: string }>> {
+  async fetchVTODOs(): Promise<CalendarObject[]> {
     if (!this.calendarUrl) {
       throw new Error('Not connected to CalDAV server');
     }

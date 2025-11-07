@@ -1,5 +1,4 @@
-import { VTODOMapper, ObsidianTask } from './vtodoMapper';
-import { DAVCalendarObject } from 'tsdav';
+import { VTODOMapper, ObsidianTask, CalendarObject } from './vtodoMapper';
 
 describe('VTODOMapper', () => {
   let mapper: VTODOMapper;
@@ -212,7 +211,7 @@ PRIORITY:0
 END:VTODO
 END:VCALENDAR`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -235,7 +234,7 @@ DUE;VALUE=DATE:20250115
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -254,7 +253,7 @@ DTSTART;VALUE=DATE:20250110
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -280,7 +279,7 @@ SUMMARY:Task
 STATUS:${vtodoStatus}
 END:VTODO`;
 
-        const vtodo: DAVCalendarObject = {
+        const vtodo: CalendarObject = {
           data: vtodoData,
           etag: 'test-etag',
           url: 'http://example.com/test.ics'
@@ -309,7 +308,7 @@ PRIORITY:${vtodoPriority}
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-        const vtodo: DAVCalendarObject = {
+        const vtodo: CalendarObject = {
           data: vtodoData,
           etag: 'test-etag',
           url: 'http://example.com/test.ics'
@@ -328,7 +327,7 @@ STATUS:COMPLETED
 COMPLETED:20250105T103000Z
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -347,7 +346,7 @@ CATEGORIES:work,urgent,project-a
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -366,7 +365,7 @@ RRULE:FREQ=DAILY;COUNT=10
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'
@@ -383,7 +382,7 @@ UID:test-uid
 STATUS:NEEDS-ACTION
 END:VTODO`;
 
-      const vtodo: DAVCalendarObject = {
+      const vtodo: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
         url: 'http://example.com/test.ics'

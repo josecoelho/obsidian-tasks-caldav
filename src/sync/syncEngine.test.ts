@@ -28,7 +28,9 @@ const mockSettings: CalDAVSettings = {
     newTasksDestination: 'Inbox.md',
     newTasksSection: '',
     requireManualConflictResolution: false,
-    autoResolveObsidianWins: true
+    autoResolveObsidianWins: true,
+    syncCompletedTasks: false,
+    deleteBehavior: 'ask'
 };
 
 describe('SyncEngine', () => {
