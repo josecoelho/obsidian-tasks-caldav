@@ -2,9 +2,11 @@ import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } 
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { TaskManager } from './src/tasks/taskManager';
+import { SyncEngine } from './src/sync/syncEngine';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
+	syncEngine: SyncEngine | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -206,6 +208,87 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// Command: Sync Now - Manual sync with CalDAV
+		this.addCommand({
+			id: 'sync-now',
+			name: 'Sync with CalDAV now',
+			callback: async () => {
+				// Initialize sync engine if not already done
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					const initialized = await this.syncEngine.initialize();
+
+					if (!initialized) {
+						new Notice('❌ Failed to initialize sync engine');
+						return;
+					}
+				}
+
+				// Perform sync
+				await this.syncEngine.sync();
+			}
+		});
+
+		// Command: View Sync Status
+		this.addCommand({
+			id: 'view-sync-status',
+			name: 'View sync status',
+			callback: async () => {
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					await this.syncEngine.initialize();
+				}
+
+				const status = await this.syncEngine.getStatus();
+				new Notice(status, 8000);
+				console.log('Sync Status:', status);
+			}
+		});
+
+		// Command: Add sync tag to all mapped tasks
+		this.addCommand({
+			id: 'add-sync-tag-to-mapped-tasks',
+			name: 'Add sync tag to all mapped CalDAV tasks',
+			callback: async () => {
+				const taskManager = new TaskManager(this.app);
+				await taskManager.initialize();
+
+				// Load mapping
+				const { SyncStorage } = require('./src/storage/syncStorage');
+				const storage = new SyncStorage(this.app);
+				await storage.initialize();
+				const mapping = await storage.loadMapping();
+
+				let updated = 0;
+				const allTasks = taskManager.getAllTasks();
+
+				for (const task of allTasks) {
+					const taskId = taskManager.getTaskId(task);
+					if (!taskId) continue;
+
+					// Check if this task is mapped to CalDAV
+					const caldavUID = mapping.tasks[taskId]?.caldavUID;
+					if (!caldavUID) continue;
+
+					// Check if task already has the sync tag
+					const syncTag = this.settings.syncTag.toLowerCase().replace(/^#/, '');
+					const hasSyncTag = task.tags?.some((t: string) =>
+						t.toLowerCase().replace(/^#/, '') === syncTag
+					);
+
+					if (!hasSyncTag) {
+						// Add the sync tag
+						const tag = this.settings.syncTag.startsWith('#') ? this.settings.syncTag : `#${this.settings.syncTag}`;
+						const newLine = task.originalMarkdown + ` ${tag}`;
+						await taskManager.updateTaskInVault(task, newLine);
+						updated++;
+					}
+				}
+
+				new Notice(`Added #${this.settings.syncTag} tag to ${updated} tasks`);
+			}
+		});
+
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
@@ -293,13 +376,13 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Sync query')
-			.setDesc('obsidian-tasks query string (e.g., "not done" or "tags include #sync")')
+			.setName('Sync tag')
+			.setDesc('Tag to filter tasks for sync (e.g., "sync" for #sync). Leave empty to sync all tasks.')
 			.addText(text => text
-				.setPlaceholder('not done')
-				.setValue(this.plugin.settings.syncQuery)
+				.setPlaceholder('sync')
+				.setValue(this.plugin.settings.syncTag)
 				.onChange(async (value) => {
-					this.plugin.settings.syncQuery = value;
+					this.plugin.settings.syncTag = value;
 					await this.plugin.saveSettings();
 				}));
 

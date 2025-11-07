@@ -1,4 +1,11 @@
-import { DAVCalendarObject } from 'tsdav';
+/**
+ * Represents a CalDAV calendar object (VTODO)
+ */
+export interface CalendarObject {
+  data: string;
+  etag?: string;
+  url: string;
+}
 
 /**
  * Represents an Obsidian task extracted from obsidian-tasks API
@@ -80,7 +87,7 @@ export class VTODOMapper {
    * @param vtodo The CalDAV calendar object containing VTODO
    * @returns Obsidian task object
    */
-  vtodoToTask(vtodo: DAVCalendarObject): ObsidianTask {
+  vtodoToTask(vtodo: CalendarObject): ObsidianTask {
     const data = vtodo.data;
 
     return {
