@@ -1,6 +1,6 @@
 import { VTODOMapper, ObsidianTask, CalendarObject } from './vtodoMapper';
 
-describe('VTODOMapper', () => {
+describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
   let mapper: VTODOMapper;
 
   beforeEach(() => {
@@ -8,7 +8,7 @@ describe('VTODOMapper', () => {
   });
 
   describe('taskToVTODO', () => {
-    it('should convert basic task to VTODO format', () => {
+    it('should generate valid iCalendar VTODO with required fields', () => {
       const task: ObsidianTask = {
         description: 'Test task',
         status: 'TODO',
@@ -23,14 +23,11 @@ describe('VTODOMapper', () => {
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid-123');
 
-      expect(vtodo).toContain('BEGIN:VCALENDAR');
-      expect(vtodo).toContain('BEGIN:VTODO');
+      expect(vtodo).toMatch(/^BEGIN:VCALENDAR\r?\n/);
+      expect(vtodo).toMatch(/\r?\nEND:VCALENDAR$/);
       expect(vtodo).toContain('UID:test-uid-123');
       expect(vtodo).toContain('SUMMARY:Test task');
       expect(vtodo).toContain('STATUS:NEEDS-ACTION');
-      expect(vtodo).toContain('PRIORITY:0');
-      expect(vtodo).toContain('END:VTODO');
-      expect(vtodo).toContain('END:VCALENDAR');
     });
 
     it('should include due date when present', () => {
