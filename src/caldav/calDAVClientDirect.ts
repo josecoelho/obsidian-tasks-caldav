@@ -178,6 +178,48 @@ export class CalDAVClientDirect {
   }
 
   /**
+   * Parse calendars from PROPFIND XML response (static for testing)
+   */
+  static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): Array<{ url: string; displayName: string; supportsVTODO: boolean }> {
+    const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
+    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
+    let match;
+
+    while ((match = responseRegex.exec(xmlText)) !== null) {
+      const responseBlock = match[1];
+
+      // Check if it's a calendar (has calendar resourcetype)
+      if (!responseBlock.includes('<c:calendar')) {
+        continue;
+      }
+
+      // Extract href
+      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
+      if (!hrefMatch) continue;
+
+      let url = hrefMatch[1];
+
+      // Make absolute URL if relative
+      if (!url.startsWith('http')) {
+        const baseUrl = new URL(baseServerUrl);
+        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
+      }
+
+      // Extract display name (handle CDATA)
+      const nameMatch = responseBlock.match(/<d:displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/d:displayname>/);
+      const displayName = nameMatch ? nameMatch[1].trim() : url;
+
+      // Check if calendar supports VTODO
+      const supportsVTODO = responseBlock.includes('<c:comp name="VTODO"') ||
+                           responseBlock.includes('<C:comp name="VTODO"');
+
+      calendars.push({ url, displayName, supportsVTODO });
+    }
+
+    return calendars;
+  }
+
+  /**
    * Find all calendars in the calendar home
    */
   private async findCalendars(homeUrl: string): Promise<Array<{ url: string; displayName: string; supportsVTODO: boolean }>> {
@@ -208,45 +250,7 @@ export class CalDAVClientDirect {
 
     console.log('[CalDAV] Calendars PROPFIND response:', response.text.substring(0, 1000));
 
-    // Parse calendar URLs and names from XML
-    const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
-
-    // Simple regex parsing (good enough for MVP)
-    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-    let match;
-
-    while ((match = responseRegex.exec(response.text)) !== null) {
-      const responseBlock = match[1];
-
-      // Check if it's a calendar (has calendar resourcetype)
-      if (!responseBlock.includes('<c:calendar')) {
-        continue;
-      }
-
-      // Extract href
-      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
-      if (!hrefMatch) continue;
-
-      let url = hrefMatch[1];
-
-      // Make absolute URL if relative
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(this.settings.serverUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
-
-      // Extract display name (handle CDATA)
-      const nameMatch = responseBlock.match(/<d:displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/d:displayname>/);
-      const displayName = nameMatch ? nameMatch[1].trim() : url;
-
-      // Check if calendar supports VTODO
-      const supportsVTODO = responseBlock.includes('<c:comp name="VTODO"') ||
-                           responseBlock.includes('<C:comp name="VTODO"');
-
-      calendars.push({ url, displayName, supportsVTODO });
-    }
-
-    return calendars;
+    return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.settings.serverUrl);
   }
 
   /**
@@ -254,6 +258,43 @@ export class CalDAVClientDirect {
    */
   isConnected(): boolean {
     return this.calendarUrl !== null;
+  }
+
+  /**
+   * Parse VTODOs from calendar-query XML response (static for testing)
+   */
+  static parseVTODOsFromXML(xmlText: string, baseServerUrl: string): CalendarObject[] {
+    const vtodos: CalendarObject[] = [];
+    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
+    let match;
+
+    while ((match = responseRegex.exec(xmlText)) !== null) {
+      const responseBlock = match[1];
+
+      // Extract href
+      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
+      if (!hrefMatch) continue;
+
+      let url = hrefMatch[1];
+      if (!url.startsWith('http')) {
+        const baseUrl = new URL(baseServerUrl);
+        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
+      }
+
+      // Extract etag
+      const etagMatch = responseBlock.match(/<d:getetag>([^<]+)<\/d:getetag>/);
+      const etag = etagMatch ? etagMatch[1].replace(/"/g, '') : undefined;
+
+      // Extract calendar data (VTODO)
+      const dataMatch = responseBlock.match(/<c:calendar-data>([\s\S]*?)<\/c:calendar-data>/);
+      if (!dataMatch) continue;
+
+      const data = dataMatch[1].trim();
+
+      vtodos.push({ data, url, etag });
+    }
+
+    return vtodos;
   }
 
   /**
@@ -296,38 +337,7 @@ export class CalDAVClientDirect {
 
     console.log('[CalDAV] REPORT response length:', response.text.length);
 
-    // Parse VTODOs from XML
-    const vtodos: Array<{ data: string; url: string; etag?: string }> = [];
-
-    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-    let match;
-
-    while ((match = responseRegex.exec(response.text)) !== null) {
-      const responseBlock = match[1];
-
-      // Extract href
-      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
-      if (!hrefMatch) continue;
-
-      let url = hrefMatch[1];
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(this.settings.serverUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
-
-      // Extract etag
-      const etagMatch = responseBlock.match(/<d:getetag>([^<]+)<\/d:getetag>/);
-      const etag = etagMatch ? etagMatch[1].replace(/"/g, '') : undefined;
-
-      // Extract calendar data (VTODO)
-      const dataMatch = responseBlock.match(/<c:calendar-data>([\s\S]*?)<\/c:calendar-data>/);
-      if (!dataMatch) continue;
-
-      const data = dataMatch[1].trim();
-
-      vtodos.push({ data, url, etag });
-    }
-
+    const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response.text, this.settings.serverUrl);
     console.log('[CalDAV] Fetched', vtodos.length, 'VTODOs');
     return vtodos;
   }

@@ -159,32 +159,15 @@ describe('CalDAVClientDirect', () => {
     </d:response>
 </d:multistatus>`;
 
-                // Simulate the parsing logic
-                const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
-                const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-                let match;
-
-                while ((match = responseRegex.exec(response)) !== null) {
-                    const responseBlock = match[1];
-
-                    if (!responseBlock.includes('<c:calendar')) continue;
-
-                    const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
-                    if (!hrefMatch) continue;
-
-                    const url = hrefMatch[1];
-                    const nameMatch = responseBlock.match(/<d:displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/d:displayname>/);
-                    const displayName = nameMatch ? nameMatch[1].trim() : url;
-                    const supportsVTODO = responseBlock.includes('<c:comp name="VTODO"');
-
-                    calendars.push({ url, displayName, supportsVTODO });
-                }
+                const calendars = CalDAVClientDirect.parseCalendarsFromXML(response, 'https://caldav.example.com');
 
                 expect(calendars).toHaveLength(2);
                 expect(calendars[0].displayName).toBe('Reminders');
                 expect(calendars[0].supportsVTODO).toBe(true);
+                expect(calendars[0].url).toBe('https://caldav.example.com/calendars/user/calendar1/');
                 expect(calendars[1].displayName).toBe('Events');
                 expect(calendars[1].supportsVTODO).toBe(false);
+                expect(calendars[1].url).toBe('https://caldav.example.com/calendars/user/calendar2/');
             });
 
             it('should handle displayname with CDATA tags', () => {
@@ -249,16 +232,7 @@ describe('CalDAVClientDirect', () => {
     </d:response>
 </d:multistatus>`;
 
-                const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
-                const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-                let match;
-
-                while ((match = responseRegex.exec(response)) !== null) {
-                    const responseBlock = match[1];
-                    if (!responseBlock.includes('<c:calendar')) continue;
-                    calendars.push({ url: '', displayName: '', supportsVTODO: false });
-                }
-
+                const calendars = CalDAVClientDirect.parseCalendarsFromXML(response, 'https://caldav.example.com');
                 expect(calendars).toHaveLength(0);
             });
         });
@@ -285,28 +259,10 @@ END:VCALENDAR</c:calendar-data>
     </d:response>
 </d:multistatus>`;
 
-                const vtodos: Array<{ data: string; url: string; etag?: string }> = [];
-                const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-                let match;
-
-                while ((match = responseRegex.exec(response)) !== null) {
-                    const responseBlock = match[1];
-
-                    const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
-                    const dataMatch = responseBlock.match(/<c:calendar-data>([\s\S]*?)<\/c:calendar-data>/);
-                    const etagMatch = responseBlock.match(/<d:getetag>"?([^<"]+)"?<\/d:getetag>/);
-
-                    if (hrefMatch && dataMatch) {
-                        vtodos.push({
-                            url: hrefMatch[1],
-                            data: dataMatch[1].trim(),
-                            etag: etagMatch ? etagMatch[1] : undefined
-                        });
-                    }
-                }
+                const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://caldav.example.com');
 
                 expect(vtodos).toHaveLength(1);
-                expect(vtodos[0].url).toBe('/calendars/user/tasks/todo1.ics');
+                expect(vtodos[0].url).toBe('https://caldav.example.com/calendars/user/tasks/todo1.ics');
                 expect(vtodos[0].data).toContain('UID:todo-1');
                 expect(vtodos[0].etag).toBe('etag-123');
             });
@@ -338,29 +294,13 @@ END:VTODO</c:calendar-data>
     </d:response>
 </d:multistatus>`;
 
-                const vtodos: Array<{ data: string; url: string; etag?: string }> = [];
-                const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
-                let match;
-
-                while ((match = responseRegex.exec(response)) !== null) {
-                    const responseBlock = match[1];
-
-                    const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
-                    const dataMatch = responseBlock.match(/<c:calendar-data>([\s\S]*?)<\/c:calendar-data>/);
-                    const etagMatch = responseBlock.match(/<d:getetag>"?([^<"]+)"?<\/d:getetag>/);
-
-                    if (hrefMatch && dataMatch) {
-                        vtodos.push({
-                            url: hrefMatch[1],
-                            data: dataMatch[1].trim(),
-                            etag: etagMatch ? etagMatch[1] : undefined
-                        });
-                    }
-                }
+                const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://caldav.example.com');
 
                 expect(vtodos).toHaveLength(2);
                 expect(vtodos[0].data).toContain('UID:todo-1');
+                expect(vtodos[0].etag).toBe('etag-1');
                 expect(vtodos[1].data).toContain('UID:todo-2');
+                expect(vtodos[1].etag).toBe('etag-2');
             });
 
             it('should handle missing etag', () => {
