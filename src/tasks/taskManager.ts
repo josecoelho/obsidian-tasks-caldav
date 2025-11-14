@@ -166,6 +166,23 @@ export class TaskManager {
     }
 
     /**
+     * Find a task by its ID
+     * @returns The task if found, null otherwise
+     */
+    findTaskById(taskId: string): ObsidianTask | null {
+        const allTasks = this.getAllTasks();
+
+        for (const task of allTasks) {
+            const id = this.getTaskId(task);
+            if (id === taskId) {
+                return task;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Ensure a task has an ID, inject if missing
      * @returns The task ID (existing or newly generated)
      */

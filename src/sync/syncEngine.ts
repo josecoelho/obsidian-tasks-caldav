@@ -120,10 +120,28 @@ export class SyncEngine {
             const existingTaskId = this.storage.getTaskIdFromCalDAV(caldavUID);
 
             if (existingTaskId) {
-                // TODO: Update existing task (not implemented in MVP)
-                // For now, skip updates
-                console.log(`VTODO ${caldavUID} already mapped to task ${existingTaskId}, skipping`);
-                updated++;
+                // Update existing task from CalDAV changes
+                const existingTask = this.taskManager.findTaskById(existingTaskId);
+
+                if (!existingTask) {
+                    console.warn(`Task ${existingTaskId} mapped to ${caldavUID} not found in vault, skipping`);
+                    continue;
+                }
+
+                // Parse VTODO to get latest task data
+                const updatedTaskData = this.mapper.vtodoToTask(vtodo);
+
+                // Generate updated markdown from VTODO data
+                const updatedMarkdown = this.createTaskMarkdown(updatedTaskData, existingTaskId, this.settings.syncTag);
+
+                // Only update if content actually changed
+                if (existingTask.originalMarkdown.trim() !== updatedMarkdown.trim()) {
+                    await this.taskManager.updateTaskInVault(existingTask, updatedMarkdown);
+                    console.log(`Updated task ${existingTaskId} from VTODO ${caldavUID}`);
+                    updated++;
+                } else {
+                    console.log(`Task ${existingTaskId} unchanged, skipping update`);
+                }
             } else {
                 // Create new task in Obsidian
                 const task = this.mapper.vtodoToTask(vtodo);

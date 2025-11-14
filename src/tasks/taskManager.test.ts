@@ -191,6 +191,62 @@ describe('TaskManager', () => {
         });
     });
 
+    describe('findTaskById', () => {
+        beforeEach(() => {
+            // Mock the tasksPlugin with getTasks() that returns test data
+            const mockTasksPlugin = {
+                getTasks: jest.fn()
+            };
+            (taskManager as any).tasksPlugin = mockTasksPlugin;
+        });
+
+        it('should find task by obsidian-tasks id', () => {
+            const task1 = createMockTask({ id: 'task-1', description: 'First task' });
+            const task2 = createMockTask({ id: 'task-2', description: 'Second task' });
+
+            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            mockTasksPlugin.getTasks.mockReturnValue([task1, task2]);
+
+            const found = taskManager.findTaskById('task-2');
+            expect(found).toBe(task2);
+            expect(found?.description).toBe('Second task');
+        });
+
+        it('should find task by markdown id', () => {
+            const task1 = createMockTask({
+                id: '',
+                originalMarkdown: '- [ ] Task [id::abc-123]',
+                description: 'Task with markdown ID'
+            });
+            const task2 = createMockTask({ id: 'other-id', description: 'Other task' });
+
+            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            mockTasksPlugin.getTasks.mockReturnValue([task1, task2]);
+
+            const found = taskManager.findTaskById('abc-123');
+            expect(found).toBe(task1);
+            expect(found?.description).toBe('Task with markdown ID');
+        });
+
+        it('should return null if task not found', () => {
+            const task1 = createMockTask({ id: 'task-1' });
+
+            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            mockTasksPlugin.getTasks.mockReturnValue([task1]);
+
+            const found = taskManager.findTaskById('nonexistent-id');
+            expect(found).toBeNull();
+        });
+
+        it('should return null if no tasks exist', () => {
+            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            mockTasksPlugin.getTasks.mockReturnValue([]);
+
+            const found = taskManager.findTaskById('any-id');
+            expect(found).toBeNull();
+        });
+    });
+
     describe('getTaskStats', () => {
         it('should calculate correct statistics', () => {
             const tasks: ObsidianTask[] = [
