@@ -160,6 +160,100 @@ describe('SyncEngine', () => {
         });
     });
 
+    describe('Description cleaning (bd-2, bd-4)', () => {
+        it('should remove [id::xxx] from description (bd-4)', () => {
+            const result = (syncEngine as any).cleanTaskDescription('Buy groceries [id::test-001]');
+            expect(result).toBe('Buy groceries');
+        });
+
+        it('should remove hashtags from description (bd-2)', () => {
+            const result = (syncEngine as any).cleanTaskDescription('Buy groceries #sync #shopping');
+            expect(result).toBe('Buy groceries');
+        });
+
+        it('should remove tags and ID together', () => {
+            const result = (syncEngine as any).cleanTaskDescription('Buy groceries #sync [id::test-001]');
+            expect(result).toBe('Buy groceries');
+        });
+
+        it('should handle multiple tags', () => {
+            const result = (syncEngine as any).cleanTaskDescription('Complete project #work #urgent [id::proj-123]');
+            expect(result).toBe('Complete project');
+        });
+
+        it('should preserve description text with special characters', () => {
+            const input = 'Review @john\'s PR #42 from 2025-11-14 [id::rev-001] #sync';
+            const result = (syncEngine as any).cleanTaskDescription(input);
+            // Should keep "@john's PR #42 from 2025-11-14" but remove #sync and [id::rev-001]
+            expect(result).toBe('Review @john\'s PR #42 from 2025-11-14');
+        });
+
+        it('should clean up extra whitespace', () => {
+            const messy = 'Task   with    spaces  #tag   [id::123]';
+            const result = (syncEngine as any).cleanTaskDescription(messy);
+            expect(result).toBe('Task with spaces');
+        });
+
+        it('should handle description with only metadata', () => {
+            const result = (syncEngine as any).cleanTaskDescription('#sync [id::test-001]');
+            expect(result).toBe('');
+        });
+
+        it('should handle empty description', () => {
+            const result = (syncEngine as any).cleanTaskDescription('');
+            expect(result).toBe('');
+        });
+
+        it('should preserve recurrence rules and other text', () => {
+            const input = 'trocar óleo 0W-20 every 10k  🔁 every 6 months #luna [id::test]';
+            const result = (syncEngine as any).cleanTaskDescription(input);
+            expect(result).toBe('trocar óleo 0W-20 every 10k 🔁 every 6 months');
+        });
+
+        it('should preserve markdown links', () => {
+            const input = 'Task with [link](https://example.com) #sync [id::123]';
+            const result = (syncEngine as any).cleanTaskDescription(input);
+            expect(result).toBe('Task with [link](https://example.com)');
+        });
+
+        it('should preserve Obsidian metadata markers', () => {
+            const input = 'Task %%[some_id:: value]%% #sync [id::123]';
+            const result = (syncEngine as any).cleanTaskDescription(input);
+            expect(result).toBe('Task %%[some_id:: value]%%');
+        });
+    });
+
+    describe('Tag cleaning (bd-1)', () => {
+        it('should remove # prefix from tags', () => {
+            const tags = ['#sync', '#work', '#urgent'];
+            const result = (syncEngine as any).cleanTags(tags);
+            expect(result).toEqual(['sync', 'work', 'urgent']);
+        });
+
+        it('should handle tags without # prefix', () => {
+            const tags = ['sync', 'work'];
+            const result = (syncEngine as any).cleanTags(tags);
+            expect(result).toEqual(['sync', 'work']);
+        });
+
+        it('should handle mixed tags (with and without #)', () => {
+            const tags = ['#sync', 'work', '#urgent'];
+            const result = (syncEngine as any).cleanTags(tags);
+            expect(result).toEqual(['sync', 'work', 'urgent']);
+        });
+
+        it('should handle empty array', () => {
+            const result = (syncEngine as any).cleanTags([]);
+            expect(result).toEqual([]);
+        });
+
+        it('should preserve tag names with hyphens and underscores', () => {
+            const tags = ['#my-tag', '#another_tag'];
+            const result = (syncEngine as any).cleanTags(tags);
+            expect(result).toEqual(['my-tag', 'another_tag']);
+        });
+    });
+
     describe('Task markdown creation', () => {
         it('should create markdown with TODO status', () => {
             const task = {

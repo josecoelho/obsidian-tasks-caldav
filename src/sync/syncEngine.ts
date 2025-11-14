@@ -236,7 +236,7 @@ export class SyncEngine {
      */
     private convertToObsidianTaskFormat(task: any): any {
         return {
-            description: task.description,
+            description: this.cleanTaskDescription(task.description),
             status: task.isDone ? 'DONE' : 'TODO',
             dueDate: task.dueDate ? task.dueDate.format('YYYY-MM-DD') : null,
             scheduledDate: task.scheduledDate ? task.scheduledDate.format('YYYY-MM-DD') : null,
@@ -244,8 +244,39 @@ export class SyncEngine {
             completedDate: task.doneDate ? task.doneDate.format('YYYY-MM-DD') : null,
             priority: this.mapPriority(task.priority),
             recurrenceRule: task.recurrence ? task.recurrence.toText() : '',
-            tags: task.tags || []
+            tags: this.cleanTags(task.tags || [])
         };
+    }
+
+    /**
+     * Clean task description by removing metadata that belongs in other fields
+     *
+     * Note: obsidian-tasks already parses out date emojis (⏳, 📅, ✅) from the description,
+     * so we only need to remove:
+     * - bd-2: Tags (#tag) - already in task.tags array
+     * - bd-4: Task ID ([id::xxx]) - internal Obsidian metadata
+     */
+    private cleanTaskDescription(description: string): string {
+        let cleaned = description;
+
+        // bd-4: Remove [id::xxx] pattern
+        cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
+
+        // bd-2: Remove hashtags (but not # followed by numbers like #42)
+        cleaned = cleaned.replace(/#[a-zA-Z][\w-]*/g, '');
+
+        // Clean up extra whitespace
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+        return cleaned;
+    }
+
+    /**
+     * Clean tags by removing # prefix
+     * Fixes bd-1: VTODO CATEGORIES should not include # character
+     */
+    private cleanTags(tags: string[]): string[] {
+        return tags.map(tag => tag.replace(/^#/, ''));
     }
 
     /**
