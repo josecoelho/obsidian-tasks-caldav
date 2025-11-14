@@ -309,8 +309,8 @@ export class SyncEngine {
      * Get sync status
      */
     async getStatus(): Promise<string> {
-        const state = await this.storage.loadState();
-        const mapping = await this.storage.loadMapping();
+        const state = this.storage.getState();
+        const mapping = this.storage.getMapping();
 
         const lastSync = state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleString() : 'Never';
         const mappedTasks = Object.keys(mapping.tasks).length;
