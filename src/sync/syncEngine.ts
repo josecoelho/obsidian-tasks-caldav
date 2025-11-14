@@ -78,8 +78,9 @@ export class SyncEngine {
             const pushResult = await this.pushToCalDAV();
             console.log(`Push result: ${pushResult.created} created, ${pushResult.updated} updated`);
 
-            // Step 4: Update last sync time
-            await this.storage.updateLastSyncTime();
+            // Step 4: Update last sync time and save to disk
+            this.storage.updateLastSyncTime();
+            await this.storage.save();
 
             const message = `✅ Sync complete! ⬇️ ${pullResult.created} created, ${pullResult.updated} updated | ⬆️ ${pushResult.created} created, ${pushResult.updated} updated`;
             new Notice(message, 5000);
@@ -116,7 +117,7 @@ export class SyncEngine {
             }
 
             // Check if we already track this VTODO
-            const existingTaskId = await this.storage.getTaskIdFromCalDAV(caldavUID);
+            const existingTaskId = this.storage.getTaskIdFromCalDAV(caldavUID);
 
             if (existingTaskId) {
                 // TODO: Update existing task (not implemented in MVP)
@@ -142,7 +143,7 @@ export class SyncEngine {
                 created++;
 
                 // Add mapping so we don't duplicate on next sync
-                await this.storage.addTaskMapping(taskId, caldavUID, this.settings.newTasksDestination);
+                this.storage.addTaskMapping(taskId, caldavUID, this.settings.newTasksDestination);
             }
         }
 
@@ -170,7 +171,7 @@ export class SyncEngine {
             const taskId = await this.taskManager.ensureTaskHasId(task);
 
             // Check if already synced to CalDAV
-            const caldavUID = await this.storage.getCalDAVFromTaskId(taskId);
+            const caldavUID = this.storage.getCalDAVFromTaskId(taskId);
             if (!caldavUID) {
                 // Not yet synced to CalDAV
                 newTasks.push({ task, taskId });
@@ -198,7 +199,7 @@ export class SyncEngine {
                 await this.caldavClient.createVTODO(vtodoData, caldavUID);
 
                 // Save mapping
-                await this.storage.addTaskMapping(taskId, caldavUID, task.taskLocation._tasksFile._path);
+                this.storage.addTaskMapping(taskId, caldavUID, task.taskLocation._tasksFile._path);
 
                 console.log(`Pushed task ${taskId} to CalDAV as ${caldavUID}`);
                 created++;
@@ -308,8 +309,8 @@ export class SyncEngine {
      * Get sync status
      */
     async getStatus(): Promise<string> {
-        const state = await this.storage.loadState();
-        const mapping = await this.storage.loadMapping();
+        const state = this.storage.getState();
+        const mapping = this.storage.getMapping();
 
         const lastSync = state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleString() : 'Never';
         const mappedTasks = Object.keys(mapping.tasks).length;

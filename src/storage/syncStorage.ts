@@ -2,36 +2,26 @@ import { App, TFile, normalizePath } from 'obsidian';
 import { MappingData, SyncState } from '../types';
 
 /**
- * FIXME: Performance issue - loads and saves on every operation
- *
- * Issue: tasks-caldav-28
- *
- * Current implementation loads/saves JSON files on every method call.
- * This causes excessive disk I/O during bulk operations (e.g., syncing 2,811 tasks).
- *
- * TODO: Refactor to use in-memory cache pattern:
- * - Load files once on initialization
- * - Keep data in memory (_mappingCache, _stateCache)
- * - Modify cache in memory
- * - Add flush() method to save when needed
- * - Only write to disk when necessary
- *
- * Example improvement:
- * Before: Each addTaskMapping() → load file → modify → save file
- * After:  Bulk operations → modify cache → flush() once
- *
- * See beads issue tasks-caldav-28 for full design.
- */
-
-/**
  * Manages persistence of sync-related data in .caldav-sync/ directory
  * Handles mapping.json (task<->CalDAV relationships) and state.json (sync metadata)
+ *
+ * Performance: Uses in-memory caching to avoid excessive disk I/O during bulk operations.
+ * Data is loaded once during initialize() and kept in memory. Explicit save() must be
+ * called to persist changes to disk.
  */
 export class SyncStorage {
   private app: App;
   private syncDir: string;
   private mappingPath: string;
   private statePath: string;
+
+  // In-memory caches
+  private mappingCache: MappingData | null = null;
+  private stateCache: SyncState | null = null;
+
+  // Dirty flags to track unsaved changes
+  private mappingDirty: boolean = false;
+  private stateDirty: boolean = false;
 
   constructor(app: App) {
     this.app = app;
@@ -41,7 +31,7 @@ export class SyncStorage {
   }
 
   /**
-   * Initialize sync storage directory and files
+   * Initialize sync storage directory, files, and in-memory caches
    */
   async initialize(): Promise<void> {
     // Create .caldav-sync directory if it doesn't exist
@@ -56,7 +46,8 @@ export class SyncStorage {
         tasks: {},
         caldavToTask: {}
       };
-      await this.saveMapping(initialMapping);
+      const content = JSON.stringify(initialMapping, null, 2);
+      await adapter.write(this.mappingPath, content);
     }
 
     // Initialize state.json if it doesn't exist
@@ -65,14 +56,28 @@ export class SyncStorage {
         lastSyncTime: new Date().toISOString(),
         conflicts: []
       };
-      await this.saveState(initialState);
+      const content = JSON.stringify(initialState, null, 2);
+      await adapter.write(this.statePath, content);
     }
+
+    // Load data into caches
+    await this.loadIntoCache();
   }
 
   /**
-   * Load mapping data from mapping.json
+   * Load data from disk into in-memory caches
    */
-  async loadMapping(): Promise<MappingData> {
+  private async loadIntoCache(): Promise<void> {
+    this.mappingCache = await this.loadMappingFromDisk();
+    this.stateCache = await this.loadStateFromDisk();
+    this.mappingDirty = false;
+    this.stateDirty = false;
+  }
+
+  /**
+   * Load mapping data from disk (private - use cache instead)
+   */
+  private async loadMappingFromDisk(): Promise<MappingData> {
     try {
       const adapter = this.app.vault.adapter;
       const content = await adapter.read(this.mappingPath);
@@ -88,23 +93,9 @@ export class SyncStorage {
   }
 
   /**
-   * Save mapping data to mapping.json
+   * Load sync state from disk (private - use cache instead)
    */
-  async saveMapping(data: MappingData): Promise<void> {
-    try {
-      const adapter = this.app.vault.adapter;
-      const content = JSON.stringify(data, null, 2);
-      await adapter.write(this.mappingPath, content);
-    } catch (error) {
-      console.error('Failed to save mapping data:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Load sync state from state.json
-   */
-  async loadState(): Promise<SyncState> {
+  private async loadStateFromDisk(): Promise<SyncState> {
     try {
       const adapter = this.app.vault.adapter;
       const content = await adapter.read(this.statePath);
@@ -120,9 +111,63 @@ export class SyncStorage {
   }
 
   /**
-   * Save sync state to state.json
+   * Get mapping data from cache
    */
-  async saveState(state: SyncState): Promise<void> {
+  getMapping(): MappingData {
+    if (!this.mappingCache) {
+      throw new Error('SyncStorage not initialized - call initialize() first');
+    }
+    return this.mappingCache;
+  }
+
+  /**
+   * Get sync state from cache
+   */
+  getState(): SyncState {
+    if (!this.stateCache) {
+      throw new Error('SyncStorage not initialized - call initialize() first');
+    }
+    return this.stateCache;
+  }
+
+  /**
+   * Save all dirty data to disk
+   * Call this at the end of sync operations to persist changes
+   */
+  async save(): Promise<void> {
+    const promises: Promise<void>[] = [];
+
+    if (this.mappingDirty && this.mappingCache) {
+      promises.push(this.saveMappingToDisk(this.mappingCache));
+      this.mappingDirty = false;
+    }
+
+    if (this.stateDirty && this.stateCache) {
+      promises.push(this.saveStateToDisk(this.stateCache));
+      this.stateDirty = false;
+    }
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Save mapping data to disk (private)
+   */
+  private async saveMappingToDisk(data: MappingData): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const content = JSON.stringify(data, null, 2);
+      await adapter.write(this.mappingPath, content);
+    } catch (error) {
+      console.error('Failed to save mapping data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save sync state to disk (private)
+   */
+  private async saveStateToDisk(state: SyncState): Promise<void> {
     try {
       const adapter = this.app.vault.adapter;
       const content = JSON.stringify(state, null, 2);
@@ -136,17 +181,17 @@ export class SyncStorage {
   /**
    * Update last sync time
    */
-  async updateLastSyncTime(): Promise<void> {
-    const state = await this.loadState();
+  updateLastSyncTime(): void {
+    const state = this.getState();
     state.lastSyncTime = new Date().toISOString();
-    await this.saveState(state);
+    this.stateDirty = true;
   }
 
   /**
    * Add a task mapping
    */
-  async addTaskMapping(taskId: string, caldavUID: string, sourceFile: string): Promise<void> {
-    const mapping = await this.loadMapping();
+  addTaskMapping(taskId: string, caldavUID: string, sourceFile: string): void {
+    const mapping = this.getMapping();
     const now = new Date().toISOString();
 
     mapping.tasks[taskId] = {
@@ -159,53 +204,52 @@ export class SyncStorage {
     };
 
     mapping.caldavToTask[caldavUID] = taskId;
-
-    await this.saveMapping(mapping);
+    this.mappingDirty = true;
   }
 
   /**
    * Remove a task mapping
    */
-  async removeTaskMapping(taskId: string): Promise<void> {
-    const mapping = await this.loadMapping();
+  removeTaskMapping(taskId: string): void {
+    const mapping = this.getMapping();
 
     if (mapping.tasks[taskId]) {
       const caldavUID = mapping.tasks[taskId].caldavUID;
       delete mapping.tasks[taskId];
       delete mapping.caldavToTask[caldavUID];
-      await this.saveMapping(mapping);
+      this.mappingDirty = true;
     }
   }
 
   /**
    * Get task ID from CalDAV UID
    */
-  async getTaskIdFromCalDAV(caldavUID: string): Promise<string | undefined> {
-    const mapping = await this.loadMapping();
+  getTaskIdFromCalDAV(caldavUID: string): string | undefined {
+    const mapping = this.getMapping();
     return mapping.caldavToTask[caldavUID];
   }
 
   /**
    * Get CalDAV UID from task ID
    */
-  async getCalDAVFromTaskId(taskId: string): Promise<string | undefined> {
-    const mapping = await this.loadMapping();
+  getCalDAVFromTaskId(taskId: string): string | undefined {
+    const mapping = this.getMapping();
     return mapping.tasks[taskId]?.caldavUID;
   }
 
   /**
    * Check if task is tracked
    */
-  async isTaskTracked(taskId: string): Promise<boolean> {
-    const mapping = await this.loadMapping();
+  isTaskTracked(taskId: string): boolean {
+    const mapping = this.getMapping();
     return taskId in mapping.tasks;
   }
 
   /**
    * Check if CalDAV UID is tracked
    */
-  async isCalDAVTracked(caldavUID: string): Promise<boolean> {
-    const mapping = await this.loadMapping();
+  isCalDAVTracked(caldavUID: string): boolean {
+    const mapping = this.getMapping();
     return caldavUID in mapping.caldavToTask;
   }
 
@@ -217,12 +261,17 @@ export class SyncStorage {
       tasks: {},
       caldavToTask: {}
     };
-    await this.saveMapping(emptyMapping);
 
     const freshState: SyncState = {
       lastSyncTime: new Date().toISOString(),
       conflicts: []
     };
-    await this.saveState(freshState);
+
+    this.mappingCache = emptyMapping;
+    this.stateCache = freshState;
+    this.mappingDirty = true;
+    this.stateDirty = true;
+
+    await this.save();
   }
 }

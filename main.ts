@@ -257,7 +257,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 				const { SyncStorage } = require('./src/storage/syncStorage');
 				const storage = new SyncStorage(this.app);
 				await storage.initialize();
-				const mapping = await storage.loadMapping();
+				const mapping = storage.getMapping();
 
 				let updated = 0;
 				const allTasks = taskManager.getAllTasks();
