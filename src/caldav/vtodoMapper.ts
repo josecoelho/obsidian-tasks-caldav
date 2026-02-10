@@ -41,6 +41,7 @@ export class VTODOMapper {
     lines.push('BEGIN:VTODO');
     lines.push(`UID:${uid}`);
     lines.push(`DTSTAMP:${this.formatDateTimeUTC(new Date())}`);
+    lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`SUMMARY:${this.escapeText(task.description)}`);
 
     // Status mapping
@@ -109,6 +110,26 @@ export class VTODOMapper {
   extractUID(data: string): string {
     const match = data.match(/^UID:(.+)$/m);
     return match ? match[1].trim() : '';
+  }
+
+  /**
+   * Extract LAST-MODIFIED timestamp from VTODO data
+   * Returns ISO 8601 string or null if not present
+   */
+  extractLastModified(data: string): string | null {
+    const match = data.match(/^LAST-MODIFIED:(.+)$/m);
+    if (!match) return null;
+
+    const timestamp = match[1].trim();
+    // Parse iCalendar datetime format (YYYYMMDDTHHMMSSZ)
+    const year = timestamp.substring(0, 4);
+    const month = timestamp.substring(4, 6);
+    const day = timestamp.substring(6, 8);
+    const hour = timestamp.substring(9, 11);
+    const minute = timestamp.substring(11, 13);
+    const second = timestamp.substring(13, 15);
+
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
   }
 
   /**
@@ -192,7 +213,10 @@ export class VTODOMapper {
       // Extract value after last colon (handles parameters like DUE;VALUE=DATE:20250105)
       const fullValue = match[1];
       const colonIndex = fullValue.lastIndexOf(':');
-      return colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
+      const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
+
+      // Unescape iCalendar special characters
+      return this.unescapeText(value);
     }
 
     return null;
@@ -239,12 +263,25 @@ export class VTODOMapper {
 
   /**
    * Extract categories (tags)
+   * Special handling: split by unescaped commas, then unescape each part
    */
   private extractCategories(data: string): string[] {
-    const value = this.extractProperty(data, 'CATEGORIES');
-    if (!value) return [];
+    const regex = new RegExp(`^CATEGORIES[;:](.+)$`, 'm');
+    const match = data.match(regex);
 
-    return value.split(',').map(cat => cat.trim());
+    if (!match) return [];
+
+    // Extract value after last colon (handles parameters)
+    const fullValue = match[1];
+    const colonIndex = fullValue.lastIndexOf(':');
+    const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
+
+    // Split by unescaped commas: split on commas that aren't preceded by backslash
+    // Use negative lookbehind: split on , that is NOT preceded by \
+    const parts = value.split(/(?<!\\),/);
+
+    // Unescape each part
+    return parts.map(part => this.unescapeText(part.trim()));
   }
 
   /**
@@ -279,5 +316,16 @@ export class VTODOMapper {
       .replace(/;/g, '\\;')
       .replace(/,/g, '\\,')
       .replace(/\n/g, '\\n');
+  }
+
+  /**
+   * Unescape special characters from iCalendar text
+   */
+  private unescapeText(text: string): string {
+    return text
+      .replace(/\\n/g, '\n')
+      .replace(/\\,/g, ',')
+      .replace(/\\;/g, ';')
+      .replace(/\\\\/g, '\\');
   }
 }

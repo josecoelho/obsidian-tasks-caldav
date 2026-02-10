@@ -373,4 +373,265 @@ describe('SyncEngine', () => {
             expect(markdown).not.toContain('#');
         });
     });
+
+    describe('pushToCalDAV - Update Logic (with content-based change detection)', () => {
+        let mockTaskManager: any;
+        let mockCalDAVClient: any;
+        let mockStorage: any;
+        let mockMapper: any;
+
+        beforeEach(() => {
+            // Create mocks for dependencies
+            mockTaskManager = {
+                getAllTasks: jest.fn(),
+                ensureTaskHasId: jest.fn()
+            };
+            mockCalDAVClient = {
+                createVTODO: jest.fn(),
+                updateVTODO: jest.fn(),
+                fetchVTODOByUID: jest.fn()
+            };
+            mockStorage = {
+                getCalDAVFromTaskId: jest.fn(),
+                addTaskMapping: jest.fn(),
+                getTaskMapping: jest.fn(),
+                updateObsidianTimestamp: jest.fn(),
+                updateCalDAVTimestamp: jest.fn()
+            };
+            mockMapper = {
+                taskToVTODO: jest.fn()
+            };
+
+            // Inject mocks into syncEngine
+            (syncEngine as any).taskManager = mockTaskManager;
+            (syncEngine as any).caldavClient = mockCalDAVClient;
+            (syncEngine as any).storage = mockStorage;
+            (syncEngine as any).mapper = mockMapper;
+        });
+
+        it('should create new tasks in CalDAV when not yet synced', async () => {
+            const task = {
+                description: 'New task',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] New task #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([task]);
+            mockTaskManager.ensureTaskHasId.mockResolvedValue('test-id-001');
+            mockStorage.getCalDAVFromTaskId.mockReturnValue(null); // Not yet synced
+            mockMapper.taskToVTODO.mockReturnValue('VTODO-DATA');
+
+            const result = await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.createVTODO).toHaveBeenCalledWith('VTODO-DATA', 'obsidian-test-id-001');
+            expect(mockCalDAVClient.updateVTODO).not.toHaveBeenCalled();
+            expect(mockStorage.addTaskMapping).toHaveBeenCalledWith('test-id-001', 'obsidian-test-id-001', 'test.md');
+            expect(mockStorage.updateObsidianTimestamp).toHaveBeenCalledWith('test-id-001', '- [ ] New task #sync');
+            expect(result.created).toBe(1);
+            expect(result.updated).toBe(0);
+        });
+
+        it('should update existing tasks in CalDAV when content has changed', async () => {
+            const task = {
+                description: 'Existing task - modified',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] Existing task - modified #sync', // Current content
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const existingVTODO = {
+                data: 'OLD-VTODO-DATA',
+                url: 'https://caldav.example.com/calendar/task.ics',
+                etag: 'etag-123'
+            };
+
+            const taskMapping = {
+                caldavUID: 'obsidian-test-id-001',
+                sourceFile: 'test.md',
+                lastSyncedObsidian: '2025-01-01T00:00:00.000Z',
+                lastSyncedCalDAV: '2025-01-01T00:00:00.000Z',
+                lastModifiedObsidian: '- [ ] Existing task #sync', // Old content (no "- modified")
+                lastModifiedCalDAV: '2025-01-01T00:00:00.000Z'
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([task]);
+            mockTaskManager.ensureTaskHasId.mockResolvedValue('test-id-001');
+            mockStorage.getCalDAVFromTaskId.mockReturnValue('obsidian-test-id-001'); // Already synced
+            mockStorage.getTaskMapping.mockReturnValue(taskMapping);
+            mockCalDAVClient.fetchVTODOByUID.mockResolvedValue(existingVTODO);
+            mockMapper.taskToVTODO.mockReturnValue('NEW-VTODO-DATA');
+
+            const result = await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.fetchVTODOByUID).toHaveBeenCalledWith('obsidian-test-id-001');
+            expect(mockCalDAVClient.updateVTODO).toHaveBeenCalledWith(existingVTODO, 'NEW-VTODO-DATA');
+            expect(mockCalDAVClient.createVTODO).not.toHaveBeenCalled();
+            expect(mockStorage.updateObsidianTimestamp).toHaveBeenCalledWith('test-id-001', '- [ ] Existing task - modified #sync');
+            expect(result.created).toBe(0);
+            expect(result.updated).toBe(1);
+        });
+
+        it('should handle mix of new and existing tasks', async () => {
+            const newTask = {
+                description: 'New task',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] New task #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const existingTask = {
+                description: 'Existing task',
+                tags: ['sync'],
+                isDone: true,
+                originalMarkdown: '- [x] Existing task #sync', // Changed from [ ] to [x]
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const existingVTODO = {
+                data: 'OLD-VTODO-DATA',
+                url: 'https://caldav.example.com/calendar/task.ics',
+                etag: 'etag-123'
+            };
+
+            const taskMapping = {
+                caldavUID: 'obsidian-existing-id-002',
+                sourceFile: 'test.md',
+                lastSyncedObsidian: '2025-01-01T00:00:00.000Z',
+                lastSyncedCalDAV: '2025-01-01T00:00:00.000Z',
+                lastModifiedObsidian: '- [ ] Existing task #sync', // Old content (not done)
+                lastModifiedCalDAV: '2025-01-01T00:00:00.000Z'
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([newTask, existingTask]);
+            mockTaskManager.ensureTaskHasId
+                .mockResolvedValueOnce('new-id-001')
+                .mockResolvedValueOnce('existing-id-002');
+            mockStorage.getCalDAVFromTaskId
+                .mockReturnValueOnce(null) // New task - not synced
+                .mockReturnValueOnce('obsidian-existing-id-002'); // Existing task
+            mockStorage.getTaskMapping.mockReturnValue(taskMapping);
+            mockCalDAVClient.fetchVTODOByUID.mockResolvedValue(existingVTODO);
+            mockMapper.taskToVTODO
+                .mockReturnValueOnce('NEW-VTODO-DATA')
+                .mockReturnValueOnce('UPDATED-VTODO-DATA');
+
+            const result = await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.createVTODO).toHaveBeenCalledTimes(1);
+            expect(mockCalDAVClient.createVTODO).toHaveBeenCalledWith('NEW-VTODO-DATA', 'obsidian-new-id-001');
+            expect(mockCalDAVClient.updateVTODO).toHaveBeenCalledTimes(1);
+            expect(mockCalDAVClient.updateVTODO).toHaveBeenCalledWith(existingVTODO, 'UPDATED-VTODO-DATA');
+            expect(result.created).toBe(1);
+            expect(result.updated).toBe(1);
+        });
+
+        it('should skip update if VTODO not found in CalDAV', async () => {
+            const task = {
+                description: 'Orphaned task',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] Orphaned task - modified #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const taskMapping = {
+                caldavUID: 'obsidian-orphan-id',
+                sourceFile: 'test.md',
+                lastSyncedObsidian: '2025-01-01T00:00:00.000Z',
+                lastSyncedCalDAV: '2025-01-01T00:00:00.000Z',
+                lastModifiedObsidian: '- [ ] Orphaned task #sync', // Old content
+                lastModifiedCalDAV: '2025-01-01T00:00:00.000Z'
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([task]);
+            mockTaskManager.ensureTaskHasId.mockResolvedValue('orphan-id');
+            mockStorage.getCalDAVFromTaskId.mockReturnValue('obsidian-orphan-id');
+            mockStorage.getTaskMapping.mockReturnValue(taskMapping);
+            mockCalDAVClient.fetchVTODOByUID.mockResolvedValue(null); // VTODO not found
+
+            const result = await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.fetchVTODOByUID).toHaveBeenCalledWith('obsidian-orphan-id');
+            expect(mockCalDAVClient.updateVTODO).not.toHaveBeenCalled();
+            expect(result.created).toBe(0);
+            expect(result.updated).toBe(0);
+        });
+
+        it('should continue processing other tasks if one update fails', async () => {
+            const task1 = {
+                description: 'Task that will fail',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] Task that will fail - v2 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const task2 = {
+                description: 'Task that will succeed',
+                tags: ['sync'],
+                isDone: false,
+                originalMarkdown: '- [ ] Task that will succeed - v2 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            const existingVTODO = {
+                data: 'OLD-VTODO-DATA',
+                url: 'https://caldav.example.com/calendar/task.ics',
+                etag: 'etag-123'
+            };
+
+            const taskMapping = {
+                caldavUID: '',
+                sourceFile: 'test.md',
+                lastSyncedObsidian: '2025-01-01T00:00:00.000Z',
+                lastSyncedCalDAV: '2025-01-01T00:00:00.000Z',
+                lastModifiedObsidian: '- [ ] Old content #sync', // Different from both
+                lastModifiedCalDAV: '2025-01-01T00:00:00.000Z'
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([task1, task2]);
+            mockTaskManager.ensureTaskHasId
+                .mockResolvedValueOnce('fail-id')
+                .mockResolvedValueOnce('success-id');
+            mockStorage.getCalDAVFromTaskId
+                .mockReturnValueOnce('obsidian-fail-id')
+                .mockReturnValueOnce('obsidian-success-id');
+            mockStorage.getTaskMapping.mockReturnValue(taskMapping);
+            mockCalDAVClient.fetchVTODOByUID.mockResolvedValue(existingVTODO);
+            mockMapper.taskToVTODO
+                .mockReturnValueOnce('FAIL-VTODO-DATA')
+                .mockReturnValueOnce('SUCCESS-VTODO-DATA');
+            mockCalDAVClient.updateVTODO
+                .mockRejectedValueOnce(new Error('Network error'))
+                .mockResolvedValueOnce(undefined);
+
+            const result = await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.updateVTODO).toHaveBeenCalledTimes(2);
+            expect(result.created).toBe(0);
+            expect(result.updated).toBe(1); // Only the successful one
+        });
+
+        it('should use correct CalDAV UID for new tasks', async () => {
+            const task = {
+                description: 'New task with specific ID',
+                tags: ['sync'],
+                isDone: false,
+                taskLocation: { _tasksFile: { _path: 'test.md' } }
+            };
+
+            mockTaskManager.getAllTasks.mockReturnValue([task]);
+            mockTaskManager.ensureTaskHasId.mockResolvedValue('my-custom-id-123');
+            mockStorage.getCalDAVFromTaskId.mockReturnValue(null);
+            mockMapper.taskToVTODO.mockReturnValue('VTODO-DATA');
+
+            await (syncEngine as any).pushToCalDAV();
+
+            expect(mockCalDAVClient.createVTODO).toHaveBeenCalledWith('VTODO-DATA', 'obsidian-my-custom-id-123');
+        });
+    });
 });

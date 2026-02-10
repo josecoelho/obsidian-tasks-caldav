@@ -424,4 +424,136 @@ END:VTODO`;
       expect(uid).toBe('test-uid-2025@example.com');
     });
   });
+
+  describe('Special character escaping/unescaping', () => {
+    it('should escape and unescape commas in task description', () => {
+      const task: ObsidianTask = {
+        description: 'Buy bread, milk, eggs',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Escape: task to VTODO
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      expect(vtodo).toContain('SUMMARY:Buy bread\\, milk\\, eggs');
+
+      // Unescape: VTODO back to task
+      const vtodoData = `BEGIN:VTODO
+UID:test-uid
+SUMMARY:Buy bread\\, milk\\, eggs
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.description).toBe('Buy bread, milk, eggs');
+    });
+
+    it('should handle multiple special characters', () => {
+      const task: ObsidianTask = {
+        description: 'Task with; comma, and\\ backslash',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Round-trip: task → VTODO → task
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+
+      const calendarObject: CalendarObject = {
+        data: vtodo,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.description).toBe('Task with; comma, and\\ backslash');
+    });
+
+    it('should prevent double-escaping on multiple syncs', () => {
+      const originalDescription = 'Buy bread, milk, eggs';
+
+      const task: ObsidianTask = {
+        description: originalDescription,
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // First sync: task → VTODO → task
+      const vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      const calObject1: CalendarObject = { data: vtodo1, etag: 'e1', url: 'http://test' };
+      const task1 = mapper.vtodoToTask(calObject1);
+
+      // Second sync: should produce same result
+      const vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      const calObject2: CalendarObject = { data: vtodo2, etag: 'e2', url: 'http://test' };
+      const task2 = mapper.vtodoToTask(calObject2);
+
+      // Third sync: should still be the same
+      const vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      const calObject3: CalendarObject = { data: vtodo3, etag: 'e3', url: 'http://test' };
+      const task3 = mapper.vtodoToTask(calObject3);
+
+      expect(task1.description).toBe(originalDescription);
+      expect(task2.description).toBe(originalDescription);
+      expect(task3.description).toBe(originalDescription);
+    });
+
+    it('should escape and unescape tags with commas', () => {
+      const task: ObsidianTask = {
+        description: 'Task',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: ['home,work', 'urgent']
+      };
+
+      // Escape: task to VTODO
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      expect(vtodo).toContain('CATEGORIES:home\\,work,urgent');
+
+      // Unescape: VTODO back to task
+      const vtodoData = `BEGIN:VTODO
+UID:test-uid
+SUMMARY:Task
+STATUS:NEEDS-ACTION
+CATEGORIES:home\\,work,urgent
+END:VTODO`;
+
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.tags).toEqual(['home,work', 'urgent']);
+    });
+  });
 });
