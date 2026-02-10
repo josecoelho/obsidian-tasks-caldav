@@ -160,6 +160,12 @@ export class SyncEngine {
                 // Create new task in Obsidian
                 const task = this.mapper.vtodoToTask(vtodo);
 
+                // Only create if VTODO has the sync tag (or if no tag filter is configured)
+                if (!this.shouldSyncTask(task)) {
+                    console.log(`Skipping VTODO ${caldavUID} - missing sync tag #${this.settings.syncTag}`);
+                    continue;
+                }
+
                 // Generate a new task ID for this task
                 const taskId = generateTaskId();
                 const taskLine = this.createTaskMarkdown(task, taskId, this.settings.syncTag);
@@ -356,6 +362,29 @@ export class SyncEngine {
             '6': 'lowest'
         };
         return priorityMap[priority] || 'none';
+    }
+
+    /**
+     * Check if a task should be synced based on sync tag
+     * Used for both Obsidian tasks and VTODO tasks
+     */
+    private shouldSyncTask(task: any): boolean {
+        const syncTag = this.settings.syncTag;
+
+        if (!syncTag || syncTag.trim() === '') {
+            // No tag filter, sync all tasks
+            return true;
+        }
+
+        // Check if task has the sync tag
+        if (!task.tags || task.tags.length === 0) {
+            return false;
+        }
+
+        const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        return task.tags.some((tag: string) =>
+            tag.toLowerCase().replace(/^#/, '') === tagLower
+        );
     }
 
     /**
