@@ -358,12 +358,13 @@ export class SyncEngine {
      * Note: obsidian-tasks already parses out date emojis (⏳, 📅, ✅) from the description,
      * so we only need to remove:
      * - bd-2: Tags (#tag) - already in task.tags array
-     * - bd-4: Task ID ([id::xxx]) - internal Obsidian metadata
+     * - bd-4: Task ID ([id::xxx] or %%[id::xxx]%%) - internal Obsidian metadata
      */
     private cleanTaskDescription(description: string): string {
         let cleaned = description;
 
-        // bd-4: Remove [id::xxx] pattern
+        // bd-4: Remove [id::xxx] pattern (with or without %% comment markers)
+        cleaned = cleaned.replace(/%%\[id::[^\]]+\]%%/g, '');
         cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
 
         // bd-2: Remove hashtags (but not # followed by numbers like #42)
@@ -445,6 +446,11 @@ export class SyncEngine {
 
     /**
      * Create markdown task line from VTODO task
+     *
+     * Format order for obsidian-tasks parsing (dates BEFORE tags):
+     * - [ ] description %%[id::xxx]%% 🛫 start ⏳ scheduled 📅 due #tags
+     *
+     * The ID is wrapped in %% %% (Obsidian comment) to hide it from obsidian-tasks parser
      */
     private createTaskMarkdown(task: any, taskId: string, syncTag?: string): string {
         let line = '- [ ] ';
@@ -455,7 +461,16 @@ export class SyncEngine {
 
         line += task.description;
 
+        // Add task ID (wrapped in Obsidian comment to hide from obsidian-tasks)
+        line += ` %%[id::${taskId}]%%`;
+
         // Add dates if present (use date-only format, not timestamp)
+        // Order: start date, scheduled date, due date (obsidian-tasks standard)
+        // Dates MUST come before tags for obsidian-tasks to parse them
+        if (task.startDate) {
+            const dateOnly = task.startDate.split('T')[0];
+            line += ` 🛫 ${dateOnly}`;
+        }
         if (task.scheduledDate) {
             const dateOnly = task.scheduledDate.split('T')[0];
             line += ` ⏳ ${dateOnly}`;
@@ -469,14 +484,11 @@ export class SyncEngine {
             line += ` ✅ ${dateOnly}`;
         }
 
-        // Add sync tag if specified
+        // Add sync tag if specified (after dates)
         if (syncTag && syncTag.trim() !== '') {
             const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
             line += ` ${tag}`;
         }
-
-        // Add task ID
-        line += ` [id::${taskId}]`;
 
         return line;
     }

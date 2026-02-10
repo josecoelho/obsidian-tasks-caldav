@@ -261,12 +261,13 @@ describe('SyncEngine', () => {
                 status: 'TODO',
                 dueDate: null,
                 scheduledDate: null,
+                startDate: null,
                 completedDate: null
             };
 
             const markdown = (syncEngine as any).createTaskMarkdown(task, 'test-id-123', 'sync');
 
-            expect(markdown).toBe('- [ ] Test task #sync [id::test-id-123]');
+            expect(markdown).toBe('- [ ] Test task %%[id::test-id-123]%% #sync');
         });
 
         it('should create markdown with DONE status', () => {
@@ -275,12 +276,13 @@ describe('SyncEngine', () => {
                 status: 'DONE',
                 dueDate: null,
                 scheduledDate: null,
+                startDate: null,
                 completedDate: null
             };
 
             const markdown = (syncEngine as any).createTaskMarkdown(task, 'test-id-123', 'sync');
 
-            expect(markdown).toBe('- [x] Completed task #sync [id::test-id-123]');
+            expect(markdown).toBe('- [x] Completed task %%[id::test-id-123]%% #sync');
         });
 
         it('should include due date', () => {
@@ -289,6 +291,7 @@ describe('SyncEngine', () => {
                 status: 'TODO',
                 dueDate: '2025-01-15T10:00:00Z',
                 scheduledDate: null,
+                startDate: null,
                 completedDate: null
             };
 
@@ -304,6 +307,7 @@ describe('SyncEngine', () => {
                 status: 'TODO',
                 dueDate: null,
                 scheduledDate: '2025-01-10T08:00:00Z',
+                startDate: null,
                 completedDate: null
             };
 
@@ -318,6 +322,7 @@ describe('SyncEngine', () => {
                 status: 'DONE',
                 dueDate: null,
                 scheduledDate: null,
+                startDate: null,
                 completedDate: '2025-01-05T14:30:00Z'
             };
 
@@ -332,11 +337,13 @@ describe('SyncEngine', () => {
                 status: 'DONE',
                 dueDate: '2025-01-15',
                 scheduledDate: '2025-01-10',
+                startDate: '2025-01-08',
                 completedDate: '2025-01-12'
             };
 
             const markdown = (syncEngine as any).createTaskMarkdown(task, 'test-id', 'sync');
 
+            expect(markdown).toContain('🛫 2025-01-08');
             expect(markdown).toContain('⏳ 2025-01-10');
             expect(markdown).toContain('📅 2025-01-15');
             expect(markdown).toContain('✅ 2025-01-12');
@@ -364,12 +371,13 @@ describe('SyncEngine', () => {
                 status: 'TODO',
                 dueDate: null,
                 scheduledDate: null,
+                startDate: null,
                 completedDate: null
             };
 
             const markdown = (syncEngine as any).createTaskMarkdown(task, 'test-id-456', '');
 
-            expect(markdown).toBe('- [ ] Task without tag [id::test-id-456]');
+            expect(markdown).toBe('- [ ] Task without tag %%[id::test-id-456]%%');
             expect(markdown).not.toContain('#');
         });
     });
