@@ -56,29 +56,38 @@ export class SyncEngine {
 
     /**
      * Perform a sync (MVP: manual sync only)
+     * @param dryRun If true, preview changes without making any modifications
      */
-    async sync(): Promise<{ success: boolean; message: string }> {
+    async sync(dryRun: boolean = false): Promise<{ success: boolean; message: string }> {
         try {
-            new Notice('🔄 Starting sync...');
-            console.log('=== Sync Started ===');
+            const mode = dryRun ? '[DRY RUN] ' : '';
+            new Notice(`🔄 ${mode}Starting sync...`);
+            console.log(`=== ${mode}Sync Started ===`);
 
             // Step 1: Connect to CalDAV
-            new Notice('📡 Connecting to CalDAV server...');
+            new Notice(`📡 ${mode}Connecting to CalDAV server...`);
             console.log('Connecting to CalDAV...');
             await this.caldavClient.connect();
             console.log('✅ Connected to CalDAV');
 
             // Step 2: Pull from CalDAV (with change detection)
-            new Notice('⬇️ Pulling tasks from CalDAV...');
-            const pullResult = await this.pullFromCalDAV();
-            console.log(`Pull result: ${pullResult.created} created, ${pullResult.updated} updated`);
+            new Notice(`⬇️ ${mode}Pulling tasks from CalDAV...`);
+            const pullResult = await this.pullFromCalDAV(dryRun);
+            console.log(`Pull result: ${pullResult.created} would be created, ${pullResult.updated} would be updated`);
 
             // Step 3: Push to CalDAV (with change detection)
-            new Notice('⬆️ Pushing tasks to CalDAV...');
-            const pushResult = await this.pushToCalDAV();
-            console.log(`Push result: ${pushResult.created} created, ${pushResult.updated} updated`);
+            new Notice(`⬆️ ${mode}Pushing tasks to CalDAV...`);
+            const pushResult = await this.pushToCalDAV(dryRun);
+            console.log(`Push result: ${pushResult.created} would be created, ${pushResult.updated} would be updated`);
 
-            // Step 4: Update last sync time and save to disk
+            if (dryRun) {
+                const message = `🔍 Dry run complete! Would sync:\n⬇️ From CalDAV: ${pullResult.created} created, ${pullResult.updated} updated\n⬆️ To CalDAV: ${pushResult.created} created, ${pushResult.updated} updated\n\nNo changes were made.`;
+                new Notice(message, 10000);
+                console.log('=== Dry Run Complete (no changes made) ===');
+                return { success: true, message };
+            }
+
+            // Step 4: Update last sync time and save to disk (only if not dry run)
             this.storage.updateLastSyncTime();
             await this.storage.save();
 
@@ -100,8 +109,9 @@ export class SyncEngine {
 
     /**
      * Pull VTODOs from CalDAV and create/update tasks in Obsidian
+     * @param dryRun If true, only count what would be synced without making changes
      */
-    private async pullFromCalDAV(): Promise<{ created: number; updated: number }> {
+    private async pullFromCalDAV(dryRun: boolean = false): Promise<{ created: number; updated: number }> {
         let created = 0;
         let updated = 0;
 
@@ -141,6 +151,12 @@ export class SyncEngine {
                     // Parse VTODO to get latest task data
                     const updatedTaskData = this.mapper.vtodoToTask(vtodo);
 
+                    if (dryRun) {
+                        console.log(`[DRY RUN] Would update task ${existingTaskId} from VTODO ${caldavUID}`);
+                        updated++;
+                        continue;
+                    }
+
                     // Generate updated markdown from VTODO data
                     const updatedMarkdown = this.createTaskMarkdown(updatedTaskData, existingTaskId, this.settings.syncTag);
 
@@ -163,6 +179,12 @@ export class SyncEngine {
                 // Only create if VTODO has the sync tag (or if no tag filter is configured)
                 if (!this.shouldSyncTask(task)) {
                     console.log(`Skipping VTODO ${caldavUID} - missing sync tag #${this.settings.syncTag}`);
+                    continue;
+                }
+
+                if (dryRun) {
+                    console.log(`[DRY RUN] Would create new task from VTODO ${caldavUID}: ${task.description}`);
+                    created++;
                     continue;
                 }
 
@@ -190,8 +212,9 @@ export class SyncEngine {
 
     /**
      * Push Obsidian tasks to CalDAV
+     * @param dryRun If true, only count what would be synced without making changes
      */
-    private async pushToCalDAV(): Promise<{ created: number; updated: number }> {
+    private async pushToCalDAV(dryRun: boolean = false): Promise<{ created: number; updated: number }> {
         let created = 0;
         let updated = 0;
 
@@ -227,6 +250,12 @@ export class SyncEngine {
             try {
                 // Generate CalDAV UID (use task ID as basis)
                 const caldavUID = `obsidian-${taskId}`;
+
+                if (dryRun) {
+                    console.log(`[DRY RUN] Would create task ${taskId} in CalDAV: ${task.description}`);
+                    created++;
+                    continue;
+                }
 
                 // Convert to VTODO
                 const obsidianTask = this.convertToObsidianTaskFormat(task);
@@ -268,6 +297,12 @@ export class SyncEngine {
 
                 // Only update if task content has actually changed
                 if (currentContent !== lastSyncedContent) {
+                    if (dryRun) {
+                        console.log(`[DRY RUN] Would update task ${taskId} in CalDAV: ${task.description}`);
+                        updated++;
+                        continue;
+                    }
+
                     // Fetch existing VTODO to get URL and etag
                     const existingVTODO = await this.caldavClient.fetchVTODOByUID(caldavUID);
 

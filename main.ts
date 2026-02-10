@@ -229,6 +229,27 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// Command: Dry Run - Preview sync without making changes
+		this.addCommand({
+			id: 'sync-dry-run',
+			name: 'Preview sync (dry run - no changes)',
+			callback: async () => {
+				// Initialize sync engine if not already done
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					const initialized = await this.syncEngine.initialize();
+
+					if (!initialized) {
+						new Notice('❌ Failed to initialize sync engine');
+						return;
+					}
+				}
+
+				// Perform dry run sync
+				await this.syncEngine.sync(true);
+			}
+		});
+
 		// Command: View Sync Status
 		this.addCommand({
 			id: 'view-sync-status',
