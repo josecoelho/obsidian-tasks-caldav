@@ -72,7 +72,7 @@ export class MockCalDAVServer {
 
 	// ── Setup ──
 
-	/** Load a VTODO from test-fixtures/vtodos/{name}.ics */
+	/** Load a VTODO from test/fixtures/vtodos/{name}.ics */
 	addVtodo(name: string): void {
 		const fixture = loadVtodo(name);
 		this.vtodos.set(fixture.uid, {

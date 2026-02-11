@@ -2,8 +2,8 @@ import { requestUrl } from 'obsidian';
 import { CalDAVClientDirect } from './calDAVClientDirect';
 import { VTODOMapper } from './vtodoMapper';
 import { CalDAVSettings } from '../types';
-import { MockCalDAVServer } from '../../test-fixtures/mockCalDAVServer';
-import { FIXTURE_SERVER, CalendarFixture } from '../../test-fixtures/fixtureLoader';
+import { MockCalDAVServer } from '../../test/helpers/mockCalDAVServer';
+import { FIXTURE_SERVER, CalendarFixture } from '../../test/helpers/fixtureLoader';
 
 const mockSettings: CalDAVSettings = {
 	serverUrl: FIXTURE_SERVER.baseUrl,
@@ -83,7 +83,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses simple Apple iOS completed task', async () => {
-			server.addVtodo('2133451409859410883');
+			server.addVtodo('apple-simple-completed');
 			const vtodos = await client.fetchVTODOs();
 
 			expect(vtodos).toHaveLength(1);
@@ -98,7 +98,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses Apple iOS task with VALARM', async () => {
-			server.addVtodo('1376780597664424489');
+			server.addVtodo('apple-valarm-due-date');
 			const vtodos = await client.fetchVTODOs();
 
 			expect(vtodos).toHaveLength(1);
@@ -110,7 +110,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses DAVx5 recurring task with RRULE', async () => {
-			server.addVtodo('173401913834894838');
+			server.addVtodo('davx5-recurring-daily');
 			const vtodos = await client.fetchVTODOs();
 
 			const task = mapper.vtodoToTask(vtodos[0]);
@@ -124,7 +124,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses Obsidian-synced completed task', async () => {
-			server.addVtodo('obsidian-20251107-099');
+			server.addVtodo('obsidian-completed-emoji');
 			const vtodos = await client.fetchVTODOs();
 
 			const task = mapper.vtodoToTask(vtodos[0]);
@@ -134,7 +134,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses task with multiple CATEGORIES lines', async () => {
-			server.addVtodo('obsidian-dump-test-001-created');
+			server.addVtodo('obsidian-all-fields-created');
 			const vtodos = await client.fetchVTODOs();
 
 			const task = mapper.vtodoToTask(vtodos[0]);
@@ -146,11 +146,11 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('parses multiple diverse VTODOs in a single fetch', async () => {
-			server.addVtodo('2133451409859410883');
-			server.addVtodo('1376780597664424489');
-			server.addVtodo('173401913834894838');
-			server.addVtodo('obsidian-20251107-099');
-			server.addVtodo('obsidian-dump-test-001-created');
+			server.addVtodo('apple-simple-completed');
+			server.addVtodo('apple-valarm-due-date');
+			server.addVtodo('davx5-recurring-daily');
+			server.addVtodo('obsidian-completed-emoji');
+			server.addVtodo('obsidian-all-fields-created');
 
 			const vtodos = await client.fetchVTODOs();
 			expect(vtodos).toHaveLength(5);
@@ -161,8 +161,8 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('returns correct URLs and etags for each VTODO', async () => {
-			server.addVtodo('2133451409859410883');
-			server.addVtodo('173401913834894838');
+			server.addVtodo('apple-simple-completed');
+			server.addVtodo('davx5-recurring-daily');
 
 			const vtodos = await client.fetchVTODOs();
 			for (const vtodo of vtodos) {
@@ -256,7 +256,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('updates a VTODO via PUT with If-Match etag', async () => {
-			server.addVtodo('2133451409859410883');
+			server.addVtodo('apple-simple-completed');
 			const vtodos = await client.fetchVTODOs();
 			const original = vtodos[0];
 
@@ -283,7 +283,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('etag changes after update', async () => {
-			server.addVtodo('2133451409859410883');
+			server.addVtodo('apple-simple-completed');
 			const before = await client.fetchVTODOs();
 			const originalEtag = before[0].etag;
 
@@ -314,8 +314,8 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('deletes a VTODO and it disappears from fetch', async () => {
-			server.addVtodo('2133451409859410883');
-			server.addVtodo('173401913834894838');
+			server.addVtodo('apple-simple-completed');
+			server.addVtodo('davx5-recurring-daily');
 			expect(server.vtodoCount).toBe(2);
 
 			const vtodos = await client.fetchVTODOs();
@@ -329,7 +329,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('sends DELETE with If-Match header', async () => {
-			server.addVtodo('2133451409859410883');
+			server.addVtodo('apple-simple-completed');
 			const vtodos = await client.fetchVTODOs();
 
 			await client.deleteVTODO(vtodos[0]);
@@ -416,7 +416,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('round-trips simple completed Apple task', async () => {
-			server.addVtodo('2133451409859410883');
+			server.addVtodo('apple-simple-completed');
 			const vtodos = await client.fetchVTODOs();
 			const task = mapper.vtodoToTask(vtodos[0]);
 
@@ -431,7 +431,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('round-trips recurring DAVx5 task with all fields', async () => {
-			server.addVtodo('173401913834894838');
+			server.addVtodo('davx5-recurring-daily');
 			const vtodos = await client.fetchVTODOs();
 			const task = mapper.vtodoToTask(vtodos[0]);
 			const uid = mapper.extractUID(vtodos[0].data);
@@ -450,7 +450,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('round-trips task with multiple categories', async () => {
-			server.addVtodo('obsidian-dump-test-001-created');
+			server.addVtodo('obsidian-all-fields-created');
 			const vtodos = await client.fetchVTODOs();
 			const task = mapper.vtodoToTask(vtodos[0]);
 			const uid = mapper.extractUID(vtodos[0].data);
@@ -463,7 +463,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 		});
 
 		it('round-trips task with VALARM (alarm is stripped — not part of ObsidianTask)', async () => {
-			server.addVtodo('1376780597664424489');
+			server.addVtodo('apple-valarm-due-date');
 			const vtodos = await client.fetchVTODOs();
 			const task = mapper.vtodoToTask(vtodos[0]);
 			const uid = mapper.extractUID(vtodos[0].data);
