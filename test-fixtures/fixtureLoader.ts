@@ -10,6 +10,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import * as Mustache from 'mustache';
 
 // ── Directory paths ──
 
@@ -67,11 +68,7 @@ function loadTemplate(category: string, name: string): string {
 }
 
 function fillTemplate(template: string, vars: Record<string, string>): string {
-	let result = template;
-	for (const [key, value] of Object.entries(vars)) {
-		result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-	}
-	return result;
+	return Mustache.render(template, vars);
 }
 
 // ── Request templates ──

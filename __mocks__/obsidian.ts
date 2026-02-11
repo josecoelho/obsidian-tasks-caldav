@@ -125,3 +125,5 @@ export interface Editor {
 export function normalizePath(path: string): string {
     return path;
 }
+
+export const requestUrl = jest.fn();

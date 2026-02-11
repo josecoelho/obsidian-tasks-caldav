@@ -285,8 +285,8 @@ export class CalDAVClientDirect {
       const etagMatch = responseBlock.match(/<d:getetag>([^<]+)<\/d:getetag>/);
       const etag = etagMatch ? etagMatch[1].replace(/"/g, '') : undefined;
 
-      // Extract calendar data (VTODO)
-      const dataMatch = responseBlock.match(/<c:calendar-data>([\s\S]*?)<\/c:calendar-data>/);
+      // Extract calendar data (VTODO) — handle optional CDATA wrapping
+      const dataMatch = responseBlock.match(/<c:calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/c:calendar-data>/);
       if (!dataMatch) continue;
 
       const data = dataMatch[1].trim();

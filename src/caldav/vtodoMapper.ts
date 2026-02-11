@@ -263,25 +263,28 @@ export class VTODOMapper {
 
   /**
    * Extract categories (tags)
-   * Special handling: split by unescaped commas, then unescape each part
+   * Handles both comma-separated (CATEGORIES:a,b,c) and multiple lines
+   * (CATEGORIES:a\nCATEGORIES:b) as servers use both formats.
    */
   private extractCategories(data: string): string[] {
-    const regex = new RegExp(`^CATEGORIES[;:](.+)$`, 'm');
-    const match = data.match(regex);
+    const regex = /^CATEGORIES[;:](.+)$/gm;
+    const categories: string[] = [];
+    let match;
 
-    if (!match) return [];
+    while ((match = regex.exec(data)) !== null) {
+      // Extract value after last colon (handles parameters)
+      const fullValue = match[1];
+      const colonIndex = fullValue.lastIndexOf(':');
+      const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
 
-    // Extract value after last colon (handles parameters)
-    const fullValue = match[1];
-    const colonIndex = fullValue.lastIndexOf(':');
-    const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
+      // Split by unescaped commas: split on commas that aren't preceded by backslash
+      const parts = value.split(/(?<!\\),/);
+      for (const part of parts) {
+        categories.push(this.unescapeText(part.trim()));
+      }
+    }
 
-    // Split by unescaped commas: split on commas that aren't preceded by backslash
-    // Use negative lookbehind: split on , that is NOT preceded by \
-    const parts = value.split(/(?<!\\),/);
-
-    // Unescape each part
-    return parts.map(part => this.unescapeText(part.trim()));
+    return categories;
   }
 
   /**
