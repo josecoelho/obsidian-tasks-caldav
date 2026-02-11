@@ -1,0 +1,23 @@
+{
+  "step": "09-delete-vtodo",
+  "description": "Delete test VTODO",
+  "timestamp": "2026-01-15T10:00:00.000Z",
+  "request": {
+    "method": "DELETE",
+    "url": "https://caldav.example.com/dav/calendars/user/user@example.com/CAL-VTODO-001/obsidian-dump-test-001.ics",
+    "headers": {
+      "Authorization": "Basic <REDACTED>",
+      "If-Match": "\"1d1c2d48112abeca98c94eaca7c811ce9efad108\""
+    }
+  },
+  "response": {
+    "status": 204,
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "date": "Wed, 11 Feb 2026 21:48:26 GMT",
+      "server": "nginx"
+    },
+    "body": ""
+  }
+}

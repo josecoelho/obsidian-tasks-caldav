@@ -1,0 +1,27 @@
+{
+  "step": "01-propfind-well-known",
+  "description": "Discover CalDAV via /.well-known/caldav",
+  "timestamp": "2026-01-15T10:00:00.000Z",
+  "request": {
+    "method": "PROPFIND",
+    "url": "https://caldav.example.com/.well-known/caldav",
+    "headers": {
+      "Authorization": "Basic <REDACTED>",
+      "Content-Type": "application/xml; charset=utf-8",
+      "Depth": "0"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<d:propfind xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:prop>\n    <d:current-user-principal />\n  </d:prop>\n</d:propfind>"
+  },
+  "response": {
+    "status": 207,
+    "headers": {
+      "connection": "keep-alive",
+      "content-type": "application/xml; charset=utf-8",
+      "date": "Wed, 11 Feb 2026 21:48:24 GMT",
+      "server": "nginx",
+      "transfer-encoding": "chunked",
+      "vary": "Accept-Encoding, Brief, Prefer"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<d:multistatus xmlns:d=\"DAV:\" xmlns:c=\"urn:ietf:params:xml:ns:caldav\">\n  <d:response>\n    <d:href>/dav/calendars</d:href>\n    <d:propstat>\n      <d:prop>\n        <d:current-user-principal>\n          <d:href>/dav/principals/user/user@example.com/</d:href>\n        </d:current-user-principal>\n      </d:prop>\n      <d:status>HTTP/1.1 200 OK</d:status>\n    </d:propstat>\n  </d:response>\n</d:multistatus>\n"
+  }
+}

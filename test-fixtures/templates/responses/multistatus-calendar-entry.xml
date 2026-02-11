@@ -1,0 +1,16 @@
+  <d:response>
+    <d:href>{{calendarPath}}</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname><![CDATA[{{displayName}}]]></d:displayname>
+        <d:resourcetype>
+          <d:collection/>
+          <c:calendar/>
+        </d:resourcetype>
+        <c:supported-calendar-component-set>
+          <c:comp name="{{componentType}}"/>
+        </c:supported-calendar-component-set>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
