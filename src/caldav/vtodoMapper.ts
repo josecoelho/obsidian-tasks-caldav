@@ -49,13 +49,13 @@ export class VTODOMapper {
 
     // Due date
     if (task.dueDate) {
-      lines.push(`DUE;VALUE=DATE:${this.formatDate(new Date(task.dueDate))}`);
+      lines.push(`DUE;VALUE=DATE:${this.formatDate(task.dueDate)}`);
     }
 
     // Start date (use scheduledDate or startDate)
     const startDate = task.scheduledDate || task.startDate;
     if (startDate) {
-      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(new Date(startDate))}`);
+      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(startDate)}`);
     }
 
     // Completed date
@@ -286,8 +286,17 @@ export class VTODOMapper {
 
   /**
    * Format date as YYYYMMDD
+   * For date-only strings (YYYY-MM-DD), parses without timezone conversion
    */
-  private formatDate(date: Date): string {
+  private formatDate(dateInput: Date | string): string {
+    // If it's already a YYYY-MM-DD string, parse it directly without timezone issues
+    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      const [year, month, day] = dateInput.split('-');
+      return `${year}${month}${day}`;
+    }
+
+    // Otherwise treat as Date object (use local time)
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');

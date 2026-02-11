@@ -114,6 +114,7 @@ export class SyncEngine {
     private async pullFromCalDAV(dryRun: boolean = false): Promise<{ created: number; updated: number }> {
         let created = 0;
         let updated = 0;
+        let skipped = 0;
 
         // Get all VTODOs from CalDAV
         const vtodos = await this.caldavClient.fetchVTODOs();
@@ -160,6 +161,14 @@ export class SyncEngine {
                     // Generate updated markdown from VTODO data
                     const updatedMarkdown = this.createTaskMarkdown(updatedTaskData, existingTaskId, this.settings.syncTag);
 
+                    // DEBUG: Log what changed
+                    const oldMarkdown = existingTask.originalMarkdown.trim();
+                    if (updatedMarkdown.trim() !== oldMarkdown) {
+                        console.log(`[PULL DEBUG] Task ${existingTaskId} content differs:`);
+                        console.log(`  Old: "${oldMarkdown}"`);
+                        console.log(`  New: "${updatedMarkdown.trim()}"`);
+                    }
+
                     // Update task in vault
                     await this.taskManager.updateTaskInVault(existingTask, updatedMarkdown);
                     console.log(`Updated task ${existingTaskId} from VTODO ${caldavUID} (CalDAV modified: ${caldavLastModified})`);
@@ -178,7 +187,7 @@ export class SyncEngine {
 
                 // Only create if VTODO has the sync tag (or if no tag filter is configured)
                 if (!this.shouldSyncTask(task)) {
-                    console.log(`Skipping VTODO ${caldavUID} - missing sync tag #${this.settings.syncTag}`);
+                    skipped++;
                     continue;
                 }
 
@@ -205,6 +214,11 @@ export class SyncEngine {
                 // Add mapping so we don't duplicate on next sync
                 this.storage.addTaskMapping(taskId, caldavUID, this.settings.newTasksDestination);
             }
+        }
+
+        // Log summary if tasks were skipped
+        if (skipped > 0) {
+            console.log(`Skipped ${skipped} VTODOs without sync tag #${this.settings.syncTag}`);
         }
 
         return { created, updated };
@@ -297,6 +311,11 @@ export class SyncEngine {
 
                 // Only update if task content has actually changed
                 if (currentContent !== lastSyncedContent) {
+                    // DEBUG: Log what changed
+                    console.log(`[PUSH DEBUG] Task ${taskId} content differs:`);
+                    console.log(`  Old: "${lastSyncedContent}"`);
+                    console.log(`  New: "${currentContent}"`);
+
                     if (dryRun) {
                         console.log(`[DRY RUN] Would update task ${taskId} in CalDAV: ${task.description}`);
                         updated++;

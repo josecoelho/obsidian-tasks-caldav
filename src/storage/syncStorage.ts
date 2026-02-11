@@ -1,5 +1,5 @@
 import { App, TFile, normalizePath } from 'obsidian';
-import { MappingData, SyncState } from '../types';
+import { MappingData, SyncState, TaskMapping } from '../types';
 
 /**
  * Manages persistence of sync-related data in .caldav-sync/ directory
@@ -251,6 +251,38 @@ export class SyncStorage {
   isCalDAVTracked(caldavUID: string): boolean {
     const mapping = this.getMapping();
     return caldavUID in mapping.caldavToTask;
+  }
+
+  /**
+   * Get task mapping for a task ID
+   */
+  getTaskMapping(taskId: string): TaskMapping | undefined {
+    const mapping = this.getMapping();
+    return mapping.tasks[taskId];
+  }
+
+  /**
+   * Update CalDAV modification timestamp for a task
+   */
+  updateCalDAVTimestamp(taskId: string, lastModified: string): void {
+    const mapping = this.getMapping();
+    if (mapping.tasks[taskId]) {
+      mapping.tasks[taskId].lastModifiedCalDAV = lastModified;
+      mapping.tasks[taskId].lastSyncedCalDAV = new Date().toISOString();
+      this.mappingDirty = true;
+    }
+  }
+
+  /**
+   * Update Obsidian modification timestamp for a task
+   */
+  updateObsidianTimestamp(taskId: string, lastModified: string): void {
+    const mapping = this.getMapping();
+    if (mapping.tasks[taskId]) {
+      mapping.tasks[taskId].lastModifiedObsidian = lastModified;
+      mapping.tasks[taskId].lastSyncedObsidian = new Date().toISOString();
+      this.mappingDirty = true;
+    }
   }
 
   /**

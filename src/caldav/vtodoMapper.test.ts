@@ -556,4 +556,88 @@ END:VTODO`;
       expect(parsedTask.tags).toEqual(['home,work', 'urgent']);
     });
   });
+
+  describe('Date timezone handling', () => {
+    it('should preserve date-only strings without timezone conversion', () => {
+      // When we have a date string like "2026-02-11", it should remain "2026-02-11"
+      // regardless of the local timezone
+      const task: ObsidianTask = {
+        description: 'Task with date',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: '2026-02-10',
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+
+      // Should format as YYYYMMDD without timezone shifting
+      expect(vtodo).toContain('DUE;VALUE=DATE:20260211');
+      expect(vtodo).toContain('DTSTART;VALUE=DATE:20260210');
+    });
+
+    it('should round-trip dates without changing them', () => {
+      // Create a task with a specific date
+      const originalTask: ObsidianTask = {
+        description: 'Round-trip test',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: '2026-02-10',
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Convert to VTODO and back
+      const vtodoData = mapper.taskToVTODO(originalTask, 'test-uid');
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+      const roundTrippedTask = mapper.vtodoToTask(calendarObject);
+
+      // Dates should be identical after round-trip
+      expect(roundTrippedTask.dueDate).toBe('2026-02-11');
+      expect(roundTrippedTask.scheduledDate).toBe('2026-02-10');
+    });
+
+    it('should handle dates consistently across multiple syncs', () => {
+      // Simulate 3 sync cycles
+      let task: ObsidianTask = {
+        description: 'Multi-sync test',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Sync 1: task → VTODO → task
+      let vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      let task1 = mapper.vtodoToTask({ data: vtodo1, etag: 'e1', url: 'http://example.com/1.ics' });
+
+      // Sync 2: task → VTODO → task
+      let vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      let task2 = mapper.vtodoToTask({ data: vtodo2, etag: 'e2', url: 'http://example.com/2.ics' });
+
+      // Sync 3: task → VTODO → task
+      let vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      let task3 = mapper.vtodoToTask({ data: vtodo3, etag: 'e3', url: 'http://example.com/3.ics' });
+
+      // Date should be stable across all syncs
+      expect(task1.dueDate).toBe('2026-02-11');
+      expect(task2.dueDate).toBe('2026-02-11');
+      expect(task3.dueDate).toBe('2026-02-11');
+    });
+  });
 });
