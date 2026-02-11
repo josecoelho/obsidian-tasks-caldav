@@ -23,3 +23,7 @@ data.json
 
 # git worktrees
 .worktrees/
+
+# CalDAV sync runtime data and raw dumps (contain PII)
+.caldav-sync/
+test-caldav-requests/

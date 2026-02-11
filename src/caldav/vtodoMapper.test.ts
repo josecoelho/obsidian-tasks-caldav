@@ -424,4 +424,220 @@ END:VTODO`;
       expect(uid).toBe('test-uid-2025@example.com');
     });
   });
+
+  describe('Special character escaping/unescaping', () => {
+    it('should escape and unescape commas in task description', () => {
+      const task: ObsidianTask = {
+        description: 'Buy bread, milk, eggs',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Escape: task to VTODO
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      expect(vtodo).toContain('SUMMARY:Buy bread\\, milk\\, eggs');
+
+      // Unescape: VTODO back to task
+      const vtodoData = `BEGIN:VTODO
+UID:test-uid
+SUMMARY:Buy bread\\, milk\\, eggs
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.description).toBe('Buy bread, milk, eggs');
+    });
+
+    it('should handle multiple special characters', () => {
+      const task: ObsidianTask = {
+        description: 'Task with; comma, and\\ backslash',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Round-trip: task → VTODO → task
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+
+      const calendarObject: CalendarObject = {
+        data: vtodo,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.description).toBe('Task with; comma, and\\ backslash');
+    });
+
+    it('should prevent double-escaping on multiple syncs', () => {
+      const originalDescription = 'Buy bread, milk, eggs';
+
+      const task: ObsidianTask = {
+        description: originalDescription,
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // First sync: task → VTODO → task
+      const vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      const calObject1: CalendarObject = { data: vtodo1, etag: 'e1', url: 'http://test' };
+      const task1 = mapper.vtodoToTask(calObject1);
+
+      // Second sync: should produce same result
+      const vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      const calObject2: CalendarObject = { data: vtodo2, etag: 'e2', url: 'http://test' };
+      const task2 = mapper.vtodoToTask(calObject2);
+
+      // Third sync: should still be the same
+      const vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      const calObject3: CalendarObject = { data: vtodo3, etag: 'e3', url: 'http://test' };
+      const task3 = mapper.vtodoToTask(calObject3);
+
+      expect(task1.description).toBe(originalDescription);
+      expect(task2.description).toBe(originalDescription);
+      expect(task3.description).toBe(originalDescription);
+    });
+
+    it('should escape and unescape tags with commas', () => {
+      const task: ObsidianTask = {
+        description: 'Task',
+        status: 'TODO',
+        dueDate: null,
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: ['home,work', 'urgent']
+      };
+
+      // Escape: task to VTODO
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      expect(vtodo).toContain('CATEGORIES:home\\,work,urgent');
+
+      // Unescape: VTODO back to task
+      const vtodoData = `BEGIN:VTODO
+UID:test-uid
+SUMMARY:Task
+STATUS:NEEDS-ACTION
+CATEGORIES:home\\,work,urgent
+END:VTODO`;
+
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const parsedTask = mapper.vtodoToTask(calendarObject);
+      expect(parsedTask.tags).toEqual(['home,work', 'urgent']);
+    });
+  });
+
+  describe('Date timezone handling', () => {
+    it('should preserve date-only strings without timezone conversion', () => {
+      // When we have a date string like "2026-02-11", it should remain "2026-02-11"
+      // regardless of the local timezone
+      const task: ObsidianTask = {
+        description: 'Task with date',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: '2026-02-10',
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+
+      // Should format as YYYYMMDD without timezone shifting
+      expect(vtodo).toContain('DUE;VALUE=DATE:20260211');
+      expect(vtodo).toContain('DTSTART;VALUE=DATE:20260210');
+    });
+
+    it('should round-trip dates without changing them', () => {
+      // Create a task with a specific date
+      const originalTask: ObsidianTask = {
+        description: 'Round-trip test',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: '2026-02-10',
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Convert to VTODO and back
+      const vtodoData = mapper.taskToVTODO(originalTask, 'test-uid');
+      const calendarObject: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+      const roundTrippedTask = mapper.vtodoToTask(calendarObject);
+
+      // Dates should be identical after round-trip
+      expect(roundTrippedTask.dueDate).toBe('2026-02-11');
+      expect(roundTrippedTask.scheduledDate).toBe('2026-02-10');
+    });
+
+    it('should handle dates consistently across multiple syncs', () => {
+      // Simulate 3 sync cycles
+      let task: ObsidianTask = {
+        description: 'Multi-sync test',
+        status: 'TODO',
+        dueDate: '2026-02-11',
+        scheduledDate: null,
+        startDate: null,
+        completedDate: null,
+        priority: 'none',
+        recurrenceRule: '',
+        tags: []
+      };
+
+      // Sync 1: task → VTODO → task
+      let vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      let task1 = mapper.vtodoToTask({ data: vtodo1, etag: 'e1', url: 'http://example.com/1.ics' });
+
+      // Sync 2: task → VTODO → task
+      let vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      let task2 = mapper.vtodoToTask({ data: vtodo2, etag: 'e2', url: 'http://example.com/2.ics' });
+
+      // Sync 3: task → VTODO → task
+      let vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      let task3 = mapper.vtodoToTask({ data: vtodo3, etag: 'e3', url: 'http://example.com/3.ics' });
+
+      // Date should be stable across all syncs
+      expect(task1.dueDate).toBe('2026-02-11');
+      expect(task2.dueDate).toBe('2026-02-11');
+      expect(task3.dueDate).toBe('2026-02-11');
+    });
+  });
 });

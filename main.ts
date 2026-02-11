@@ -3,6 +3,7 @@ import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { TaskManager } from './src/tasks/taskManager';
 import { SyncEngine } from './src/sync/syncEngine';
+import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
@@ -229,6 +230,27 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// Command: Dry Run - Preview sync without making changes
+		this.addCommand({
+			id: 'sync-dry-run',
+			name: 'Preview sync (dry run - no changes)',
+			callback: async () => {
+				// Initialize sync engine if not already done
+				if (!this.syncEngine) {
+					this.syncEngine = new SyncEngine(this.app, this.settings);
+					const initialized = await this.syncEngine.initialize();
+
+					if (!initialized) {
+						new Notice('❌ Failed to initialize sync engine');
+						return;
+					}
+				}
+
+				// Perform dry run sync
+				await this.syncEngine.sync(true);
+			}
+		});
+
 		// Command: View Sync Status
 		this.addCommand({
 			id: 'view-sync-status',
@@ -286,6 +308,23 @@ export default class CalDAVSyncPlugin extends Plugin {
 				}
 
 				new Notice(`Added #${this.settings.syncTag} tag to ${updated} tasks`);
+			}
+		});
+
+		// Command: Dump CalDAV requests for testing
+		this.addCommand({
+			id: 'dump-caldav-requests',
+			name: '[DEV] Dump CalDAV requests for testing',
+			callback: async () => {
+				new Notice('Starting CalDAV request dump...');
+				try {
+					const result = await dumpCalDAVRequests(this.app, this.settings);
+					new Notice(result, 8000);
+				} catch (error) {
+					const msg = error instanceof Error ? error.message : String(error);
+					new Notice(`CalDAV dump failed: ${msg}`, 8000);
+					console.error('[CalDAV Dump]', error);
+				}
 			}
 		});
 

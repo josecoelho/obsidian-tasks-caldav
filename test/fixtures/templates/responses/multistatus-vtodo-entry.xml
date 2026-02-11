@@ -1,0 +1,10 @@
+  <d:response>
+    <d:href>{{{vtodoPath}}}</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:getetag>"{{{etag}}}"</d:getetag>
+        <c:calendar-data><![CDATA[{{{icalData}}}]]></c:calendar-data>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>

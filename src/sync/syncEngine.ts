@@ -1,4 +1,4 @@
-import { App, Notice } from 'obsidian';
+import { App, Notice, TFile } from 'obsidian';
 import { TaskManager, ObsidianTask } from '../tasks/taskManager';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { VTODOMapper } from '../caldav/vtodoMapper';
@@ -56,29 +56,38 @@ export class SyncEngine {
 
     /**
      * Perform a sync (MVP: manual sync only)
+     * @param dryRun If true, preview changes without making any modifications
      */
-    async sync(): Promise<{ success: boolean; message: string }> {
+    async sync(dryRun: boolean = false): Promise<{ success: boolean; message: string }> {
         try {
-            new Notice('🔄 Starting sync...');
-            console.log('=== Sync Started ===');
+            const mode = dryRun ? '[DRY RUN] ' : '';
+            new Notice(`🔄 ${mode}Starting sync...`);
+            console.log(`=== ${mode}Sync Started ===`);
 
             // Step 1: Connect to CalDAV
-            new Notice('📡 Connecting to CalDAV server...');
+            new Notice(`📡 ${mode}Connecting to CalDAV server...`);
             console.log('Connecting to CalDAV...');
             await this.caldavClient.connect();
             console.log('✅ Connected to CalDAV');
 
-            // Step 2: Pull from CalDAV
-            new Notice('⬇️ Pulling tasks from CalDAV...');
-            const pullResult = await this.pullFromCalDAV();
-            console.log(`Pull result: ${pullResult.created} created, ${pullResult.updated} updated`);
+            // Step 2: Pull from CalDAV (with change detection)
+            new Notice(`⬇️ ${mode}Pulling tasks from CalDAV...`);
+            const pullResult = await this.pullFromCalDAV(dryRun);
+            console.log(`Pull result: ${pullResult.created} would be created, ${pullResult.updated} would be updated`);
 
-            // Step 3: Push to CalDAV
-            new Notice('⬆️ Pushing tasks to CalDAV...');
-            const pushResult = await this.pushToCalDAV();
-            console.log(`Push result: ${pushResult.created} created, ${pushResult.updated} updated`);
+            // Step 3: Push to CalDAV (with change detection)
+            new Notice(`⬆️ ${mode}Pushing tasks to CalDAV...`);
+            const pushResult = await this.pushToCalDAV(dryRun);
+            console.log(`Push result: ${pushResult.created} would be created, ${pushResult.updated} would be updated`);
 
-            // Step 4: Update last sync time and save to disk
+            if (dryRun) {
+                const message = `🔍 Dry run complete! Would sync:\n⬇️ From CalDAV: ${pullResult.created} created, ${pullResult.updated} updated\n⬆️ To CalDAV: ${pushResult.created} created, ${pushResult.updated} updated\n\nNo changes were made.`;
+                new Notice(message, 10000);
+                console.log('=== Dry Run Complete (no changes made) ===');
+                return { success: true, message };
+            }
+
+            // Step 4: Update last sync time and save to disk (only if not dry run)
             this.storage.updateLastSyncTime();
             await this.storage.save();
 
@@ -100,10 +109,12 @@ export class SyncEngine {
 
     /**
      * Pull VTODOs from CalDAV and create/update tasks in Obsidian
+     * @param dryRun If true, only count what would be synced without making changes
      */
-    private async pullFromCalDAV(): Promise<{ created: number; updated: number }> {
+    private async pullFromCalDAV(dryRun: boolean = false): Promise<{ created: number; updated: number }> {
         let created = 0;
         let updated = 0;
+        let skipped = 0;
 
         // Get all VTODOs from CalDAV
         const vtodos = await this.caldavClient.fetchVTODOs();
@@ -120,13 +131,71 @@ export class SyncEngine {
             const existingTaskId = this.storage.getTaskIdFromCalDAV(caldavUID);
 
             if (existingTaskId) {
-                // TODO: Update existing task (not implemented in MVP)
-                // For now, skip updates
-                console.log(`VTODO ${caldavUID} already mapped to task ${existingTaskId}, skipping`);
-                updated++;
+                // Check if CalDAV version is newer than last sync
+                const taskMapping = this.storage.getTaskMapping(existingTaskId);
+                const caldavLastModified = this.mapper.extractLastModified(vtodo.data);
+
+                if (!taskMapping) {
+                    console.warn(`Task ${existingTaskId} has no mapping, skipping`);
+                    continue;
+                }
+
+                // Only update if CalDAV has been modified since last sync
+                if (caldavLastModified && caldavLastModified > taskMapping.lastModifiedCalDAV) {
+                    const existingTask = this.taskManager.findTaskById(existingTaskId);
+
+                    if (!existingTask) {
+                        console.warn(`Task ${existingTaskId} mapped to ${caldavUID} not found in vault, skipping`);
+                        continue;
+                    }
+
+                    // Parse VTODO to get latest task data
+                    const updatedTaskData = this.mapper.vtodoToTask(vtodo);
+
+                    if (dryRun) {
+                        console.log(`[DRY RUN] Would update task ${existingTaskId} from VTODO ${caldavUID}`);
+                        updated++;
+                        continue;
+                    }
+
+                    // Generate updated markdown from VTODO data
+                    const updatedMarkdown = this.createTaskMarkdown(updatedTaskData, existingTaskId, this.settings.syncTag);
+
+                    // DEBUG: Log what changed
+                    const oldMarkdown = existingTask.originalMarkdown.trim();
+                    if (updatedMarkdown.trim() !== oldMarkdown) {
+                        console.log(`[PULL DEBUG] Task ${existingTaskId} content differs:`);
+                        console.log(`  Old: "${oldMarkdown}"`);
+                        console.log(`  New: "${updatedMarkdown.trim()}"`);
+                    }
+
+                    // Update task in vault
+                    await this.taskManager.updateTaskInVault(existingTask, updatedMarkdown);
+                    console.log(`Updated task ${existingTaskId} from VTODO ${caldavUID} (CalDAV modified: ${caldavLastModified})`);
+                    updated++;
+
+                    // Update CalDAV timestamp in mapping
+                    this.storage.updateCalDAVTimestamp(existingTaskId, caldavLastModified);
+
+                    // Update Obsidian content hash to match what we just wrote
+                    this.storage.updateObsidianTimestamp(existingTaskId, updatedMarkdown.trim());
+                }
+                // Skip logging for unchanged tasks to reduce verbosity
             } else {
                 // Create new task in Obsidian
                 const task = this.mapper.vtodoToTask(vtodo);
+
+                // Only create if VTODO has the sync tag (or if no tag filter is configured)
+                if (!this.shouldSyncTask(task)) {
+                    skipped++;
+                    continue;
+                }
+
+                if (dryRun) {
+                    console.log(`[DRY RUN] Would create new task from VTODO ${caldavUID}: ${task.description}`);
+                    created++;
+                    continue;
+                }
 
                 // Generate a new task ID for this task
                 const taskId = generateTaskId();
@@ -147,13 +216,19 @@ export class SyncEngine {
             }
         }
 
+        // Log summary if tasks were skipped
+        if (skipped > 0) {
+            console.log(`Skipped ${skipped} VTODOs without sync tag #${this.settings.syncTag}`);
+        }
+
         return { created, updated };
     }
 
     /**
      * Push Obsidian tasks to CalDAV
+     * @param dryRun If true, only count what would be synced without making changes
      */
-    private async pushToCalDAV(): Promise<{ created: number; updated: number }> {
+    private async pushToCalDAV(dryRun: boolean = false): Promise<{ created: number; updated: number }> {
         let created = 0;
         let updated = 0;
 
@@ -164,7 +239,7 @@ export class SyncEngine {
 
         // Process each task: ensure ID, check if already synced
         const newTasks = [];
-        const alreadySynced = [];
+        const existingTasks = [];
 
         for (const task of tasksToSync) {
             // Ensure task has ID (will add if missing, writes to file immediately)
@@ -176,20 +251,25 @@ export class SyncEngine {
                 // Not yet synced to CalDAV
                 newTasks.push({ task, taskId });
             } else {
-                alreadySynced.push({ taskId, caldavUID, description: task.description });
+                // Already synced, needs update
+                existingTasks.push({ task, taskId, caldavUID });
             }
         }
 
-        console.log(`${newTasks.length} tasks need to be pushed to CalDAV`);
-        if (alreadySynced.length > 0) {
-            console.log(`${alreadySynced.length} tasks already synced:`, alreadySynced);
-        }
+        console.log(`${newTasks.length} tasks need to be created in CalDAV`);
+        console.log(`${existingTasks.length} tasks need to be updated in CalDAV`);
 
+        // Create new tasks in CalDAV
         for (const { task, taskId } of newTasks) {
             try {
-
                 // Generate CalDAV UID (use task ID as basis)
                 const caldavUID = `obsidian-${taskId}`;
+
+                if (dryRun) {
+                    console.log(`[DRY RUN] Would create task ${taskId} in CalDAV: ${task.description}`);
+                    created++;
+                    continue;
+                }
 
                 // Convert to VTODO
                 const obsidianTask = this.convertToObsidianTaskFormat(task);
@@ -198,14 +278,75 @@ export class SyncEngine {
                 // Create in CalDAV
                 await this.caldavClient.createVTODO(vtodoData, caldavUID);
 
-                // Save mapping
+                // Save mapping with initial content hash
                 this.storage.addTaskMapping(taskId, caldavUID, task.taskLocation._tasksFile._path);
 
-                console.log(`Pushed task ${taskId} to CalDAV as ${caldavUID}`);
+                // Store the current content as the baseline
+                const currentContent = this.getTaskContentHash(task);
+                this.storage.updateObsidianTimestamp(taskId, currentContent);
+
+                console.log(`Created task ${taskId} in CalDAV as ${caldavUID}`);
                 created++;
 
             } catch (error) {
-                console.error(`Failed to push task: ${task.description}`, error);
+                console.error(`Failed to create task in CalDAV: ${task.description}`, error);
+                // Continue with other tasks
+            }
+        }
+
+        // Update existing tasks in CalDAV
+        for (const { task, taskId, caldavUID } of existingTasks) {
+            try {
+                // Check if Obsidian task content has changed
+                const taskMapping = this.storage.getTaskMapping(taskId);
+                const currentContent = this.getTaskContentHash(task);
+
+                if (!taskMapping) {
+                    console.warn(`Task ${taskId} has no mapping, skipping`);
+                    continue;
+                }
+
+                // Get the last synced content from mapping
+                const lastSyncedContent = taskMapping.lastModifiedObsidian;
+
+                // Only update if task content has actually changed
+                if (currentContent !== lastSyncedContent) {
+                    // DEBUG: Log what changed
+                    console.log(`[PUSH DEBUG] Task ${taskId} content differs:`);
+                    console.log(`  Old: "${lastSyncedContent}"`);
+                    console.log(`  New: "${currentContent}"`);
+
+                    if (dryRun) {
+                        console.log(`[DRY RUN] Would update task ${taskId} in CalDAV: ${task.description}`);
+                        updated++;
+                        continue;
+                    }
+
+                    // Fetch existing VTODO to get URL and etag
+                    const existingVTODO = await this.caldavClient.fetchVTODOByUID(caldavUID);
+
+                    if (!existingVTODO) {
+                        console.warn(`VTODO ${caldavUID} not found in CalDAV, skipping update`);
+                        continue;
+                    }
+
+                    // Convert to VTODO
+                    const obsidianTask = this.convertToObsidianTaskFormat(task);
+                    const newVTODOData = this.mapper.taskToVTODO(obsidianTask, caldavUID);
+
+                    // Update in CalDAV
+                    await this.caldavClient.updateVTODO(existingVTODO, newVTODOData);
+
+                    console.log(`Updated task ${taskId} in CalDAV (${caldavUID}) (content changed)`);
+                    updated++;
+
+                    // Update content hash in mapping
+                    this.storage.updateObsidianTimestamp(taskId, currentContent);
+                }
+                // Skip logging for unchanged tasks to reduce verbosity
+
+            } catch (error) {
+                console.error(`Failed to update task in CalDAV: ${task.description}`, error);
                 // Continue with other tasks
             }
         }
@@ -236,12 +377,13 @@ export class SyncEngine {
      * Note: obsidian-tasks already parses out date emojis (⏳, 📅, ✅) from the description,
      * so we only need to remove:
      * - bd-2: Tags (#tag) - already in task.tags array
-     * - bd-4: Task ID ([id::xxx]) - internal Obsidian metadata
+     * - bd-4: Task ID ([id::xxx] or %%[id::xxx]%%) - internal Obsidian metadata
      */
     private cleanTaskDescription(description: string): string {
         let cleaned = description;
 
-        // bd-4: Remove [id::xxx] pattern
+        // bd-4: Remove [id::xxx] pattern (with or without %% comment markers)
+        cleaned = cleaned.replace(/%%\[id::[^\]]+\]%%/g, '');
         cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
 
         // bd-2: Remove hashtags (but not # followed by numbers like #42)
@@ -278,6 +420,29 @@ export class SyncEngine {
     }
 
     /**
+     * Check if a task should be synced based on sync tag
+     * Used for both Obsidian tasks and VTODO tasks
+     */
+    private shouldSyncTask(task: any): boolean {
+        const syncTag = this.settings.syncTag;
+
+        if (!syncTag || syncTag.trim() === '') {
+            // No tag filter, sync all tasks
+            return true;
+        }
+
+        // Check if task has the sync tag
+        if (!task.tags || task.tags.length === 0) {
+            return false;
+        }
+
+        const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        return task.tags.some((tag: string) =>
+            tag.toLowerCase().replace(/^#/, '') === tagLower
+        );
+    }
+
+    /**
      * Filter tasks by sync tag
      */
     private filterTasksByTag(tasks: any[], syncTag: string): any[] {
@@ -300,6 +465,11 @@ export class SyncEngine {
 
     /**
      * Create markdown task line from VTODO task
+     *
+     * Format order for obsidian-tasks parsing (dates BEFORE tags):
+     * - [ ] description %%[id::xxx]%% 🛫 start ⏳ scheduled 📅 due #tags
+     *
+     * The ID is wrapped in %% %% (Obsidian comment) to hide it from obsidian-tasks parser
      */
     private createTaskMarkdown(task: any, taskId: string, syncTag?: string): string {
         let line = '- [ ] ';
@@ -310,7 +480,16 @@ export class SyncEngine {
 
         line += task.description;
 
+        // Add task ID (wrapped in Obsidian comment to hide from obsidian-tasks)
+        line += ` %%[id::${taskId}]%%`;
+
         // Add dates if present (use date-only format, not timestamp)
+        // Order: start date, scheduled date, due date (obsidian-tasks standard)
+        // Dates MUST come before tags for obsidian-tasks to parse them
+        if (task.startDate) {
+            const dateOnly = task.startDate.split('T')[0];
+            line += ` 🛫 ${dateOnly}`;
+        }
         if (task.scheduledDate) {
             const dateOnly = task.scheduledDate.split('T')[0];
             line += ` ⏳ ${dateOnly}`;
@@ -324,16 +503,23 @@ export class SyncEngine {
             line += ` ✅ ${dateOnly}`;
         }
 
-        // Add sync tag if specified
+        // Add sync tag if specified (after dates)
         if (syncTag && syncTag.trim() !== '') {
             const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
             line += ` ${tag}`;
         }
 
-        // Add task ID
-        line += ` [id::${taskId}]`;
-
         return line;
+    }
+
+    /**
+     * Get a hash of the task's content for change detection
+     * Simple hash based on the task's markdown representation
+     */
+    private getTaskContentHash(task: any): string {
+        // Use the task's markdown as the basis for comparison
+        // This way we detect actual task changes, not just file mtime
+        return task.originalMarkdown.trim();
     }
 
     /**
