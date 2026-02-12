@@ -4,6 +4,7 @@ import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGe
 import { TaskManager } from './src/tasks/taskManager';
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
+import { VTODOMapper, CalendarObject } from './src/caldav/vtodoMapper';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
@@ -308,6 +309,88 @@ export default class CalDAVSyncPlugin extends Plugin {
 				}
 
 				new Notice(`Added #${this.settings.syncTag} tag to ${updated} tasks`);
+			}
+		});
+
+		// Command: Test VTODO parser fixes (issue #13)
+		this.addCommand({
+			id: 'test-vtodo-parser',
+			name: '[DEV] Test VTODO parser (line folding + TZID dates)',
+			callback: () => {
+				const mapper = new VTODOMapper();
+				const results: string[] = [];
+				let pass = 0;
+				let fail = 0;
+
+				const check = (label: string, actual: string | null, expected: string) => {
+					if (actual === expected) {
+						results.push(`  ✅ ${label}: "${actual}"`);
+						pass++;
+					} else {
+						results.push(`  ❌ ${label}: got "${actual}", expected "${expected}"`);
+						fail++;
+					}
+				};
+
+				// Test 1: Line folding
+				results.push('--- Test 1: RFC 5545 line folding ---');
+				const foldedVtodo: CalendarObject = {
+					data: 'BEGIN:VTODO\r\nUID:fold-test-1\r\nSUMMARY:Buy groceries from the store including\r\n  bread and milk\r\nDUE;VALUE=DATE:20260215\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO',
+					url: 'http://test/1.ics'
+				};
+				const task1 = mapper.vtodoToTask(foldedVtodo);
+				check('Unfolded summary', task1.description, 'Buy groceries from the store including bread and milk');
+				check('Due date', task1.dueDate, '2026-02-15');
+
+				// Test 2: TZID dates
+				results.push('--- Test 2: TZID date parsing ---');
+				const tzidVtodo: CalendarObject = {
+					data: 'BEGIN:VTODO\r\nUID:tzid-test-1\r\nSUMMARY:Task with timezone dates\r\nDUE;TZID=Pacific/Auckland:20260214T060001\r\nDTSTART;TZID=Pacific/Auckland:20260214T000000\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO',
+					url: 'http://test/2.ics'
+				};
+				const task2 = mapper.vtodoToTask(tzidVtodo);
+				check('DUE with TZID', task2.dueDate, '2026-02-14');
+				check('DTSTART with TZID', task2.scheduledDate, '2026-02-14');
+
+				// Test 3: VTIMEZONE block isolation
+				results.push('--- Test 3: VTIMEZONE block isolation ---');
+				const vtimezoneVtodo: CalendarObject = {
+					data: [
+						'BEGIN:VCALENDAR',
+						'BEGIN:VTIMEZONE',
+						'TZID:Pacific/Auckland',
+						'BEGIN:STANDARD',
+						'DTSTART:19700405T030000',
+						'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4',
+						'END:STANDARD',
+						'END:VTIMEZONE',
+						'BEGIN:VTODO',
+						'UID:tz-block-test',
+						'SUMMARY:Task in VTIMEZONE calendar',
+						'DUE;TZID=Pacific/Auckland:20260301T090000',
+						'DTSTART;TZID=Pacific/Auckland:20260228T080000',
+						'STATUS:NEEDS-ACTION',
+						'END:VTODO',
+						'END:VCALENDAR'
+					].join('\r\n'),
+					url: 'http://test/3.ics'
+				};
+				const task3 = mapper.vtodoToTask(vtimezoneVtodo);
+				check('DUE (not from VTIMEZONE)', task3.dueDate, '2026-03-01');
+				check('DTSTART (not from VTIMEZONE)', task3.scheduledDate, '2026-02-28');
+
+				// Test 4: Round-trip
+				results.push('--- Test 4: Round-trip ---');
+				const vtodoOut = mapper.taskToVTODO(task2, 'roundtrip-test');
+				const roundTrip = mapper.vtodoToTask({ data: vtodoOut, url: 'http://test/rt.ics' });
+				check('Round-trip DUE', roundTrip.dueDate, '2026-02-14');
+				check('Round-trip DTSTART', roundTrip.scheduledDate, '2026-02-14');
+
+				// Summary
+				const summary = `VTODO Parser Test: ${pass} passed, ${fail} failed`;
+				results.unshift(summary);
+				console.log('[VTODO Parser Test]\n' + results.join('\n'));
+				new Notice(summary, 5000);
 			}
 		});
 
