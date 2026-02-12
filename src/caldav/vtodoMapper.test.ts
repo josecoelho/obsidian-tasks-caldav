@@ -640,4 +640,215 @@ END:VTODO`;
       expect(task3.dueDate).toBe('2026-02-11');
     });
   });
+
+  describe('RFC 5545 line folding', () => {
+    it('should unfold SUMMARY split across lines', () => {
+      const vtodoData = `BEGIN:VTODO\r\nUID:fold-test\r\nSUMMARY:Test task created by CalDAV request dumper for fixture \r\n generation.\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.description).toBe('Test task created by CalDAV request dumper for fixture generation.');
+    });
+
+    it('should unfold with LF-only line endings', () => {
+      const vtodoData = `BEGIN:VTODO\nUID:fold-lf\nSUMMARY:A very long task description that has been\n  folded by the server\nSTATUS:NEEDS-ACTION\nEND:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.description).toBe('A very long task description that has been folded by the server');
+    });
+
+    it('should unfold with tab continuation', () => {
+      const vtodoData = `BEGIN:VTODO\r\nUID:fold-tab\r\nSUMMARY:Task with tab\r\n\tcontinuation\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.description).toBe('Task with tabcontinuation');
+    });
+
+    it('should unfold UID when extracting directly', () => {
+      const data = `BEGIN:VTODO\r\nUID:very-long-uid-that-was-\r\n folded-by-server\r\nSUMMARY:Task\r\nEND:VTODO`;
+
+      const uid = mapper.extractUID(data);
+      expect(uid).toBe('very-long-uid-that-was-folded-by-server');
+    });
+  });
+
+  describe('VTIMEZONE / TZID date handling', () => {
+    it('should parse DUE with TZID parameter', () => {
+      const vtodoData = `BEGIN:VTODO
+UID:tzid-test
+SUMMARY:Task with TZID date
+DUE;TZID=Pacific/Auckland:20260214T060001
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.dueDate).toBe('2026-02-14');
+    });
+
+    it('should parse DTSTART with TZID parameter', () => {
+      const vtodoData = `BEGIN:VTODO
+UID:tzid-start-test
+SUMMARY:Task with TZID start date
+DTSTART;TZID=Pacific/Auckland:20260214T000000
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.scheduledDate).toBe('2026-02-14');
+    });
+
+    it('should still parse VALUE=DATE format', () => {
+      const vtodoData = `BEGIN:VTODO
+UID:value-date-test
+SUMMARY:Task
+DUE;VALUE=DATE:20260214
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.dueDate).toBe('2026-02-14');
+    });
+  });
+
+  describe('Integration: realistic server VTODO with folding and TZID', () => {
+    it('should parse a full DAVx5/Tasks.org VTODO with VTIMEZONE block', () => {
+      // Simulates a real VTODO from DAVx5 with:
+      // - VTIMEZONE block
+      // - TZID-parameterized dates
+      // - Folded DESCRIPTION
+      // - CATEGORIES, PRIORITY, RRULE
+      const vtodoData = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//DAVx5//Tasks.org//EN',
+        'BEGIN:VTIMEZONE',
+        'TZID:Pacific/Auckland',
+        'BEGIN:STANDARD',
+        'DTSTART:19700405T030000',
+        'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4',
+        'TZOFFSETFROM:+1300',
+        'TZOFFSETTO:+1200',
+        'END:STANDARD',
+        'BEGIN:DAYLIGHT',
+        'DTSTART:19700927T020000',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=9',
+        'TZOFFSETFROM:+1200',
+        'TZOFFSETTO:+1300',
+        'END:DAYLIGHT',
+        'END:VTIMEZONE',
+        'BEGIN:VTODO',
+        'UID:3507578162627955783@tasks.org',
+        'DTSTAMP:20260210T120000Z',
+        'LAST-MODIFIED:20260210T120000Z',
+        'SUMMARY:Weekly grocery shopping with a very long description',
+        ' that continues on the next line and needs to be',
+        ' unfolded properly',
+        'DESCRIPTION:Buy the following items from the store: bread\\,',
+        ' milk\\, eggs\\, cheese\\, and other essentials for',
+        ' the week ahead.',
+        'DUE;TZID=Pacific/Auckland:20260214T060001',
+        'DTSTART;TZID=Pacific/Auckland:20260214T000000',
+        'STATUS:NEEDS-ACTION',
+        'PRIORITY:3',
+        'CATEGORIES:groceries,weekly',
+        'RRULE:FREQ=WEEKLY;BYDAY=SA',
+        'END:VTODO',
+        'END:VCALENDAR'
+      ].join('\r\n');
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: '"abc123"',
+        url: 'http://dav.example.com/calendars/tasks/3507578162627955783.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+
+      // Folded SUMMARY should be unfolded
+      expect(task.description).toBe(
+        'Weekly grocery shopping with a very long description' +
+        'that continues on the next line and needs to be' +
+        'unfolded properly'
+      );
+
+      // TZID dates should extract date portion
+      expect(task.dueDate).toBe('2026-02-14');
+      expect(task.scheduledDate).toBe('2026-02-14');
+
+      // Other properties should parse normally
+      expect(task.status).toBe('TODO');
+      expect(task.priority).toBe('high');
+      expect(task.tags).toEqual(['groceries', 'weekly']);
+      expect(task.recurrenceRule).toBe('FREQ=WEEKLY;BYDAY=SA');
+
+      // UID extraction should also handle unfolding
+      const uid = mapper.extractUID(vtodoData);
+      expect(uid).toBe('3507578162627955783@tasks.org');
+
+      // LAST-MODIFIED should parse
+      const lastModified = mapper.extractLastModified(vtodoData);
+      expect(lastModified).toBe('2026-02-10T12:00:00Z');
+    });
+
+    it('should round-trip a task with TZID dates correctly', () => {
+      // Parse a VTODO with TZID dates
+      const vtodoData = `BEGIN:VTODO\r\nUID:round-trip-tzid\r\nSUMMARY:Round trip test\r\nDUE;TZID=Europe/London:20260315T090000\r\nDTSTART;TZID=Europe/London:20260310T080000\r\nSTATUS:NEEDS-ACTION\r\nPRIORITY:5\r\nEND:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test',
+        url: 'http://example.com/test.ics'
+      };
+
+      // Parse TZID dates
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.dueDate).toBe('2026-03-15');
+      expect(task.scheduledDate).toBe('2026-03-10');
+
+      // Round-trip: convert back to VTODO (will use VALUE=DATE format)
+      const vtodoOut = mapper.taskToVTODO(task, 'round-trip-tzid');
+      expect(vtodoOut).toContain('DUE;VALUE=DATE:20260315');
+      expect(vtodoOut).toContain('DTSTART;VALUE=DATE:20260310');
+
+      // Parse again — dates should be stable
+      const task2 = mapper.vtodoToTask({ data: vtodoOut, etag: 'e2', url: 'http://test' });
+      expect(task2.dueDate).toBe('2026-03-15');
+      expect(task2.scheduledDate).toBe('2026-03-10');
+    });
+  });
 });
