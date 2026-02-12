@@ -67,11 +67,45 @@ When releasing, these files must be included:
 - Update `manifest.json` with new version and minimum Obsidian version
 - Update `versions.json` with version compatibility mapping
 - Can use `npm version patch|minor|major` to automate bumping (after manually updating minAppVersion)
-- Testing Approach
+## Testing
 
-Principles:
+### Principles
+- Test behavior, not implementation
+- Focus on what can break
+- Pure functions tested thoroughly
+- No trivial setter/getter tests
 
-    Test behavior, not implementation
-    Focus on what can break
-    Pure functions tested thoroughly
-    No trivial setter/getter tests
+### Test Commands
+- `npm test` - Run unit tests (mocked Obsidian API, fast, CI-safe)
+- `npm run test:e2e` - Run E2E tests against a real Radicale CalDAV server (starts Docker automatically)
+
+### Testing Workflow: Discover with E2E, Lock Down with Unit Tests
+
+**E2E tests** (`test/e2e/**/*.e2e.test.ts`) are the primary tool for validating CalDAV sync behavior. Use them to:
+- Validate any change to sync, CalDAV client, or VTODO mapping before claiming done
+- Discover real protocol issues (XML namespaces, line folding, server quirks)
+- Test full round-trips (create → fetch → update → delete against a real server)
+- Debug problems interactively with Radicale (`docker compose up -d` keeps it running)
+
+**Once an E2E test reveals an issue**, add a unit test to lock down the fix:
+- Extract the minimal reproducing case (e.g., a specific XML response format)
+- Add it as a unit test or fixture so CI catches regressions without Docker
+- The E2E test stays as broad integration coverage; the unit test is the fast guard
+
+**Unit tests** (`src/**/*.test.ts`) — for pure logic and locked-down behavior:
+- VTODO parsing / mapping
+- Task ID generation, markdown generation
+- Specific server response formats discovered via E2E (add as fixtures)
+
+### E2E Test Design
+- **Keep tests broad** — group related assertions in a single test to avoid recreating calendars repeatedly. One well-structured CRUD test is better than five slow isolated ones.
+- **Clean once per describe**, not per test — use `beforeAll` for calendar setup when tests within a group don't conflict. Reserve `beforeEach(cleanCalendar)` for groups where test isolation is essential.
+- **Use `FetchHttpClient`** in E2E tests (not Obsidian's `requestUrl`)
+- **Test the round-trip**: Create via the client, fetch back, verify the data survives the server's processing
+- E2E tests use a local Radicale server via Docker (`docker-compose.yml`). The container stays running between test runs.
+
+### Manual Testing
+E2E tests replace the manual test loop for CalDAV protocol and sync logic. Manual testing by the user is still required for:
+- Obsidian UI integration (settings tab, ribbon icons, notices)
+- obsidian-tasks plugin API interactions
+- Epic-level acceptance criteria

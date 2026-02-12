@@ -1,20 +1,23 @@
-import { requestUrl } from 'obsidian';
 import { CalDAVSettings } from '../types';
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
+import { HttpClient, ObsidianHttpClient } from './httpClient';
 
 /**
- * Direct CalDAV client implementation using Obsidian's requestUrl
- * Bypasses CORS issues by not using fetch()
+ * Direct CalDAV client implementation.
+ * Uses an HttpClient abstraction so the transport layer can be swapped
+ * (ObsidianHttpClient in production, FetchHttpClient in E2E tests).
  */
 export class CalDAVClientDirect {
   private settings: CalDAVSettings;
   private mapper: VTODOMapper;
   private calendarUrl: string | null = null;
   private authHeader: string;
+  private httpClient: HttpClient;
 
-  constructor(settings: CalDAVSettings) {
+  constructor(settings: CalDAVSettings, httpClient?: HttpClient) {
     this.settings = settings;
     this.mapper = new VTODOMapper();
+    this.httpClient = httpClient ?? new ObsidianHttpClient();
 
     // Create Basic Auth header
     const credentials = `${settings.username}:${settings.password}`;
@@ -62,7 +65,7 @@ export class CalDAVClientDirect {
     console.log('[CalDAV] Trying well-known URL:', wellKnownUrl);
 
     try {
-      const wellKnownResponse = await requestUrl({
+      const wellKnownResponse = await this.httpClient.request({
         url: wellKnownUrl,
         method: 'PROPFIND',
         headers: {
@@ -97,7 +100,7 @@ export class CalDAVClientDirect {
   </d:prop>
 </d:propfind>`;
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url: this.settings.serverUrl,
       method: 'PROPFIND',
       headers: {
@@ -122,8 +125,8 @@ export class CalDAVClientDirect {
    * Discover calendar home from principal URL
    */
   private async discoverFromPrincipal(propfindResponse: string, contextUrl: string): Promise<string> {
-    // Extract current-user-principal
-    const principalMatch = propfindResponse.match(/<d:current-user-principal>\s*<d:href>([^<]+)<\/d:href>/);
+    // Extract current-user-principal (handle any namespace prefix or none)
+    const principalMatch = propfindResponse.match(/<(?:\w+:)?current-user-principal>\s*<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
     if (!principalMatch) {
       throw new Error('Could not find current-user-principal in response');
     }
@@ -139,7 +142,7 @@ export class CalDAVClientDirect {
     console.log('[CalDAV] Principal URL:', principalUrl);
 
     // Now get calendar-home-set from principal
-    const calendarHomeResponse = await requestUrl({
+    const calendarHomeResponse = await this.httpClient.request({
       url: principalUrl,
       method: 'PROPFIND',
       headers: {
@@ -160,8 +163,8 @@ export class CalDAVClientDirect {
       throw new Error(`Failed to get calendar-home-set: ${calendarHomeResponse.status}`);
     }
 
-    // Extract calendar-home-set
-    const homeMatch = calendarHomeResponse.text.match(/<c:calendar-home-set>\s*<d:href>([^<]+)<\/d:href>/);
+    // Extract calendar-home-set (handle any namespace prefix or none)
+    const homeMatch = calendarHomeResponse.text.match(/<(?:\w+:)?calendar-home-set>\s*<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
     if (!homeMatch) {
       throw new Error('Could not find calendar-home-set in principal response');
     }
@@ -182,19 +185,19 @@ export class CalDAVClientDirect {
    */
   static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): Array<{ url: string; displayName: string; supportsVTODO: boolean }> {
     const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
-    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
+    const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
 
     while ((match = responseRegex.exec(xmlText)) !== null) {
       const responseBlock = match[1];
 
-      // Check if it's a calendar (has calendar resourcetype)
-      if (!responseBlock.includes('<c:calendar')) {
+      // Check if it's a calendar (has calendar resourcetype, any namespace prefix)
+      if (!/< ?\w*:?calendar[\s/>]/i.test(responseBlock)) {
         continue;
       }
 
-      // Extract href
-      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
+      // Extract href (any namespace prefix or none)
+      const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
       let url = hrefMatch[1];
@@ -205,13 +208,12 @@ export class CalDAVClientDirect {
         url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
       }
 
-      // Extract display name (handle CDATA)
-      const nameMatch = responseBlock.match(/<d:displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/d:displayname>/);
+      // Extract display name (handle CDATA, any namespace prefix)
+      const nameMatch = responseBlock.match(/<(?:\w+:)?displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/(?:\w+:)?displayname>/);
       const displayName = nameMatch ? nameMatch[1].trim() : url;
 
-      // Check if calendar supports VTODO
-      const supportsVTODO = responseBlock.includes('<c:comp name="VTODO"') ||
-                           responseBlock.includes('<C:comp name="VTODO"');
+      // Check if calendar supports VTODO (any namespace prefix, case-insensitive)
+      const supportsVTODO = /< ?\w*:?comp name="VTODO"/i.test(responseBlock);
 
       calendars.push({ url, displayName, supportsVTODO });
     }
@@ -232,7 +234,7 @@ export class CalDAVClientDirect {
   </d:prop>
 </d:propfind>`;
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url: homeUrl,
       method: 'PROPFIND',
       headers: {
@@ -265,14 +267,14 @@ export class CalDAVClientDirect {
    */
   static parseVTODOsFromXML(xmlText: string, baseServerUrl: string): CalendarObject[] {
     const vtodos: CalendarObject[] = [];
-    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/g;
+    const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
 
     while ((match = responseRegex.exec(xmlText)) !== null) {
       const responseBlock = match[1];
 
-      // Extract href
-      const hrefMatch = responseBlock.match(/<d:href>([^<]+)<\/d:href>/);
+      // Extract href (any namespace prefix or none)
+      const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
       let url = hrefMatch[1];
@@ -281,12 +283,12 @@ export class CalDAVClientDirect {
         url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
       }
 
-      // Extract etag
-      const etagMatch = responseBlock.match(/<d:getetag>([^<]+)<\/d:getetag>/);
+      // Extract etag (any namespace prefix or none)
+      const etagMatch = responseBlock.match(/<(?:\w+:)?getetag>([^<]+)<\/(?:\w+:)?getetag>/);
       const etag = etagMatch ? etagMatch[1].replace(/"/g, '') : undefined;
 
-      // Extract calendar data (VTODO) — handle optional CDATA wrapping
-      const dataMatch = responseBlock.match(/<c:calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/c:calendar-data>/);
+      // Extract calendar data (VTODO) — handle optional CDATA wrapping, any namespace prefix
+      const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
       if (!dataMatch) continue;
 
       const data = dataMatch[1].trim();
@@ -319,7 +321,7 @@ export class CalDAVClientDirect {
   </c:filter>
 </c:calendar-query>`;
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url: this.calendarUrl,
       method: 'REPORT',
       headers: {
@@ -361,7 +363,7 @@ export class CalDAVClientDirect {
     const filename = `${uid}.ics`;
     const url = `${this.calendarUrl}/${filename}`;
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url,
       method: 'PUT',
       headers: {
@@ -394,7 +396,7 @@ export class CalDAVClientDirect {
       headers['If-Match'] = `"${vtodo.etag}"`;
     }
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url: vtodo.url,
       method: 'PUT',
       headers,
@@ -402,7 +404,7 @@ export class CalDAVClientDirect {
       throw: false
     });
 
-    if (response.status !== 204 && response.status !== 200) {
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
       throw new Error(`Update VTODO failed: ${response.status}`);
     }
 
@@ -421,7 +423,7 @@ export class CalDAVClientDirect {
       headers['If-Match'] = `"${vtodo.etag}"`;
     }
 
-    const response = await requestUrl({
+    const response = await this.httpClient.request({
       url: vtodo.url,
       method: 'DELETE',
       headers,

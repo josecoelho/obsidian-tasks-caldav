@@ -1,0 +1,15 @@
+services:
+  radicale:
+    image: tomsquest/docker-radicale
+    ports:
+      - "5232:5232"
+    environment:
+      # Disable authentication for testing
+      RADICALE_AUTH__TYPE: none
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5232/.web/"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
