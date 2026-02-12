@@ -81,9 +81,15 @@ export class SyncEngine {
       );
       console.log(`Found ${obsidianTasks.length} Obsidian tasks to sync`);
 
-      // 4. Load baseline
-      const baseline = this.storage.getBaseline();
-      console.log(`Baseline has ${baseline.length} tasks`);
+      // 4. Load baseline — if empty, seed from already-mapped tasks so the
+      //    first sync with this engine doesn't duplicate everything.
+      let baseline = this.storage.getBaseline();
+      if (baseline.length === 0 && Object.keys(this.storage.getMapping().tasks).length > 0) {
+        baseline = this.seedBaselineFromMapping(obsidianTasks, caldavTasks);
+        console.log(`Seeded baseline from existing mapping: ${baseline.length} tasks`);
+      } else {
+        console.log(`Baseline has ${baseline.length} tasks`);
+      }
 
       // 5. Diff
       const strategy: ConflictStrategy = this.settings.autoResolveObsidianWins
@@ -178,6 +184,32 @@ export class SyncEngine {
     const conflicts = state.conflicts.length;
 
     return `Last sync: ${lastSync}\nMapped tasks: ${mappedTasks}\nBaseline tasks: ${baselineTasks}\nConflicts: ${conflicts}`;
+  }
+
+  /**
+   * Seed baseline from existing mapping data.
+   * Used on first sync with the new engine to avoid duplicating
+   * tasks that were already synced by the old engine.
+   * For each mapped task, use whichever side has it — preferring
+   * Obsidian (since it's the source of truth for content).
+   */
+  private seedBaselineFromMapping(obsidianTasks: CommonTask[], caldavTasks: CommonTask[]): CommonTask[] {
+    const mapping = this.storage.getMapping();
+    const obsidianByUid = new Map(obsidianTasks.map(t => [t.uid, t]));
+    const caldavByUid = new Map(caldavTasks.map(t => [t.uid, t]));
+    const baseline: CommonTask[] = [];
+
+    for (const taskId of Object.keys(mapping.tasks)) {
+      const obs = obsidianByUid.get(taskId);
+      const cal = caldavByUid.get(taskId);
+      if (obs) {
+        baseline.push(obs);
+      } else if (cal) {
+        baseline.push(cal);
+      }
+    }
+
+    return baseline;
   }
 
   /**
