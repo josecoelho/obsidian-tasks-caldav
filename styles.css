@@ -1,8 +1,198 @@
-/*
+/* Sync Result Modal */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.sync-modal {
+  max-width: 700px;
+}
 
-If your plugin does not need CSS, delete this file.
+.sync-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
 
-*/
+.sync-summary-item {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: var(--font-ui-small);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.sync-summary-error {
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+}
+
+.sync-section {
+  margin-bottom: 12px;
+}
+
+.sync-section-title {
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+  padding: 6px 0;
+  color: var(--text-normal);
+}
+
+.sync-section-content {
+  padding: 4px 0 4px 8px;
+}
+
+.sync-section-content h4 {
+  margin: 10px 0 4px;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+/* Task tables */
+
+.sync-task-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-ui-smaller);
+  margin-bottom: 8px;
+}
+
+.sync-task-table th {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-weight: var(--font-semibold);
+}
+
+.sync-task-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.sync-uid {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}
+
+/* Change badges */
+
+.sync-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sync-change-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.sync-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.sync-badge-create {
+  background: var(--color-green);
+  color: var(--text-on-accent);
+}
+
+.sync-badge-update {
+  background: var(--color-blue);
+  color: var(--text-on-accent);
+}
+
+.sync-badge-delete {
+  background: var(--color-red);
+  color: var(--text-on-accent);
+}
+
+.sync-change-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-change-uid {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.sync-change-diff {
+  width: 100%;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  padding-left: 76px;
+}
+
+/* Conflicts */
+
+.sync-conflict {
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+}
+
+.sync-conflict h5 {
+  margin: 0 0 8px;
+  font-size: var(--font-ui-small);
+}
+
+.sync-conflict-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.sync-conflict-col h6 {
+  margin: 0 0 4px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sync-task-detail {
+  margin: 0;
+  font-size: var(--font-ui-smaller);
+}
+
+.sync-task-detail dt {
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+.sync-task-detail dd {
+  margin: 0;
+}
+
+/* Actions */
+
+.sync-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.sync-no-changes {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 20px 0;
+}

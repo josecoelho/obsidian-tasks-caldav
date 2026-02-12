@@ -20,6 +20,9 @@ export interface SyncResult {
     toObsidian: SyncChange[];
     toCalDAV: SyncChange[];
     conflictDetails: Conflict[];
+    obsidianTasks?: CommonTask[];
+    caldavTasks?: CommonTask[];
+    baselineTasks?: CommonTask[];
   };
 }
 
@@ -117,6 +120,9 @@ export class SyncEngine {
           toObsidian: changeset.toObsidian,
           toCalDAV: changeset.toCalDAV,
           conflictDetails: changeset.conflicts,
+          obsidianTasks,
+          caldavTasks,
+          baselineTasks: baseline,
         },
       };
 

@@ -4,6 +4,7 @@ import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGe
 import { TaskManager } from './src/tasks/taskManager';
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
+import { SyncResultModal } from './src/ui/syncResultModal';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
@@ -225,8 +226,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 					}
 				}
 
-				// Perform sync
-				await this.syncEngine.sync();
+				// Perform sync and show results
+				const result = await this.syncEngine.sync();
+				new SyncResultModal(this.app, result, false).open();
 			}
 		});
 
@@ -246,8 +248,11 @@ export default class CalDAVSyncPlugin extends Plugin {
 					}
 				}
 
-				// Perform dry run sync
-				await this.syncEngine.sync(true);
+				// Perform dry run and show preview modal
+				const result = await this.syncEngine.sync(true);
+				new SyncResultModal(this.app, result, true, async () => {
+					return await this.syncEngine!.sync(false);
+				}).open();
 			}
 		});
 

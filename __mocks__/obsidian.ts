@@ -27,6 +27,20 @@ export class Notice {
     }
 }
 
+export class Modal {
+    app: App;
+    contentEl: HTMLElement;
+    constructor(app: App) {
+        this.app = app;
+        this.contentEl = document.createElement('div');
+    }
+    open(): void {}
+    close(): void {}
+    onOpen(): void {}
+    onClose(): void {}
+    setTitle(title: string): void {}
+}
+
 export class Plugin {
     app: App = new App();
     manifest: any = {};
