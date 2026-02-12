@@ -29,7 +29,7 @@ function makeObsidianTask(overrides: Partial<any> = {}): any {
 function makeSettings(overrides: Partial<CalDAVSettings> = {}): CalDAVSettings {
   return {
     ...DEFAULT_CALDAV_SETTINGS,
-    syncTag: 'sync',
+    syncTag: '', // Default to no tag filtering; tests that need it set syncTag explicitly
     ...overrides,
   };
 }
@@ -600,6 +600,103 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('CalDAV sync tag filtering', () => {
+    it('should exclude CalDAV tasks without the sync tag', async () => {
+      // CalDAV has two tasks: one with CATEGORIES:sync, one with a different category
+      const vtodoWithTag = makeCalObj('caldav-with-tag', 'Task with tag', ['CATEGORIES:sync']);
+      const vtodoWithoutTag = makeCalObj('caldav-no-tag', 'Task without tag', ['CATEGORIES:other']);
+
+      mockFetchVTODOs.mockResolvedValue([vtodoWithTag, vtodoWithoutTag]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      // Only the task with sync tag should be synced to Obsidian
+      expect(result.created.toObsidian).toBe(1);
+      expect(result.details.caldavTasks!.length).toBe(1);
+      expect(result.details.caldavTasks![0].description).toBe('Task with tag');
+    });
+
+    it('should include mapped CalDAV tasks even without the sync tag', async () => {
+      // CalDAV has a previously-synced task (mapped) without the sync tag in categories
+      const vtodo = makeCalObj('caldav-mapped', 'Mapped task');
+
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      // This task is already mapped
+      mockGetMapping.mockReturnValue({
+        tasks: { 'task-mapped': { caldavUID: 'caldav-mapped', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-mapped': 'task-mapped' },
+      });
+
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      // Mapped task should be included even without the tag
+      expect(result.details.caldavTasks!.length).toBe(1);
+      expect(result.details.caldavTasks![0].uid).toBe('task-mapped');
+    });
+
+    it('should exclude CalDAV tasks with no categories when sync tag is set', async () => {
+      // CalDAV task with no CATEGORIES at all
+      const vtodo = makeCalObj('caldav-bare', 'Task no categories');
+
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      expect(result.details.caldavTasks!.length).toBe(0);
+      expect(result.created.toObsidian).toBe(0);
+    });
+
+    it('should match CalDAV categories case-insensitively', async () => {
+      const vtodo = makeCalObj('caldav-upper', 'Task with SYNC', ['CATEGORIES:SYNC']);
+
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      expect(result.details.caldavTasks!.length).toBe(1);
+    });
+
+    it('should include all CalDAV tasks when no sync tag is configured', async () => {
+      const vtodo1 = makeCalObj('caldav-1', 'Task one');
+      const vtodo2 = makeCalObj('caldav-2', 'Task two');
+
+      mockFetchVTODOs.mockResolvedValue([vtodo1, vtodo2]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '' }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      expect(result.details.caldavTasks!.length).toBe(2);
+    });
+  });
+
   describe('sync result', () => {
     it('should include input snapshots', async () => {
       const task = makeObsidianTask({
@@ -791,8 +888,7 @@ describe('SyncEngine', () => {
 
       // Obsidian still has the same task
       mockGetAllTasks.mockReturnValue([taskA]);
-      // CalDAV now has a matching task (created in first sync)
-      // Include CATEGORIES:sync to match what the real sync would produce
+      // CalDAV now has a matching task (created in first sync, with CATEGORIES from Obsidian tags)
       const vtodoA = makeCalObj('obsidian-20250101-aaa', 'Task A', ['CATEGORIES:sync']);
       mockFetchVTODOs.mockResolvedValue([vtodoA]);
       // Baseline reflects what was saved

@@ -66,11 +66,12 @@ export class SyncEngine {
       new Notice(`${mode}Connecting to CalDAV server...`);
       await this.caldavClient.connect();
 
-      // 2. Fetch CalDAV tasks → normalize to CommonTask[]
+      // 2. Fetch CalDAV tasks → normalize to CommonTask[] → filter by sync tag
       const vtodos = await this.caldavClient.fetchVTODOs();
       const uidMapping = this.buildUidMapping();
-      const caldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
-      console.log(`[Sync] CalDAV: ${caldavTasks.length} tasks`, caldavTasks.map(t => `${t.uid}: ${t.description}`));
+      const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
+      const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
+      console.log(`[Sync] CalDAV: ${caldavTasks.length}/${allCaldavTasks.length} tasks (after sync tag filter)`, caldavTasks.map(t => `${t.uid}: ${t.description}`));
 
       // 3. Get Obsidian tasks → filter by sync tag → inject IDs only on matching tasks
       const allObsidianTasks = this.taskManager.getAllTasks();
@@ -200,7 +201,7 @@ export class SyncEngine {
   }
 
   /**
-   * Filter tasks by the configured sync tag.
+   * Filter Obsidian tasks by the configured sync tag.
    * Only these tasks should get IDs injected and be synced.
    */
   private filterBySyncTag(tasks: ObsidianTask[]): ObsidianTask[] {
@@ -213,6 +214,28 @@ export class SyncEngine {
       return task.tags.some((tag: string) =>
         tag.toLowerCase().replace(/^#/, '') === tagLower
       );
+    });
+  }
+
+  /**
+   * Filter CalDAV tasks by sync tag.
+   * Include a CalDAV task if it is already mapped (previously synced)
+   * or if its CATEGORIES contain the sync tag.
+   * When no sync tag is configured, include all tasks.
+   */
+  private filterCalDAVBySyncTag(tasks: CommonTask[], uidMapping: Map<string, string>): CommonTask[] {
+    const syncTag = this.settings.syncTag;
+    if (!syncTag || syncTag.trim() === '') return tasks;
+
+    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+    const mapping = this.storage.getMapping();
+
+    return tasks.filter(task => {
+      // Always include tasks that are already mapped (previously synced)
+      if (mapping.tasks[task.uid]) return true;
+
+      // Include new CalDAV tasks that have the sync tag in their categories
+      return task.tags.some(tag => tag.toLowerCase() === tagLower);
     });
   }
 
