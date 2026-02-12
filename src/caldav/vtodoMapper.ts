@@ -89,7 +89,10 @@ export class VTODOMapper {
    * @returns Obsidian task object
    */
   vtodoToTask(vtodo: CalendarObject): ObsidianTask {
-    const data = vtodo.data;
+    const unfolded = this.unfold(vtodo.data);
+    // Extract only the VTODO section to avoid matching properties from VTIMEZONE or other components
+    const vtodoMatch = unfolded.match(/BEGIN:VTODO[\s\S]*?END:VTODO/);
+    const data = vtodoMatch ? vtodoMatch[0] : unfolded;
 
     return {
       description: this.extractProperty(data, 'SUMMARY') || 'Untitled Task',
@@ -108,7 +111,8 @@ export class VTODOMapper {
    * Extract UID from VTODO data
    */
   extractUID(data: string): string {
-    const match = data.match(/^UID:(.+)$/m);
+    const unfolded = this.unfold(data);
+    const match = unfolded.match(/^UID:(.+)$/m);
     return match ? match[1].trim() : '';
   }
 
@@ -117,7 +121,7 @@ export class VTODOMapper {
    * Returns ISO 8601 string or null if not present
    */
   extractLastModified(data: string): string | null {
-    const match = data.match(/^LAST-MODIFIED:(.+)$/m);
+    const match = this.unfold(data).match(/^LAST-MODIFIED:(.+)$/m);
     if (!match) return null;
 
     const timestamp = match[1].trim();
@@ -203,6 +207,14 @@ export class VTODOMapper {
   }
 
   /**
+   * RFC 5545 Section 3.1: Unfold long content lines.
+   * Lines folded with CRLF+space/tab continuation are joined.
+   */
+  private unfold(data: string): string {
+    return data.replace(/\r?\n[ \t]/g, '');
+  }
+
+  /**
    * Extract a simple property value from iCalendar data
    */
   private extractProperty(data: string, property: string): string | null {
@@ -229,8 +241,16 @@ export class VTODOMapper {
     const value = this.extractProperty(data, property);
     if (!value) return null;
 
-    // Parse YYYYMMDD format
-    if (value.length === 8) {
+    // Parse YYYYMMDD format (VALUE=DATE)
+    if (value.length === 8 && /^\d{8}$/.test(value)) {
+      const year = value.substring(0, 4);
+      const month = value.substring(4, 6);
+      const day = value.substring(6, 8);
+      return `${year}-${month}-${day}`;
+    }
+
+    // Parse YYYYMMDDTHHMMSS format (TZID parameter or datetime without Z)
+    if (value.length >= 15 && value.includes('T')) {
       const year = value.substring(0, 4);
       const month = value.substring(4, 6);
       const day = value.substring(6, 8);
