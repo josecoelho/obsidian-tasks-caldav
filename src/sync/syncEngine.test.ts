@@ -1,6 +1,7 @@
 import { App } from 'obsidian';
 import { SyncEngine } from './syncEngine';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
+import { CalendarObject } from '../caldav/vtodoMapper';
 
 // --- Helpers ---
 
@@ -33,50 +34,469 @@ function makeSettings(overrides: Partial<CalDAVSettings> = {}): CalDAVSettings {
   };
 }
 
+function buildVTODO(uid: string, summary: string, extra: string[] = []): string {
+  const hasStatus = extra.some(l => l.startsWith('STATUS:'));
+  const hasPriority = extra.some(l => l.startsWith('PRIORITY:'));
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Test//EN',
+    'BEGIN:VTODO',
+    `UID:${uid}`,
+    'DTSTAMP:20250101T000000Z',
+    `SUMMARY:${summary}`,
+    ...(hasStatus ? [] : ['STATUS:NEEDS-ACTION']),
+    ...(hasPriority ? [] : ['PRIORITY:0']),
+    ...extra,
+    'END:VTODO',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+function makeCalObj(uid: string, summary: string, extra: string[] = []): CalendarObject {
+  return {
+    data: buildVTODO(uid, summary, extra),
+    url: `http://example.com/${uid}.ics`,
+    etag: `etag-${uid}`,
+  };
+}
+
 // --- Mocks ---
 
-// Mock TaskManager
-const mockGetAllTasks = jest.fn();
+// All mock fns are declared at module level so jest.mock() can reference them,
+// but each test can reconfigure via mockReturnValue / mockImplementation.
+
+const mockTaskManagerInitialize = jest.fn().mockResolvedValue(true);
+const mockGetAllTasks = jest.fn().mockReturnValue([]);
 const mockEnsureTaskHasId = jest.fn().mockResolvedValue('mock-id');
-const mockInitialize = jest.fn().mockResolvedValue(true);
+const mockFindTaskById = jest.fn().mockReturnValue(null);
+const mockCreateTask = jest.fn().mockResolvedValue(undefined);
+const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('../tasks/taskManager', () => ({
   TaskManager: jest.fn().mockImplementation(() => ({
-    initialize: mockInitialize,
+    initialize: mockTaskManagerInitialize,
     getAllTasks: mockGetAllTasks,
     ensureTaskHasId: mockEnsureTaskHasId,
-    findTaskById: jest.fn().mockReturnValue(null),
+    findTaskById: mockFindTaskById,
+    createTask: mockCreateTask,
+    updateTaskInVault: mockUpdateTaskInVault,
   })),
 }));
 
-// Mock CalDAVClientDirect
+const mockConnect = jest.fn().mockResolvedValue(undefined);
+const mockFetchVTODOs = jest.fn().mockResolvedValue([]);
+const mockCreateVTODO = jest.fn().mockResolvedValue(undefined);
+const mockUpdateVTODO = jest.fn().mockResolvedValue(undefined);
+const mockDeleteVTODOByUID = jest.fn().mockResolvedValue(undefined);
+const mockFetchVTODOByUID = jest.fn().mockResolvedValue(null);
+
 jest.mock('../caldav/calDAVClientDirect', () => ({
   CalDAVClientDirect: jest.fn().mockImplementation(() => ({
-    connect: jest.fn().mockResolvedValue(undefined),
-    fetchVTODOs: jest.fn().mockResolvedValue([]),
+    connect: mockConnect,
+    fetchVTODOs: mockFetchVTODOs,
+    createVTODO: mockCreateVTODO,
+    updateVTODO: mockUpdateVTODO,
+    deleteVTODOByUID: mockDeleteVTODOByUID,
+    fetchVTODOByUID: mockFetchVTODOByUID,
   })),
 }));
 
-// Mock SyncStorage
+const mockStorageInitialize = jest.fn().mockResolvedValue(undefined);
+const mockGetBaseline = jest.fn().mockReturnValue([]);
+const mockGetMapping = jest.fn().mockReturnValue({ tasks: {}, caldavToTask: {} });
+const mockGetState = jest.fn().mockReturnValue({ lastSyncTime: '', conflicts: [] });
+const mockSetBaseline = jest.fn();
+const mockUpdateLastSyncTime = jest.fn();
+const mockSave = jest.fn().mockResolvedValue(undefined);
+const mockAddTaskMapping = jest.fn();
+const mockRemoveTaskMapping = jest.fn();
+
 jest.mock('../storage/syncStorage', () => ({
   SyncStorage: jest.fn().mockImplementation(() => ({
-    initialize: jest.fn().mockResolvedValue(undefined),
-    getBaseline: jest.fn().mockReturnValue([]),
-    getMapping: jest.fn().mockReturnValue({ tasks: {}, caldavToTask: {} }),
-    getState: jest.fn().mockReturnValue({ lastSyncTime: '', conflicts: [] }),
-    setBaseline: jest.fn(),
-    updateLastSyncTime: jest.fn(),
-    save: jest.fn().mockResolvedValue(undefined),
-    addTaskMapping: jest.fn(),
-    removeTaskMapping: jest.fn(),
+    initialize: mockStorageInitialize,
+    getBaseline: mockGetBaseline,
+    getMapping: mockGetMapping,
+    getState: mockGetState,
+    setBaseline: mockSetBaseline,
+    updateLastSyncTime: mockUpdateLastSyncTime,
+    save: mockSave,
+    addTaskMapping: mockAddTaskMapping,
+    removeTaskMapping: mockRemoveTaskMapping,
   })),
 }));
 
-describe('SyncEngine', () => {
-  let engine: SyncEngine;
+// --- Tests ---
 
+describe('SyncEngine', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Re-set implementations that individual tests may override.
+    // clearAllMocks clears call counts but not implementations,
+    // so we must explicitly reset any fn that a test reconfigures.
+    mockTaskManagerInitialize.mockResolvedValue(true);
+    mockGetAllTasks.mockReturnValue([]);
+    mockEnsureTaskHasId.mockResolvedValue('mock-id');
+    mockFindTaskById.mockReturnValue(null);
+    mockCreateTask.mockResolvedValue(undefined);
+    mockUpdateTaskInVault.mockResolvedValue(undefined);
+    mockConnect.mockResolvedValue(undefined);
+    mockFetchVTODOs.mockResolvedValue([]);
+    mockCreateVTODO.mockResolvedValue(undefined);
+    mockUpdateVTODO.mockResolvedValue(undefined);
+    mockDeleteVTODOByUID.mockResolvedValue(undefined);
+    mockFetchVTODOByUID.mockResolvedValue(null);
+    mockStorageInitialize.mockResolvedValue(undefined);
+    mockGetBaseline.mockReturnValue([]);
+    mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+    mockGetState.mockReturnValue({ lastSyncTime: '', conflicts: [] });
+    mockSave.mockResolvedValue(undefined);
+  });
+
+  describe('initialize', () => {
+    it('should return true when obsidian-tasks plugin is available', async () => {
+      const engine = new SyncEngine(new App(), makeSettings());
+      expect(await engine.initialize()).toBe(true);
+      expect(mockTaskManagerInitialize).toHaveBeenCalled();
+      expect(mockStorageInitialize).toHaveBeenCalled();
+    });
+
+    it('should return false when obsidian-tasks plugin is unavailable', async () => {
+      mockTaskManagerInitialize.mockResolvedValue(false);
+      const engine = new SyncEngine(new App(), makeSettings());
+      expect(await engine.initialize()).toBe(false);
+      // Should not initialize storage if taskManager failed
+      expect(mockStorageInitialize).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('error handling', () => {
+    it('should return failure result when CalDAV connection fails', async () => {
+      mockConnect.mockRejectedValue(new Error('Connection refused'));
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Connection refused');
+      expect(result.created).toEqual({ toObsidian: 0, toCalDAV: 0 });
+    });
+
+    it('should return failure result when fetching VTODOs fails', async () => {
+      mockFetchVTODOs.mockRejectedValue(new Error('Server error'));
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Server error');
+    });
+  });
+
+  describe('dry run', () => {
+    it('should not apply changes or save state', async () => {
+      const task = makeObsidianTask({
+        description: 'New obsidian task',
+        id: '20250101-abc',
+        tags: ['#sync'],
+      });
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      // Should NOT touch vault or CalDAV
+      expect(mockCreateTask).not.toHaveBeenCalled();
+      expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateVTODO).not.toHaveBeenCalled();
+      expect(mockDeleteVTODOByUID).not.toHaveBeenCalled();
+      // Should NOT save state
+      expect(mockSetBaseline).not.toHaveBeenCalled();
+      expect(mockUpdateLastSyncTime).not.toHaveBeenCalled();
+      expect(mockSave).not.toHaveBeenCalled();
+    });
+
+    it('should still report what would change', async () => {
+      // Obsidian has a task, CalDAV doesn't → would create on CalDAV
+      const task = makeObsidianTask({
+        description: 'Task to sync',
+        id: '20250101-abc',
+        tags: ['#sync'],
+      });
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.created.toCalDAV).toBe(1);
+      expect(result.details.toCalDAV.length).toBe(1);
+      expect(result.details.toCalDAV[0].type).toBe('create');
+      expect(result.message).toContain('Dry run');
+    });
+  });
+
+  describe('real sync', () => {
+    it('should apply changes and save state', async () => {
+      // Obsidian has a task not on CalDAV → creates on CalDAV
+      const task = makeObsidianTask({
+        description: 'Task to push',
+        id: '20250101-abc',
+        tags: ['#sync'],
+      });
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+      // Should create VTODO on CalDAV
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      // Should save state
+      expect(mockSetBaseline).toHaveBeenCalled();
+      expect(mockUpdateLastSyncTime).toHaveBeenCalled();
+      expect(mockSave).toHaveBeenCalled();
+    });
+
+    it('should create task in Obsidian when CalDAV has a new task', async () => {
+      // CalDAV has a task, Obsidian doesn't → create in Obsidian
+      const vtodo = makeCalObj('caldav-task-001', 'Buy milk');
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetAllTasks.mockReturnValue([]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+      expect(result.created.toObsidian).toBe(1);
+      expect(mockCreateTask).toHaveBeenCalledTimes(1);
+      // Should add mapping for the new task
+      expect(mockAddTaskMapping).toHaveBeenCalled();
+    });
+
+    it('should remove mapping when deleting a task', async () => {
+      // Task exists in baseline but not in Obsidian or CalDAV → delete
+      // Simulate: CalDAV has task that was in baseline, Obsidian deleted it
+      const task = makeObsidianTask({
+        description: 'Task to delete on CalDAV',
+        id: '20250101-del',
+        tags: ['#sync'],
+      });
+      // Task is in baseline (was synced before) and in CalDAV, but not in Obsidian
+      const vtodo = makeCalObj('caldav-del', 'Task to delete on CalDAV');
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetAllTasks.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({
+        tasks: { '20250101-del': { caldavUID: 'caldav-del', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-del': '20250101-del' },
+      });
+      // Baseline has this task (synced before)
+      mockGetBaseline.mockReturnValue([{
+        uid: '20250101-del',
+        description: 'Task to delete on CalDAV',
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+      }]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+      expect(result.deleted.toCalDAV).toBe(1);
+      expect(mockDeleteVTODOByUID).toHaveBeenCalledTimes(1);
+      expect(mockRemoveTaskMapping).toHaveBeenCalled();
+    });
+  });
+
+  describe('result counting', () => {
+    it('should count creates, updates, and deletes correctly', async () => {
+      // Two Obsidian tasks not on CalDAV → 2 creates to CalDAV
+      const task1 = makeObsidianTask({
+        description: 'Task one',
+        id: '20250101-001',
+        tags: ['#sync'],
+      });
+      const task2 = makeObsidianTask({
+        description: 'Task two',
+        id: '20250101-002',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Task two %%[id::20250101-002]%% #sync',
+      });
+      mockGetAllTasks.mockReturnValue([task1, task2]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.created.toCalDAV).toBe(2);
+      expect(result.updated.toCalDAV).toBe(0);
+      expect(result.deleted.toCalDAV).toBe(0);
+      expect(result.created.toObsidian).toBe(0);
+    });
+
+    it('should count CalDAV creates to Obsidian', async () => {
+      // Two CalDAV tasks not in Obsidian → 2 creates to Obsidian
+      mockFetchVTODOs.mockResolvedValue([
+        makeCalObj('cal-001', 'CalDAV task 1'),
+        makeCalObj('cal-002', 'CalDAV task 2'),
+      ]);
+      mockGetAllTasks.mockReturnValue([]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.created.toObsidian).toBe(2);
+      expect(result.created.toCalDAV).toBe(0);
+    });
+  });
+
+  describe('baseline seeding', () => {
+    it('should seed baseline from mapping on first sync with new engine', async () => {
+      // Scenario: mapping exists from old engine, baseline is empty
+      const task = makeObsidianTask({
+        description: 'Already synced task',
+        id: '20250101-abc',
+        tags: ['#sync'],
+      });
+      const vtodo = makeCalObj('caldav-abc', 'Already synced task');
+      mockGetAllTasks.mockReturnValue([task]);
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([]); // Empty baseline
+      mockGetMapping.mockReturnValue({
+        tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      // The task exists on both sides and was in the mapping →
+      // baseline should have been seeded, preventing duplication
+      expect(result.created.toObsidian).toBe(0);
+      expect(result.created.toCalDAV).toBe(0);
+    });
+
+    it('should not seed baseline when mapping is also empty', async () => {
+      // Fresh install: no mapping, no baseline → tasks are new
+      const task = makeObsidianTask({
+        description: 'Brand new task',
+        id: '20250101-new',
+        tags: ['#sync'],
+      });
+      mockGetAllTasks.mockReturnValue([task]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      // No baseline, no mapping → task is new, should be created on CalDAV
+      expect(result.created.toCalDAV).toBe(1);
+    });
+  });
+
+  describe('conflict strategy', () => {
+    it('should use obsidian-wins strategy when autoResolveObsidianWins is true', async () => {
+      // Both sides have the same task with different content, baseline has original
+      const baseline = {
+        uid: '20250101-abc',
+        description: 'Original task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [] as string[],
+        recurrenceRule: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Updated in Obsidian',
+        id: '20250101-abc',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Updated in Obsidian %%[id::20250101-abc]%% #sync',
+      });
+
+      const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
+
+      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetMapping.mockReturnValue({
+        tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+
+      const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: true }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      // With obsidian-wins, conflict is auto-resolved → update pushed to CalDAV
+      // The conflict is still recorded for informational purposes
+      expect(result.conflicts).toBe(1);
+      expect(result.updated.toCalDAV).toBe(1);
+      expect(result.details.toCalDAV[0].task.description).toBe('Updated in Obsidian');
+    });
+
+    it('should use caldav-wins strategy when autoResolveObsidianWins is false', async () => {
+      const baseline = {
+        uid: '20250101-abc',
+        description: 'Original task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [] as string[],
+        recurrenceRule: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Updated in Obsidian',
+        id: '20250101-abc',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Updated in Obsidian %%[id::20250101-abc]%% #sync',
+      });
+
+      const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
+
+      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetMapping.mockReturnValue({
+        tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+
+      const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: false }));
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      // With caldav-wins, conflict is auto-resolved → update pushed to Obsidian
+      // The conflict is still recorded for informational purposes
+      expect(result.conflicts).toBe(1);
+      expect(result.updated.toObsidian).toBe(1);
+      expect(result.details.toObsidian[0].task.description).toBe('Updated in CalDAV');
+    });
   });
 
   describe('sync tag filtering for ID injection', () => {
@@ -96,11 +516,10 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([syncedTask, unsyncedTask]);
 
-      engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
       await engine.initialize();
       await engine.sync(true);
 
-      // ensureTaskHasId should only be called for the #sync task
       expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(1);
       expect(mockEnsureTaskHasId).toHaveBeenCalledWith(syncedTask);
     });
@@ -119,7 +538,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([task1, task2]);
 
-      engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
       await engine.initialize();
       await engine.sync(true);
 
@@ -140,11 +559,10 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([task1, task2]);
 
-      engine = new SyncEngine(new App(), makeSettings({ syncTag: '' }));
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '' }));
       await engine.initialize();
       await engine.sync(true);
 
-      // No sync tag filter → all tasks get IDs
       expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(2);
     });
 
@@ -157,7 +575,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([task]);
 
-      engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
       await engine.initialize();
       await engine.sync(true);
 
@@ -174,7 +592,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([task]);
 
-      engine = new SyncEngine(new App(), makeSettings({ syncTag: '#sync' }));
+      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '#sync' }));
       await engine.initialize();
       await engine.sync(true);
 
@@ -182,8 +600,8 @@ describe('SyncEngine', () => {
     });
   });
 
-  describe('sync result includes input snapshots', () => {
-    it('should include obsidian, caldav, and baseline tasks in dry run result', async () => {
+  describe('sync result', () => {
+    it('should include input snapshots', async () => {
       const task = makeObsidianTask({
         description: 'My task',
         tags: ['#sync'],
@@ -192,7 +610,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasks.mockReturnValue([task]);
 
-      engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -204,6 +622,17 @@ describe('SyncEngine', () => {
       expect(result.details.obsidianTasks![0].uid).toBe('20250101-abc');
       expect(result.details.caldavTasks).toEqual([]);
       expect(result.details.baselineTasks).toEqual([]);
+    });
+
+    it('should not include input snapshots on error', async () => {
+      mockConnect.mockRejectedValue(new Error('fail'));
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(false);
+      expect(result.details.obsidianTasks).toBeUndefined();
     });
   });
 });
