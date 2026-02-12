@@ -1,5 +1,6 @@
 import { App, TFile, normalizePath } from 'obsidian';
 import { MappingData, SyncState, TaskMapping } from '../types';
+import { CommonTask } from '../sync/types';
 
 /**
  * Manages persistence of sync-related data in .caldav-sync/ directory
@@ -14,20 +15,24 @@ export class SyncStorage {
   private syncDir: string;
   private mappingPath: string;
   private statePath: string;
+  private baselinePath: string;
 
   // In-memory caches
   private mappingCache: MappingData | null = null;
   private stateCache: SyncState | null = null;
+  private baselineCache: CommonTask[] | null = null;
 
   // Dirty flags to track unsaved changes
   private mappingDirty: boolean = false;
   private stateDirty: boolean = false;
+  private baselineDirty: boolean = false;
 
   constructor(app: App) {
     this.app = app;
     this.syncDir = normalizePath('.caldav-sync');
     this.mappingPath = normalizePath('.caldav-sync/mapping.json');
     this.statePath = normalizePath('.caldav-sync/state.json');
+    this.baselinePath = normalizePath('.caldav-sync/baseline.json');
   }
 
   /**
@@ -70,8 +75,10 @@ export class SyncStorage {
   private async loadIntoCache(): Promise<void> {
     this.mappingCache = await this.loadMappingFromDisk();
     this.stateCache = await this.loadStateFromDisk();
+    this.baselineCache = await this.loadBaselineFromDisk();
     this.mappingDirty = false;
     this.stateDirty = false;
+    this.baselineDirty = false;
   }
 
   /**
@@ -145,6 +152,11 @@ export class SyncStorage {
     if (this.stateDirty && this.stateCache) {
       promises.push(this.saveStateToDisk(this.stateCache));
       this.stateDirty = false;
+    }
+
+    if (this.baselineDirty && this.baselineCache) {
+      promises.push(this.saveBaselineToDisk(this.baselineCache));
+      this.baselineDirty = false;
     }
 
     await Promise.all(promises);
@@ -286,6 +298,52 @@ export class SyncStorage {
   }
 
   /**
+   * Get baseline snapshot from cache
+   */
+  getBaseline(): CommonTask[] {
+    return this.baselineCache ?? [];
+  }
+
+  /**
+   * Update baseline snapshot
+   */
+  setBaseline(tasks: CommonTask[]): void {
+    this.baselineCache = tasks;
+    this.baselineDirty = true;
+  }
+
+  /**
+   * Load baseline from disk
+   */
+  private async loadBaselineFromDisk(): Promise<CommonTask[]> {
+    try {
+      const adapter = this.app.vault.adapter;
+      if (!(await adapter.exists(this.baselinePath))) {
+        return [];
+      }
+      const content = await adapter.read(this.baselinePath);
+      return JSON.parse(content);
+    } catch (error) {
+      console.error('Failed to load baseline:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Save baseline to disk
+   */
+  private async saveBaselineToDisk(baseline: CommonTask[]): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const content = JSON.stringify(baseline, null, 2);
+      await adapter.write(this.baselinePath, content);
+    } catch (error) {
+      console.error('Failed to save baseline:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear all sync data (use with caution)
    */
   async clearAll(): Promise<void> {
@@ -301,8 +359,10 @@ export class SyncStorage {
 
     this.mappingCache = emptyMapping;
     this.stateCache = freshState;
+    this.baselineCache = [];
     this.mappingDirty = true;
     this.stateDirty = true;
+    this.baselineDirty = true;
 
     await this.save();
   }
