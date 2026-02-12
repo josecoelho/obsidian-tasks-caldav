@@ -67,7 +67,7 @@ export class SyncEngine {
       const vtodos = await this.caldavClient.fetchVTODOs();
       const uidMapping = this.buildUidMapping();
       const caldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
-      console.log(`Fetched ${caldavTasks.length} tasks from CalDAV`);
+      console.log(`[Sync] CalDAV: ${caldavTasks.length} tasks`, caldavTasks.map(t => `${t.uid}: ${t.description}`));
 
       // 3. Get Obsidian tasks → normalize to CommonTask[]
       const allObsidianTasks = this.taskManager.getAllTasks();
@@ -79,7 +79,7 @@ export class SyncEngine {
         this.taskManager.getAllTasks(), // Re-fetch after ID injection
         this.settings.syncTag,
       );
-      console.log(`Found ${obsidianTasks.length} Obsidian tasks to sync`);
+      console.log(`[Sync] Obsidian: ${obsidianTasks.length} tasks`, obsidianTasks.map(t => `${t.uid}: ${t.description}`));
 
       // 4. Load baseline — if empty, seed from already-mapped tasks so the
       //    first sync with this engine doesn't duplicate everything.
@@ -97,7 +97,14 @@ export class SyncEngine {
         : 'caldav-wins';
       const changeset = diff(obsidianTasks, caldavTasks, baseline, strategy);
 
-      console.log(`Changeset: toObsidian=${changeset.toObsidian.length}, toCalDAV=${changeset.toCalDAV.length}, conflicts=${changeset.conflicts.length}`);
+      console.log(`[Sync] Baseline: ${baseline.length} tasks`, baseline.map(t => `${t.uid}: ${t.description}`));
+      console.log(`[Sync] Changeset: toObsidian=${changeset.toObsidian.length}, toCalDAV=${changeset.toCalDAV.length}, conflicts=${changeset.conflicts.length}`);
+      for (const c of changeset.toObsidian) {
+        console.log(`[Sync]   → Obsidian: ${c.type} "${c.task.description}" (uid: ${c.task.uid})`);
+      }
+      for (const c of changeset.toCalDAV) {
+        console.log(`[Sync]   → CalDAV: ${c.type} "${c.task.description}" (uid: ${c.task.uid})`);
+      }
 
       const result: SyncResult = {
         success: true,
