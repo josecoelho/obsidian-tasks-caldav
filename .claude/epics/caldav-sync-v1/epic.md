@@ -119,8 +119,9 @@ Extract inline XML strings from `calDAVClientDirect.ts` into string constants in
 - [ ] #14 - Clean up plugin UI — remove debug commands, add production commands (parallel: true, depends: #17)
 - [ ] #16 - Extract CalDAV XML templates to constants (parallel: true)
 - [ ] #18 - Documentation — README, usage guide, CHANGELOG (parallel: true, depends: #17, #14)
+- [ ] #22 - Set up local CalDAV server for integration testing (parallel: true, depends: #13)
 
-Total tasks: 6
-Parallel tasks: 4 (#13, #14, #16, #18)
+Total tasks: 7
+Parallel tasks: 5 (#13, #14, #16, #18, #22)
 Sequential tasks: 2 (#15, #17 — critical path)
-Estimated total effort: 25-42 hours
+Estimated total effort: 29-48 hours
