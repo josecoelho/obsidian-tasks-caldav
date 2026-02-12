@@ -1,5 +1,5 @@
 import { App, Notice } from 'obsidian';
-import { TaskManager } from '../tasks/taskManager';
+import { TaskManager, ObsidianTask } from '../tasks/taskManager';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
@@ -72,10 +72,10 @@ export class SyncEngine {
       const caldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       console.log(`[Sync] CalDAV: ${caldavTasks.length} tasks`, caldavTasks.map(t => `${t.uid}: ${t.description}`));
 
-      // 3. Get Obsidian tasks → normalize to CommonTask[]
+      // 3. Get Obsidian tasks → filter by sync tag → inject IDs only on matching tasks
       const allObsidianTasks = this.taskManager.getAllTasks();
-      // Ensure all synced tasks have IDs before normalizing
-      for (const task of allObsidianTasks) {
+      const syncTagFiltered = this.filterBySyncTag(allObsidianTasks);
+      for (const task of syncTagFiltered) {
         await this.taskManager.ensureTaskHasId(task);
       }
       const obsidianTasks = this.obsidianAdapter.normalize(
@@ -197,6 +197,23 @@ export class SyncEngine {
     const conflicts = state.conflicts.length;
 
     return `Last sync: ${lastSync}\nMapped tasks: ${mappedTasks}\nBaseline tasks: ${baselineTasks}\nConflicts: ${conflicts}`;
+  }
+
+  /**
+   * Filter tasks by the configured sync tag.
+   * Only these tasks should get IDs injected and be synced.
+   */
+  private filterBySyncTag(tasks: ObsidianTask[]): ObsidianTask[] {
+    const syncTag = this.settings.syncTag;
+    if (!syncTag || syncTag.trim() === '') return tasks;
+
+    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+    return tasks.filter(task => {
+      if (!task.tags || task.tags.length === 0) return false;
+      return task.tags.some((tag: string) =>
+        tag.toLowerCase().replace(/^#/, '') === tagLower
+      );
+    });
   }
 
   /**
