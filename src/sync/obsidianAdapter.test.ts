@@ -90,6 +90,13 @@ describe('ObsidianAdapter', () => {
       const task = makeTask({ recurrence: { toText: () => 'FREQ=DAILY;COUNT=5' } });
       expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY;COUNT=5');
     });
+
+    it('should map non-done status to TODO (IN_PROGRESS/CANCELLED not preserved)', () => {
+      // obsidian-tasks only has isDone boolean, so IN_PROGRESS/CANCELLED from CalDAV
+      // both map to TODO. This is a known limitation of the Obsidian data model.
+      const task = makeTask({ isDone: false });
+      expect(adapter.toCommonTask(task, 'id').status).toBe('TODO');
+    });
   });
 
   describe('normalize', () => {
@@ -246,6 +253,44 @@ describe('ObsidianAdapter', () => {
       const with_ = adapter.toMarkdown(task, 'id', '#sync');
       expect(without).toContain('#sync');
       expect(with_).toContain('#sync');
+    });
+
+    it('should not include priority in markdown (known limitation)', () => {
+      const task = {
+        uid: 'id',
+        description: 'High priority task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'high' as const,
+        tags: [],
+        recurrenceRule: '',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      // Priority is not mapped to obsidian-tasks emoji format — data is lost in CalDAV→Obsidian direction
+      expect(md).not.toContain('⏫');
+      expect(md).not.toContain('🔼');
+    });
+
+    it('should not include recurrence rule in markdown (known limitation)', () => {
+      const task = {
+        uid: 'id',
+        description: 'Recurring task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: 'FREQ=DAILY',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      // Recurrence rules are not mapped to obsidian-tasks format — data is lost
+      expect(md).not.toContain('🔁');
+      expect(md).not.toContain('FREQ=DAILY');
     });
   });
 
