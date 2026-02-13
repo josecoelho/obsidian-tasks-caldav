@@ -1,7 +1,7 @@
 {
 	"name": "tasks-caldav-sync",
 	"version": "1.0.0",
-	"description": "Bidirectional sync between tasks and CalDAV servers",
+	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
