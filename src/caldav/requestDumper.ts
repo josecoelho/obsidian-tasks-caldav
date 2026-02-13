@@ -183,7 +183,6 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 	function addLog(msg: string) {
 		const ts = new Date().toISOString();
 		log.push(`[${ts}] ${msg}`);
-		console.log(`[CalDAV Dump] ${msg}`);
 	}
 
 	// Ensure dump directory exists

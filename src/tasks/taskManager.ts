@@ -134,7 +134,7 @@ export class TaskManager {
         }
 
         // Default: return all non-done tasks
-        console.warn(`Unsupported query: "${query}", defaulting to "not done"`);
+        // Unsupported query, default to "not done"
         return tasks.filter(task => !task.isDone);
     }
 
