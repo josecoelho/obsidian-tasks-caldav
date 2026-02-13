@@ -68,7 +68,7 @@ describe('CalDAVAdapter', () => {
 
       const task = adapter.toCommonTask(vtodo, 'id');
       expect(task.dueDate).toBe('2025-01-15');
-      expect(task.scheduledDate).toBe('2025-01-10');
+      expect(task.startDate).toBe('2025-01-10');
       expect(task.completedDate).toBe('2025-01-12');
     });
 

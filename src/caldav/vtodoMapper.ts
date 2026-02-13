@@ -52,10 +52,10 @@ export class VTODOMapper {
       lines.push(`DUE;VALUE=DATE:${this.formatDate(task.dueDate)}`);
     }
 
-    // Start date (use scheduledDate or startDate)
-    const startDate = task.scheduledDate || task.startDate;
-    if (startDate) {
-      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(startDate)}`);
+    // Start date: prefer startDate (🛫) over scheduledDate (⏳) for DTSTART
+    const dtstart = task.startDate || task.scheduledDate;
+    if (dtstart) {
+      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(dtstart)}`);
     }
 
     // Completed date
@@ -98,8 +98,8 @@ export class VTODOMapper {
       description: this.extractProperty(data, 'SUMMARY') || 'Untitled Task',
       status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION'),
       dueDate: this.extractDateProperty(data, 'DUE'),
-      scheduledDate: this.extractDateProperty(data, 'DTSTART'),
-      startDate: null,
+      scheduledDate: null,
+      startDate: this.extractDateProperty(data, 'DTSTART'),
       completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0'),
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',

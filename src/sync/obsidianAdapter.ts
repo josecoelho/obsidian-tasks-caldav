@@ -34,7 +34,7 @@ export class ObsidianAdapter {
       completedDate: this.formatDate(task.doneDate),
       priority: this.mapPriority(task.priority),
       tags: this.cleanTags(task.tags || []),
-      recurrenceRule: task.recurrence ? task.recurrence.toText() : '',
+      recurrenceRule: task.recurrence ? this.extractRecurrenceRule(task.recurrence) : '',
     };
   }
 
@@ -134,6 +134,22 @@ export class ObsidianAdapter {
       '6': 'lowest',
     };
     return map[priority] || 'none';
+  }
+
+  /**
+   * Extract RRULE string from obsidian-tasks Recurrence object.
+   * obsidian-tasks stores an rrule.js RRule instance as a TypeScript-private property.
+   * RRule.toString() returns "DTSTART:...\nRRULE:FREQ=DAILY" — we extract just the
+   * RRULE value since the VTODO mapper adds the property name.
+   */
+  private extractRecurrenceRule(recurrence: any): string {
+    const rrule = recurrence.rrule;
+    if (rrule && typeof rrule.toString === 'function') {
+      const str = rrule.toString();
+      const match = str.match(/(?:^|\n)RRULE:(.+)/);
+      if (match) return match[1];
+    }
+    return '';
   }
 
   /**

@@ -124,7 +124,7 @@ describe('CalDAVAdapter E2E', () => {
       expect(tasks[0].title).toBe('Round trip test');
       expect(tasks[0].status).toBe('TODO');
       expect(tasks[0].dueDate).toBe('2025-07-01');
-      expect(tasks[0].scheduledDate).toBe('2025-06-28');
+      expect(tasks[0].startDate).toBe('2025-06-28');
       expect(tasks[0].priority).toBe('high');
       expect(tasks[0].tags).toEqual(['sync', 'test']);
     });

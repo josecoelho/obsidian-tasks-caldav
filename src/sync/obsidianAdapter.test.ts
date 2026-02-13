@@ -86,9 +86,31 @@ describe('ObsidianAdapter', () => {
       expect(adapter.toCommonTask(task, 'id').dueDate).toBe('2025-01-15');
     });
 
-    it('should extract recurrence rule', () => {
-      const task = makeTask({ recurrence: { toText: () => 'FREQ=DAILY;COUNT=5' } });
+    it('should extract recurrence rule from rrule object', () => {
+      const task = makeTask({
+        recurrence: {
+          toText: () => 'every day 5 times',
+          rrule: { toString: () => 'RRULE:FREQ=DAILY;COUNT=5' },
+        },
+      });
       expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY;COUNT=5');
+    });
+
+    it('should extract recurrence rule when DTSTART is present', () => {
+      const task = makeTask({
+        recurrence: {
+          toText: () => 'every day',
+          rrule: { toString: () => 'DTSTART:20260212T000000Z\nRRULE:FREQ=DAILY' },
+        },
+      });
+      expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY');
+    });
+
+    it('should return empty recurrence when rrule not accessible', () => {
+      const task = makeTask({
+        recurrence: { toText: () => 'every day' },
+      });
+      expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('');
     });
 
     it('should map non-done status to TODO (IN_PROGRESS/CANCELLED not preserved)', () => {
