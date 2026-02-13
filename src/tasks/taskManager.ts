@@ -226,8 +226,19 @@ export class TaskManager {
             throw new Error(`Could not find task in file: ${originalMarkdown}`);
         }
 
-        // Update the line
-        lines[taskIndex] = newContent;
+        // Count indented note lines below the task
+        let noteLineCount = 0;
+        for (let i = taskIndex + 1; i < lines.length; i++) {
+            if (/^(?:\s{2,}|\t)- /.test(lines[i])) {
+                noteLineCount++;
+            } else {
+                break;
+            }
+        }
+
+        // Replace the task line + any note lines with new content
+        const newLines = newContent.split('\n');
+        lines.splice(taskIndex, 1 + noteLineCount, ...newLines);
 
         // Write back to file
         await this.app.vault.modify(file, lines.join('\n'));

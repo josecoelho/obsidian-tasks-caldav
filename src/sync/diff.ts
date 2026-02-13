@@ -13,6 +13,7 @@ export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
     a.completedDate === b.completedDate &&
     a.priority === b.priority &&
     a.recurrenceRule === b.recurrenceRule &&
+    a.notes === b.notes &&
     a.tags.length === b.tags.length &&
     a.tags.every((tag, i) => tag === b.tags[i])
   );
