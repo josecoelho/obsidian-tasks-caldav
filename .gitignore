@@ -27,3 +27,7 @@ data.json
 # CalDAV sync runtime data and raw dumps (contain PII)
 .caldav-sync/
 test-caldav-requests/
+
+# Test coverage reports
+coverage/
+coverage-e2e/

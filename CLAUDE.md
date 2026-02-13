@@ -74,10 +74,22 @@ When releasing, these files must be included:
 - Focus on what can break
 - Pure functions tested thoroughly
 - No trivial setter/getter tests
+- Use TDD: write failing test first, then implement
+- Coverage threshold must be met before work is considered done
+
+### Coverage Thresholds
+Enforced per directory via `jest.config.js` and CI:
+- `src/sync/` — 80% lines, 80% branches
+- `src/caldav/` — 80% lines, 70% branches (CalDAV client error paths tested via E2E)
+- `src/tasks/` — 80% lines, 80% branches
+
+Excluded from coverage: `requestDumper.ts` (debug utility), `obsidianTasksApi.ts` (type definitions), `src/ui/` (Obsidian UI requires manual testing).
 
 ### Test Commands
 - `npm test` - Run unit tests (mocked Obsidian API, fast, CI-safe)
-- `npm run test:e2e` - Run E2E tests against a real Radicale CalDAV server (starts Docker automatically)
+- `npm run test:coverage` - Run unit tests with Istanbul coverage report and threshold enforcement
+- `npm run test:e2e` - Run E2E tests with coverage against a real Radicale CalDAV server (starts Docker automatically, outputs to `coverage-e2e/`)
+- `npm run test:all` - Run both unit and E2E tests with coverage (requires Docker). **This is the definitive check — work is done when `test:all` passes.**
 
 ### Testing Workflow: Discover with E2E, Lock Down with Unit Tests
 
