@@ -46,6 +46,13 @@ describe('CalDAVAdapter', () => {
       expect(task.completedDate).toBeNull();
       expect(task.tags).toEqual([]);
       expect(task.recurrenceRule).toBe('');
+      expect(task.notes).toBe('');
+    });
+
+    it('should extract notes from DESCRIPTION', () => {
+      const vtodo = makeCalObj('caldav-notes', 'Task with notes', ['DESCRIPTION:Remember to check']);
+      const task = adapter.toCommonTask(vtodo, 'my-id');
+      expect(task.notes).toBe('Remember to check');
     });
 
     it('should map VTODO status correctly', () => {
@@ -142,6 +149,7 @@ describe('CalDAVAdapter', () => {
         priority: 'high' as const,
         tags: ['sync', 'work'],
         recurrenceRule: '',
+        notes: '',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-uid-001');
@@ -153,6 +161,44 @@ describe('CalDAVAdapter', () => {
       expect(vtodo).toContain('DTSTART;VALUE=DATE:20250110');
       expect(vtodo).toContain('PRIORITY:3');
       expect(vtodo).toContain('CATEGORIES:sync,work');
+    });
+
+    it('should include DESCRIPTION when notes is non-empty', () => {
+      const task = {
+        uid: 'notes-id',
+        title: 'Task with notes',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        notes: 'Remember to bring supplies',
+      };
+
+      const vtodo = adapter.fromCommonTask(task, 'caldav-notes');
+      expect(vtodo).toContain('DESCRIPTION:Remember to bring supplies');
+    });
+
+    it('should omit DESCRIPTION when notes is empty', () => {
+      const task = {
+        uid: 'no-notes',
+        title: 'Task without notes',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        notes: '',
+      };
+
+      const vtodo = adapter.fromCommonTask(task, 'caldav-no-notes');
+      expect(vtodo).not.toContain('DESCRIPTION');
     });
 
     it('should handle completed tasks', () => {
@@ -167,6 +213,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-done');
@@ -197,6 +244,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       await adapter.applyChanges(
@@ -228,6 +276,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       await adapter.applyChanges(
@@ -262,6 +311,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       await adapter.applyChanges(
