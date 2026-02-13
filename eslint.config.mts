@@ -57,7 +57,7 @@ export default tseslint.config(
 		"esbuild.config.mjs",
 		"version-bump.mjs",
 		"versions.json",
-		"jest.config.js",
+		"jest.config.cjs",
 		"scripts/",
 		"test/",
 		"coverage/",
