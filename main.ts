@@ -9,6 +9,7 @@ import { SyncResultModal } from './src/ui/syncResultModal';
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
 	syncEngine: SyncEngine | null = null;
+	private autoSyncIntervalId: number | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -336,6 +337,8 @@ export default class CalDAVSyncPlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
+		this.startAutoSync();
+
 		console.log('CalDAV Sync Plugin loaded');
 	}
 
@@ -349,6 +352,32 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		// Re-initialize sync engine with new settings
+		this.syncEngine = new SyncEngine(this.app, this.settings);
+		await this.syncEngine.initialize();
+		this.startAutoSync();
+	}
+
+	private startAutoSync(): void {
+		this.stopAutoSync();
+		if (this.settings.syncInterval > 0 && this.syncEngine) {
+			const intervalMs = this.settings.syncInterval * 60 * 1000;
+			this.autoSyncIntervalId = window.setInterval(async () => {
+				try {
+					await this.syncEngine?.sync();
+				} catch (error) {
+					console.error('Auto-sync failed:', error);
+				}
+			}, intervalMs);
+			this.registerInterval(this.autoSyncIntervalId);
+		}
+	}
+
+	private stopAutoSync(): void {
+		if (this.autoSyncIntervalId !== null) {
+			window.clearInterval(this.autoSyncIntervalId);
+			this.autoSyncIntervalId = null;
+		}
 	}
 }
 
