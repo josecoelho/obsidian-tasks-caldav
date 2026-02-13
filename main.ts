@@ -4,10 +4,12 @@ import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGe
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
+import { AutoSyncScheduler } from './src/sync/autoSync';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
 	syncEngine: SyncEngine | null = null;
+	private autoSync: AutoSyncScheduler | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -171,6 +173,13 @@ export default class CalDAVSyncPlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
+		// Auto-sync scheduler
+		this.autoSync = new AutoSyncScheduler(
+			() => this.syncEngine!.sync().then(() => {}),
+			(id) => this.registerInterval(id),
+		);
+		this.autoSync.start(this.settings.syncInterval);
+
 		console.log('CalDAV Sync Plugin loaded');
 	}
 
@@ -184,7 +193,12 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		// Re-initialize sync engine with new settings
+		this.syncEngine = new SyncEngine(this.app, this.settings);
+		await this.syncEngine.initialize();
+		this.autoSync?.start(this.settings.syncInterval);
 	}
+
 }
 
 class CalDAVSettingTab extends PluginSettingTab {
