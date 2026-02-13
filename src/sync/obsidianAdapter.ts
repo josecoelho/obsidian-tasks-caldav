@@ -1,3 +1,4 @@
+import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from './types';
 import { ObsidianTask } from '../tasks/taskManager';
 
@@ -58,6 +59,14 @@ export class ObsidianAdapter {
     }
     if (task.completedDate) {
       line += ` ✅ ${task.completedDate}`;
+    }
+
+    // Recurrence rule in obsidian-tasks format
+    if (task.recurrenceRule) {
+      const text = this.rruleToText(task.recurrenceRule);
+      if (text) {
+        line += ` 🔁 ${text}`;
+      }
     }
 
     // Task ID in obsidian-tasks emoji format
@@ -138,18 +147,33 @@ export class ObsidianAdapter {
 
   /**
    * Extract RRULE string from obsidian-tasks Recurrence object.
-   * obsidian-tasks stores an rrule.js RRule instance as a TypeScript-private property.
-   * RRule.toString() returns "DTSTART:...\nRRULE:FREQ=DAILY" — we extract just the
-   * RRULE value since the VTODO mapper adds the property name.
+   * Uses rrule.js to parse the human-readable text from toText(),
+   * avoiding access to obsidian-tasks private properties.
    */
   private extractRecurrenceRule(recurrence: any): string {
-    const rrule = recurrence.rrule;
-    if (rrule && typeof rrule.toString === 'function') {
-      const str = rrule.toString();
-      const match = str.match(/(?:^|\n)RRULE:(.+)/);
-      if (match) return match[1];
+    try {
+      const text = recurrence.toText();
+      if (!text) return '';
+      // Strip "when done" suffix — obsidian-tasks specific, not part of RRULE
+      const cleanText = text.replace(/\s+when\s+done\s*$/i, '');
+      const rule = RRule.fromText(cleanText);
+      return rule.toString().replace(/^RRULE:/, '');
+    } catch {
+      return '';
     }
-    return '';
+  }
+
+  /**
+   * Convert an RRULE string (e.g. "FREQ=DAILY") to obsidian-tasks
+   * human-readable format (e.g. "every day").
+   */
+  private rruleToText(rruleStr: string): string {
+    try {
+      const rule = RRule.fromString(`RRULE:${rruleStr}`);
+      return rule.toText();
+    } catch {
+      return '';
+    }
   }
 
   /**
