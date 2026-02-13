@@ -28,18 +28,26 @@ export function generateTaskId(): string {
 }
 
 /**
- * Extract task ID from task text
- * Looks for ID in format [id::YYYYMMDD-xxx]
+ * Extract task ID from task text.
+ * Supports emoji format (🆔 xxx) and Dataview format ([id::xxx]).
  * @param taskText The full task text
  * @returns The task ID if found, null otherwise
  */
 export function extractTaskId(taskText: string): string | null {
-  const match = taskText.match(/\[id::([^\]]+)\]/);
-  return match ? match[1] : null;
+  // Emoji format: 🆔 xxx
+  const emojiMatch = taskText.match(/🆔\s*(\S+)/);
+  if (emojiMatch) return emojiMatch[1];
+
+  // Dataview format: [id::xxx] (backwards compat)
+  const dvMatch = taskText.match(/\[id::([^\]]+)\]/);
+  if (dvMatch) return dvMatch[1];
+
+  return null;
 }
 
 /**
- * Inject task ID into task text if not already present
+ * Inject task ID into task text if not already present.
+ * Uses obsidian-tasks emoji format: 🆔 xxx
  * @param taskText The original task text
  * @returns Task text with ID injected (or original if ID already present)
  */
@@ -51,7 +59,18 @@ export function ensureTaskId(taskText: string): { text: string; id: string; modi
   }
 
   const newId = generateTaskId();
-  const textWithId = `${taskText} [id::${newId}]`;
+  const idField = `🆔 ${newId}`;
+
+  // Insert before obsidian-tasks metadata (emoji markers, tags)
+  const metadataPattern = /\s(?:[📅🛫⏳✅🔁⏫🔼🔽⏬➕]|#[a-zA-Z])/;
+  const match = taskText.match(metadataPattern);
+
+  let textWithId: string;
+  if (match && match.index !== undefined) {
+    textWithId = taskText.slice(0, match.index) + ` ${idField}` + taskText.slice(match.index);
+  } else {
+    textWithId = `${taskText} ${idField}`;
+  }
 
   return { text: textWithId, id: newId, modified: true };
 }

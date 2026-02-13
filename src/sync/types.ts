@@ -3,7 +3,7 @@ export type TaskPriority = 'none' | 'lowest' | 'low' | 'medium' | 'high' | 'high
 
 export interface CommonTask {
   uid: string;
-  description: string;
+  title: string;
   status: TaskStatus;
   dueDate: string | null;       // 'YYYY-MM-DD'
   startDate: string | null;     // 'YYYY-MM-DD'

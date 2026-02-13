@@ -71,7 +71,7 @@ export class SyncEngine {
       const uidMapping = this.buildUidMapping();
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
-      console.log(`[Sync] CalDAV: ${caldavTasks.length}/${allCaldavTasks.length} tasks (after sync tag filter)`, caldavTasks.map(t => `${t.uid}: ${t.description}`));
+      console.log(`[Sync] CalDAV: ${caldavTasks.length}/${allCaldavTasks.length} tasks (after sync tag filter)`, caldavTasks.map(t => `${t.uid}: ${t.title}`));
 
       // 3. Get Obsidian tasks → filter by sync tag → inject IDs only on matching tasks
       const allObsidianTasks = this.taskManager.getAllTasks();
@@ -83,7 +83,7 @@ export class SyncEngine {
         this.taskManager.getAllTasks(), // Re-fetch after ID injection
         this.settings.syncTag,
       );
-      console.log(`[Sync] Obsidian: ${obsidianTasks.length} tasks`, obsidianTasks.map(t => `${t.uid}: ${t.description}`));
+      console.log(`[Sync] Obsidian: ${obsidianTasks.length} tasks`, obsidianTasks.map(t => `${t.uid}: ${t.title}`));
 
       // 4. Load baseline — if empty, seed from already-mapped tasks so the
       //    first sync with this engine doesn't duplicate everything.
@@ -101,13 +101,13 @@ export class SyncEngine {
         : 'caldav-wins';
       const changeset = diff(obsidianTasks, caldavTasks, baseline, strategy);
 
-      console.log(`[Sync] Baseline: ${baseline.length} tasks`, baseline.map(t => `${t.uid}: ${t.description}`));
+      console.log(`[Sync] Baseline: ${baseline.length} tasks`, baseline.map(t => `${t.uid}: ${t.title}`));
       console.log(`[Sync] Changeset: toObsidian=${changeset.toObsidian.length}, toCalDAV=${changeset.toCalDAV.length}, conflicts=${changeset.conflicts.length}`);
       for (const c of changeset.toObsidian) {
-        console.log(`[Sync]   → Obsidian: ${c.type} "${c.task.description}" (uid: ${c.task.uid})`);
+        console.log(`[Sync]   → Obsidian: ${c.type} "${c.task.title}" (uid: ${c.task.uid})`);
       }
       for (const c of changeset.toCalDAV) {
-        console.log(`[Sync]   → CalDAV: ${c.type} "${c.task.description}" (uid: ${c.task.uid})`);
+        console.log(`[Sync]   → CalDAV: ${c.type} "${c.task.title}" (uid: ${c.task.uid})`);
       }
 
       const result: SyncResult = {

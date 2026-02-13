@@ -37,7 +37,7 @@ export class CalDAVAdapter {
 
     return {
       uid,
-      description: parsed.description,
+      title: parsed.description,
       status: parsed.status as TaskStatus,
       dueDate: parsed.dueDate,
       startDate: parsed.startDate,
@@ -54,7 +54,7 @@ export class CalDAVAdapter {
    */
   fromCommonTask(task: CommonTask, caldavUID: string): string {
     const obsidianTask: ObsidianTask = {
-      description: task.description,
+      description: task.title,
       status: task.status,
       dueDate: task.dueDate,
       startDate: task.startDate,

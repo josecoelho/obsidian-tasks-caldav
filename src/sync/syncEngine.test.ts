@@ -13,7 +13,7 @@ function makeObsidianTask(overrides: Partial<any> = {}): any {
     priority: '0',
     tags: ['#sync'],
     taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
-    originalMarkdown: '- [ ] Test task %%[id::20250101-abc]%% #sync',
+    originalMarkdown: '- [ ] Test task [id::20250101-abc] #sync',
     createdDate: null,
     startDate: null,
     scheduledDate: null,
@@ -334,7 +334,7 @@ describe('SyncEngine', () => {
         description: 'Task two',
         id: '20250101-002',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Task two %%[id::20250101-002]%% #sync',
+        originalMarkdown: '- [ ] Task two [id::20250101-002] #sync',
       });
       mockGetAllTasks.mockReturnValue([task1, task2]);
 
@@ -432,7 +432,7 @@ describe('SyncEngine', () => {
         description: 'Updated in Obsidian',
         id: '20250101-abc',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Updated in Obsidian %%[id::20250101-abc]%% #sync',
+        originalMarkdown: '- [ ] Updated in Obsidian [id::20250101-abc] #sync',
       });
 
       const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
@@ -453,7 +453,7 @@ describe('SyncEngine', () => {
       // The conflict is still recorded for informational purposes
       expect(result.conflicts).toBe(1);
       expect(result.updated.toCalDAV).toBe(1);
-      expect(result.details.toCalDAV[0].task.description).toBe('Updated in Obsidian');
+      expect(result.details.toCalDAV[0].task.title).toBe('Updated in Obsidian');
     });
 
     it('should use caldav-wins strategy when autoResolveObsidianWins is false', async () => {
@@ -474,7 +474,7 @@ describe('SyncEngine', () => {
         description: 'Updated in Obsidian',
         id: '20250101-abc',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Updated in Obsidian %%[id::20250101-abc]%% #sync',
+        originalMarkdown: '- [ ] Updated in Obsidian [id::20250101-abc] #sync',
       });
 
       const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
@@ -495,7 +495,7 @@ describe('SyncEngine', () => {
       // The conflict is still recorded for informational purposes
       expect(result.conflicts).toBe(1);
       expect(result.updated.toObsidian).toBe(1);
-      expect(result.details.toObsidian[0].task.description).toBe('Updated in CalDAV');
+      expect(result.details.toObsidian[0].task.title).toBe('Updated in CalDAV');
     });
   });
 
@@ -619,7 +619,7 @@ describe('SyncEngine', () => {
       // Only the task with sync tag should be synced to Obsidian
       expect(result.created.toObsidian).toBe(1);
       expect(result.details.caldavTasks!.length).toBe(1);
-      expect(result.details.caldavTasks![0].description).toBe('Task with tag');
+      expect(result.details.caldavTasks![0].title).toBe('Task with tag');
     });
 
     it('should include mapped CalDAV tasks even without the sync tag', async () => {
@@ -754,7 +754,7 @@ describe('SyncEngine', () => {
         description: 'Original task',
         id: '20250101-abc',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Original task %%[id::20250101-abc]%% #sync',
+        originalMarkdown: '- [ ] Original task [id::20250101-abc] #sync',
       });
 
       // CalDAV has changed description
@@ -789,7 +789,7 @@ describe('SyncEngine', () => {
         description: 'New obsidian task',
         id: '20250101-new',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] New obsidian task %%[id::20250101-new]%% #sync',
+        originalMarkdown: '- [ ] New obsidian task [id::20250101-new] #sync',
       });
       mockGetAllTasks.mockReturnValue([task]);
       mockFetchVTODOs.mockResolvedValue([]);
@@ -820,7 +820,7 @@ describe('SyncEngine', () => {
         description: 'Task A from Obsidian',
         id: '20250101-aaa',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Task A from Obsidian %%[id::20250101-aaa]%% #sync',
+        originalMarkdown: '- [ ] Task A from Obsidian [id::20250101-aaa] #sync',
       });
       // CalDAV has task B (new)
       const vtodoB = makeCalObj('caldav-bbb', 'Task B from CalDAV');
@@ -853,7 +853,7 @@ describe('SyncEngine', () => {
         description: 'Task A',
         id: '20250101-aaa',
         tags: ['#sync'],
-        originalMarkdown: '- [ ] Task A %%[id::20250101-aaa]%% #sync',
+        originalMarkdown: '- [ ] Task A [id::20250101-aaa] #sync',
       });
       mockGetAllTasks.mockReturnValue([taskA]);
       mockFetchVTODOs.mockResolvedValue([]);

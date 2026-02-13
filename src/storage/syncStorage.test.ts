@@ -5,7 +5,7 @@ import { CommonTask } from '../sync/types';
 function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
   return {
     uid: 'task-001',
-    description: 'Default task',
+    title: 'Default task',
     status: 'TODO',
     dueDate: null,
     startDate: null,

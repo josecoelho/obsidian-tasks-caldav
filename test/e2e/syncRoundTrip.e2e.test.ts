@@ -83,8 +83,8 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.conflicts).toHaveLength(0);
 
     // Verify task details survived the round-trip
-    const t1 = changeset.toObsidian.find(c => c.task.description === 'Task from CalDAV 1');
-    const t2 = changeset.toObsidian.find(c => c.task.description === 'Task from CalDAV 2');
+    const t1 = changeset.toObsidian.find(c => c.task.title === 'Task from CalDAV 1');
+    const t2 = changeset.toObsidian.find(c => c.task.title === 'Task from CalDAV 2');
     expect(t1?.task.priority).toBe('medium');
     expect(t2?.task.dueDate).toBe('2025-07-15');
   });
@@ -97,7 +97,7 @@ describe('Sync round-trip E2E', () => {
     const obsidianTasks: CommonTask[] = [
       {
         uid: 'obs-new-1',
-        description: 'Task from Obsidian',
+        title: 'Task from Obsidian',
         status: 'TODO',
         dueDate: '2025-08-01',
         startDate: null,
@@ -127,7 +127,7 @@ describe('Sync round-trip E2E', () => {
     expect(vtodos.length).toBe(1);
 
     const tasks = caldavAdapter.normalize(vtodos, new Map());
-    expect(tasks[0].description).toBe('Task from Obsidian');
+    expect(tasks[0].title).toBe('Task from Obsidian');
     expect(tasks[0].priority).toBe('high');
     expect(tasks[0].dueDate).toBe('2025-08-01');
   });
@@ -215,7 +215,7 @@ describe('Sync round-trip E2E', () => {
     // Obsidian side: different update
     const obsidianTasks: CommonTask[] = [{
       ...baseline[0],
-      description: 'Obsidian version',
+      title: 'Obsidian version',
     }];
 
     const changeset = diff(obsidianTasks, caldavTasks, baseline, 'caldav-wins');
@@ -223,7 +223,7 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.conflicts).toHaveLength(1);
     // CalDAV wins: update should go to Obsidian
     expect(changeset.toObsidian).toHaveLength(1);
-    expect(changeset.toObsidian[0].task.description).toBe('CalDAV version');
+    expect(changeset.toObsidian[0].task.title).toBe('CalDAV version');
     expect(changeset.toCalDAV).toHaveLength(0);
   });
 
@@ -249,7 +249,7 @@ describe('Sync round-trip E2E', () => {
     const markdown = obsidianAdapter.toMarkdown(task, 'test-id-123', 'sync');
 
     expect(markdown).toContain('- [ ] Test markdown gen');
-    expect(markdown).toContain('%%[id::test-id-123]%%');
+    expect(markdown).toContain('🆔 test-id-123');
     expect(markdown).toContain('📅 2025-08-01');
     expect(markdown).toContain('#sync');
   });

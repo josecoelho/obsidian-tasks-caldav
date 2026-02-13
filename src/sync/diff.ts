@@ -5,7 +5,7 @@ import { CommonTask, Changeset, SyncChange, Conflict, ConflictStrategy } from '.
  */
 export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
   return (
-    a.description === b.description &&
+    a.title === b.title &&
     a.status === b.status &&
     a.dueDate === b.dueDate &&
     a.startDate === b.startDate &&

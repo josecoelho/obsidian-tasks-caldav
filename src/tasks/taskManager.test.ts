@@ -436,6 +436,7 @@ describe('TaskManager', () => {
 
             const task = createMockTask({
                 id: '',
+                description: 'Task without ID',
                 originalMarkdown: '- [ ] Task without ID',
                 taskLocation: {
                     _tasksFile: { _path: 'test.md' },
@@ -458,7 +459,7 @@ describe('TaskManager', () => {
 
             // The modified content should contain the new ID
             const updatedContent = mockApp.vault.modify.mock.calls[0][1];
-            expect(updatedContent).toContain(`[id::${result}]`);
+            expect(updatedContent).toContain(`🆔 ${result}`);
         });
     });
 

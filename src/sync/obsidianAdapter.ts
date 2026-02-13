@@ -26,7 +26,7 @@ export class ObsidianAdapter {
   toCommonTask(task: ObsidianTask, taskId: string): CommonTask {
     return {
       uid: taskId,
-      description: this.cleanDescription(task.description),
+      title: this.cleanDescription(task.description),
       status: this.mapStatus(task),
       dueDate: this.formatDate(task.dueDate),
       startDate: this.formatDate(task.startDate),
@@ -44,10 +44,7 @@ export class ObsidianAdapter {
   toMarkdown(task: CommonTask, taskId: string, syncTag?: string): string {
     let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
 
-    line += task.description;
-
-    // Task ID in Obsidian comment
-    line += ` %%[id::${taskId}]%%`;
+    line += task.title;
 
     // Dates in obsidian-tasks order: start, scheduled, due, completed
     if (task.startDate) {
@@ -63,7 +60,10 @@ export class ObsidianAdapter {
       line += ` ✅ ${task.completedDate}`;
     }
 
-    // Sync tag after dates
+    // Task ID in obsidian-tasks emoji format
+    line += ` 🆔 ${taskId}`;
+
+    // Sync tag after ID
     if (syncTag && syncTag.trim() !== '') {
       const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
       line += ` ${tag}`;
@@ -81,23 +81,22 @@ export class ObsidianAdapter {
 
   /**
    * Extract task ID from an obsidian-tasks Task.
+   * obsidian-tasks populates task.id for both 🆔 and [id::] formats.
    */
   extractId(task: ObsidianTask): string | null {
     if (task.id && task.id.length > 0) return task.id;
-    const match = task.originalMarkdown.match(/\[id::([^\]]+)\]/);
-    return match ? match[1] : null;
+    return null;
   }
 
   /**
    * Clean description by removing metadata that belongs in other fields.
-   * Removes [id::xxx], %%[id::xxx]%%, and #tags from description.
+   * obsidian-tasks already strips 🆔 from description. This handles
+   * [id::xxx] for backwards compat and #tags.
    */
   private cleanDescription(description: string): string {
     let cleaned = description;
 
-    // Remove %%[id::xxx]%%
-    cleaned = cleaned.replace(/%%\[id::[^\]]+\]%%/g, '');
-    // Remove [id::xxx]
+    // Remove [id::xxx] (backwards compat for tasks indexed before migration)
     cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
     // Remove hashtags (but not # followed by numbers like #42)
     cleaned = cleaned.replace(/#[a-zA-Z][\w-]*/g, '');

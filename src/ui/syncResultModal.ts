@@ -148,7 +148,7 @@ export class SyncResultModal extends Modal {
     const table = container.createEl('table', { cls: 'sync-task-table' });
     const thead = table.createEl('thead');
     const headerRow = thead.createEl('tr');
-    for (const header of ['UID', 'Description', 'Status', 'Due', 'Priority']) {
+    for (const header of ['UID', 'Title', 'Status', 'Due', 'Priority']) {
       headerRow.createEl('th', { text: header });
     }
 
@@ -156,7 +156,7 @@ export class SyncResultModal extends Modal {
     for (const task of tasks) {
       const row = tbody.createEl('tr');
       row.createEl('td', { text: this.truncateUid(task.uid), cls: 'sync-uid', attr: { title: task.uid } });
-      row.createEl('td', { text: task.description });
+      row.createEl('td', { text: task.title });
       row.createEl('td', { text: task.status });
       row.createEl('td', { text: task.dueDate ?? '—' });
       row.createEl('td', { text: task.priority === 'none' ? '—' : task.priority });
@@ -173,7 +173,7 @@ export class SyncResultModal extends Modal {
       badge.textContent = change.type;
 
       const desc = item.createSpan({ cls: 'sync-change-desc' });
-      desc.textContent = change.task.description;
+      desc.textContent = change.task.title;
 
       const uid = item.createSpan({ cls: 'sync-change-uid' });
       uid.textContent = this.truncateUid(change.task.uid);
@@ -218,7 +218,7 @@ export class SyncResultModal extends Modal {
   private renderTaskDetail(container: HTMLElement, task: CommonTask): void {
     const dl = container.createEl('dl', { cls: 'sync-task-detail' });
     const fields: [string, string][] = [
-      ['Description', task.description],
+      ['Title', task.title],
       ['Status', task.status],
       ['Due', task.dueDate ?? '—'],
       ['Priority', task.priority === 'none' ? '—' : task.priority],
@@ -264,7 +264,7 @@ export class SyncResultModal extends Modal {
 
   private describeChanges(prev: CommonTask, curr: CommonTask): string {
     const diffs: string[] = [];
-    if (prev.description !== curr.description) diffs.push('description');
+    if (prev.title !== curr.title) diffs.push('title');
     if (prev.status !== curr.status) diffs.push(`status: ${prev.status} → ${curr.status}`);
     if (prev.dueDate !== curr.dueDate) diffs.push(`due: ${prev.dueDate ?? '—'} → ${curr.dueDate ?? '—'}`);
     if (prev.priority !== curr.priority) diffs.push(`priority: ${prev.priority} → ${curr.priority}`);

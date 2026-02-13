@@ -37,7 +37,7 @@ describe('CalDAVAdapter', () => {
       const task = adapter.toCommonTask(vtodo, 'my-task-id');
 
       expect(task.uid).toBe('my-task-id');
-      expect(task.description).toBe('Buy groceries');
+      expect(task.title).toBe('Buy groceries');
       expect(task.status).toBe('TODO');
       expect(task.priority).toBe('none');
       expect(task.dueDate).toBeNull();
@@ -108,9 +108,9 @@ describe('CalDAVAdapter', () => {
 
       expect(tasks).toHaveLength(2);
       expect(tasks[0].uid).toBe('obsidian-id-123');
-      expect(tasks[0].description).toBe('Mapped task');
+      expect(tasks[0].title).toBe('Mapped task');
       expect(tasks[1].uid).toBe('caldav-bbb');
-      expect(tasks[1].description).toBe('Unmapped task');
+      expect(tasks[1].title).toBe('Unmapped task');
     });
 
     it('should skip VTODOs without UIDs', () => {
@@ -133,7 +133,7 @@ describe('CalDAVAdapter', () => {
     it('should convert CommonTask to VTODO string', () => {
       const task = {
         uid: 'my-id',
-        description: 'Test task',
+        title: 'Test task',
         status: 'TODO' as const,
         dueDate: '2025-01-15',
         startDate: null,
@@ -158,7 +158,7 @@ describe('CalDAVAdapter', () => {
     it('should handle completed tasks', () => {
       const task = {
         uid: 'done-id',
-        description: 'Done task',
+        title: 'Done task',
         status: 'DONE' as const,
         dueDate: null,
         startDate: null,
@@ -188,7 +188,7 @@ describe('CalDAVAdapter', () => {
 
       const task = {
         uid: 'new-task',
-        description: 'New task',
+        title: 'New task',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -219,7 +219,7 @@ describe('CalDAVAdapter', () => {
 
       const task = {
         uid: 'del-task',
-        description: 'To delete',
+        title: 'To delete',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -253,7 +253,7 @@ describe('CalDAVAdapter', () => {
 
       const task = {
         uid: 'upd-task',
-        description: 'Updated task',
+        title: 'Updated task',
         status: 'DONE' as const,
         dueDate: null,
         startDate: null,

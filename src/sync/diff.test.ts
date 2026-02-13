@@ -4,7 +4,7 @@ import { CommonTask } from './types';
 function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
   return {
     uid: 'task-001',
-    description: 'Default task',
+    title: 'Default task',
     status: 'TODO',
     dueDate: null,
     startDate: null,
@@ -25,8 +25,8 @@ describe('tasksEqual', () => {
   });
 
   it('should detect description change', () => {
-    const a = makeCommonTask({ description: 'Task A' });
-    const b = makeCommonTask({ description: 'Task B' });
+    const a = makeCommonTask({ title: 'Task A' });
+    const b = makeCommonTask({ title: 'Task B' });
     expect(tasksEqual(a, b)).toBe(false);
   });
 
@@ -111,29 +111,29 @@ describe('diff', () => {
 
   describe('updates', () => {
     it('should detect task updated in Obsidian only', () => {
-      const baseline = makeCommonTask({ uid: 't1', description: 'Original' });
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Modified in Obsidian' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'Original' });
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Modified in Obsidian' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'Original' });
 
       const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
 
       expect(result.toCalDAV).toHaveLength(1);
       expect(result.toCalDAV[0].type).toBe('update');
-      expect(result.toCalDAV[0].task.description).toBe('Modified in Obsidian');
+      expect(result.toCalDAV[0].task.title).toBe('Modified in Obsidian');
       expect(result.toCalDAV[0].previousVersion).toEqual(baseline);
       expect(result.toObsidian).toHaveLength(0);
     });
 
     it('should detect task updated in CalDAV only', () => {
-      const baseline = makeCommonTask({ uid: 't1', description: 'Original' });
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Original' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'Modified in CalDAV' });
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Original' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'Modified in CalDAV' });
 
       const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
 
       expect(result.toObsidian).toHaveLength(1);
       expect(result.toObsidian[0].type).toBe('update');
-      expect(result.toObsidian[0].task.description).toBe('Modified in CalDAV');
+      expect(result.toObsidian[0].task.title).toBe('Modified in CalDAV');
       expect(result.toCalDAV).toHaveLength(0);
     });
 
@@ -186,99 +186,99 @@ describe('diff', () => {
 
   describe('conflicts', () => {
     it('should detect conflict when both sides modified', () => {
-      const baseline = makeCommonTask({ uid: 't1', description: 'Original' });
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Modified in Obsidian' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'Modified in CalDAV' });
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Modified in Obsidian' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'Modified in CalDAV' });
 
       const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
 
       expect(result.conflicts).toHaveLength(1);
       expect(result.conflicts[0].uid).toBe('t1');
-      expect(result.conflicts[0].obsidianVersion.description).toBe('Modified in Obsidian');
-      expect(result.conflicts[0].caldavVersion.description).toBe('Modified in CalDAV');
-      expect(result.conflicts[0].baselineVersion.description).toBe('Original');
+      expect(result.conflicts[0].obsidianVersion.title).toBe('Modified in Obsidian');
+      expect(result.conflicts[0].caldavVersion.title).toBe('Modified in CalDAV');
+      expect(result.conflicts[0].baselineVersion.title).toBe('Original');
     });
 
     it('should resolve conflict with caldav-wins strategy', () => {
-      const baseline = makeCommonTask({ uid: 't1', description: 'Original' });
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Obsidian version' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'CalDAV version' });
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian version' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'CalDAV version' });
 
       const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
 
       // CalDAV wins: push CalDAV version to Obsidian
       expect(result.toObsidian).toHaveLength(1);
       expect(result.toObsidian[0].type).toBe('update');
-      expect(result.toObsidian[0].task.description).toBe('CalDAV version');
+      expect(result.toObsidian[0].task.title).toBe('CalDAV version');
       expect(result.toCalDAV).toHaveLength(0);
     });
 
     it('should resolve conflict with obsidian-wins strategy', () => {
-      const baseline = makeCommonTask({ uid: 't1', description: 'Original' });
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Obsidian version' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'CalDAV version' });
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian version' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'CalDAV version' });
 
       const result = diff([obsidian], [caldav], [baseline], 'obsidian-wins');
 
       // Obsidian wins: push Obsidian version to CalDAV
       expect(result.toCalDAV).toHaveLength(1);
       expect(result.toCalDAV[0].type).toBe('update');
-      expect(result.toCalDAV[0].task.description).toBe('Obsidian version');
+      expect(result.toCalDAV[0].task.title).toBe('Obsidian version');
       expect(result.toObsidian).toHaveLength(0);
     });
   });
 
   describe('first sync (both sides present, no baseline)', () => {
     it('should use caldav-wins strategy when no baseline exists', () => {
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Obsidian' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'CalDAV' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'CalDAV' });
 
       const result = diff([obsidian], [caldav], [], 'caldav-wins');
 
       expect(result.toObsidian).toHaveLength(1);
-      expect(result.toObsidian[0].task.description).toBe('CalDAV');
+      expect(result.toObsidian[0].task.title).toBe('CalDAV');
     });
 
     it('should use obsidian-wins strategy when no baseline exists', () => {
-      const obsidian = makeCommonTask({ uid: 't1', description: 'Obsidian' });
-      const caldav = makeCommonTask({ uid: 't1', description: 'CalDAV' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'CalDAV' });
 
       const result = diff([obsidian], [caldav], [], 'obsidian-wins');
 
       expect(result.toCalDAV).toHaveLength(1);
-      expect(result.toCalDAV[0].task.description).toBe('Obsidian');
+      expect(result.toCalDAV[0].task.title).toBe('Obsidian');
     });
   });
 
   describe('mixed scenarios', () => {
     it('should handle creates + updates + deletes + conflicts simultaneously', () => {
       const baseline = [
-        makeCommonTask({ uid: 'unchanged', description: 'Same on both sides' }),
-        makeCommonTask({ uid: 'obs-updated', description: 'Original' }),
-        makeCommonTask({ uid: 'cal-updated', description: 'Original' }),
-        makeCommonTask({ uid: 'conflict', description: 'Original' }),
-        makeCommonTask({ uid: 'del-from-cal', description: 'Will be deleted from CalDAV' }),
-        makeCommonTask({ uid: 'del-from-obs', description: 'Will be deleted from Obsidian' }),
+        makeCommonTask({ uid: 'unchanged', title: 'Same on both sides' }),
+        makeCommonTask({ uid: 'obs-updated', title: 'Original' }),
+        makeCommonTask({ uid: 'cal-updated', title: 'Original' }),
+        makeCommonTask({ uid: 'conflict', title: 'Original' }),
+        makeCommonTask({ uid: 'del-from-cal', title: 'Will be deleted from CalDAV' }),
+        makeCommonTask({ uid: 'del-from-obs', title: 'Will be deleted from Obsidian' }),
       ];
 
       const obsidian = [
-        makeCommonTask({ uid: 'unchanged', description: 'Same on both sides' }),
-        makeCommonTask({ uid: 'obs-updated', description: 'Updated in Obsidian' }),
-        makeCommonTask({ uid: 'cal-updated', description: 'Original' }),
-        makeCommonTask({ uid: 'conflict', description: 'Obsidian conflict' }),
-        makeCommonTask({ uid: 'del-from-cal', description: 'Will be deleted from CalDAV' }),
+        makeCommonTask({ uid: 'unchanged', title: 'Same on both sides' }),
+        makeCommonTask({ uid: 'obs-updated', title: 'Updated in Obsidian' }),
+        makeCommonTask({ uid: 'cal-updated', title: 'Original' }),
+        makeCommonTask({ uid: 'conflict', title: 'Obsidian conflict' }),
+        makeCommonTask({ uid: 'del-from-cal', title: 'Will be deleted from CalDAV' }),
         // del-from-obs is missing
-        makeCommonTask({ uid: 'new-from-obs', description: 'Brand new from Obsidian' }),
+        makeCommonTask({ uid: 'new-from-obs', title: 'Brand new from Obsidian' }),
       ];
 
       const caldav = [
-        makeCommonTask({ uid: 'unchanged', description: 'Same on both sides' }),
-        makeCommonTask({ uid: 'obs-updated', description: 'Original' }),
-        makeCommonTask({ uid: 'cal-updated', description: 'Updated in CalDAV' }),
-        makeCommonTask({ uid: 'conflict', description: 'CalDAV conflict' }),
+        makeCommonTask({ uid: 'unchanged', title: 'Same on both sides' }),
+        makeCommonTask({ uid: 'obs-updated', title: 'Original' }),
+        makeCommonTask({ uid: 'cal-updated', title: 'Updated in CalDAV' }),
+        makeCommonTask({ uid: 'conflict', title: 'CalDAV conflict' }),
         // del-from-cal is missing
-        makeCommonTask({ uid: 'del-from-obs', description: 'Will be deleted from Obsidian' }),
-        makeCommonTask({ uid: 'new-from-cal', description: 'Brand new from CalDAV' }),
+        makeCommonTask({ uid: 'del-from-obs', title: 'Will be deleted from Obsidian' }),
+        makeCommonTask({ uid: 'new-from-cal', title: 'Brand new from CalDAV' }),
       ];
 
       const result = diff(obsidian, caldav, baseline, 'caldav-wins');
@@ -315,9 +315,9 @@ describe('diff', () => {
     });
 
     it('should handle multiple tasks of the same type', () => {
-      const newObs1 = makeCommonTask({ uid: 'new-1', description: 'New 1' });
-      const newObs2 = makeCommonTask({ uid: 'new-2', description: 'New 2' });
-      const newCal1 = makeCommonTask({ uid: 'new-3', description: 'New 3' });
+      const newObs1 = makeCommonTask({ uid: 'new-1', title: 'New 1' });
+      const newObs2 = makeCommonTask({ uid: 'new-2', title: 'New 2' });
+      const newCal1 = makeCommonTask({ uid: 'new-3', title: 'New 3' });
 
       const result = diff([newObs1, newObs2], [newCal1], [], 'caldav-wins');
 

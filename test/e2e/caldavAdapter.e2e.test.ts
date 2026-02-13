@@ -72,7 +72,7 @@ describe('CalDAVAdapter E2E', () => {
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].uid).toBe(uid);
-      expect(tasks[0].description).toBe('Buy milk');
+      expect(tasks[0].title).toBe('Buy milk');
       expect(tasks[0].status).toBe('TODO');
       expect(tasks[0].dueDate).toBe('2025-06-15');
       expect(tasks[0].priority).toBe('high');
@@ -101,7 +101,7 @@ describe('CalDAVAdapter E2E', () => {
 
       const task: CommonTask = {
         uid: 'round-trip-id',
-        description: 'Round trip test',
+        title: 'Round trip test',
         status: 'TODO',
         dueDate: '2025-07-01',
         startDate: null,
@@ -121,7 +121,7 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, new Map());
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].description).toBe('Round trip test');
+      expect(tasks[0].title).toBe('Round trip test');
       expect(tasks[0].status).toBe('TODO');
       expect(tasks[0].dueDate).toBe('2025-07-01');
       expect(tasks[0].scheduledDate).toBe('2025-06-28');
@@ -135,7 +135,7 @@ describe('CalDAVAdapter E2E', () => {
 
       const task: CommonTask = {
         uid: 'done-id',
-        description: 'Completed task',
+        title: 'Completed task',
         status: 'DONE',
         dueDate: null,
         startDate: null,
@@ -181,7 +181,7 @@ describe('CalDAVAdapter E2E', () => {
       // Apply: create new + update existing + delete one
       const newTask: CommonTask = {
         uid: 'obs-new',
-        description: 'Brand new task',
+        title: 'Brand new task',
         status: 'TODO',
         dueDate: '2025-08-01',
         startDate: null,
@@ -194,7 +194,7 @@ describe('CalDAVAdapter E2E', () => {
 
       const updatedTask: CommonTask = {
         uid: 'obs-existing',
-        description: 'Updated existing task',
+        title: 'Updated existing task',
         status: 'DONE',
         dueDate: null,
         startDate: null,
@@ -207,7 +207,7 @@ describe('CalDAVAdapter E2E', () => {
 
       const deletedTask: CommonTask = {
         uid: 'obs-delete',
-        description: 'To delete',
+        title: 'To delete',
         status: 'TODO',
         dueDate: null,
         startDate: null,
@@ -233,10 +233,10 @@ describe('CalDAVAdapter E2E', () => {
       expect(vtodos.length).toBe(2); // 2 original - 1 deleted + 1 created = 2
 
       const tasks = adapter.normalize(vtodos, new Map());
-      const descriptions = tasks.map(t => t.description).sort();
+      const descriptions = tasks.map(t => t.title).sort();
       expect(descriptions).toEqual(['Brand new task', 'Updated existing task']);
 
-      const updated = tasks.find(t => t.description === 'Updated existing task');
+      const updated = tasks.find(t => t.title === 'Updated existing task');
       expect(updated?.status).toBe('DONE');
     });
   });

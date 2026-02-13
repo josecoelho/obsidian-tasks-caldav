@@ -8,7 +8,7 @@ function makeTask(overrides: Partial<any> = {}): any {
     priority: '0',
     tags: ['#sync'],
     taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
-    originalMarkdown: '- [ ] Buy groceries %%[id::20250105-a4f]%% #sync',
+    originalMarkdown: '- [ ] Buy groceries 🆔 20250105-a4f #sync',
     createdDate: null,
     startDate: null,
     scheduledDate: null,
@@ -30,7 +30,7 @@ describe('ObsidianAdapter', () => {
       const common = adapter.toCommonTask(task, '20250105-a4f');
 
       expect(common.uid).toBe('20250105-a4f');
-      expect(common.description).toBe('Buy groceries');
+      expect(common.title).toBe('Buy groceries');
       expect(common.status).toBe('TODO');
       expect(common.priority).toBe('none');
       expect(common.dueDate).toBeNull();
@@ -54,10 +54,10 @@ describe('ObsidianAdapter', () => {
 
     it('should clean description of tags and IDs', () => {
       const task = makeTask({
-        description: 'Buy groceries #sync #shopping %%[id::test-001]%%',
+        description: 'Buy groceries #sync #shopping [id::test-001]',
       });
       const common = adapter.toCommonTask(task, 'test-001');
-      expect(common.description).toBe('Buy groceries');
+      expect(common.title).toBe('Buy groceries');
     });
 
     it('should clean # prefix from tags', () => {
@@ -103,20 +103,20 @@ describe('ObsidianAdapter', () => {
     it('should filter by sync tag', () => {
       const tasks = [
         makeTask({ description: 'Task 1', tags: ['#sync'] }),
-        makeTask({ description: 'Task 2', tags: ['#work'], id: '20250105-b00', originalMarkdown: '- [ ] Task 2 %%[id::20250105-b00]%% #work' }),
-        makeTask({ description: 'Task 3', tags: ['#sync', '#work'], id: '20250105-c00', originalMarkdown: '- [ ] Task 3 %%[id::20250105-c00]%% #sync #work' }),
+        makeTask({ description: 'Task 2', tags: ['#work'], id: '20250105-b00', originalMarkdown: '- [ ] Task 2 🆔 20250105-b00 #work' }),
+        makeTask({ description: 'Task 3', tags: ['#sync', '#work'], id: '20250105-c00', originalMarkdown: '- [ ] Task 3 🆔 20250105-c00 #sync #work' }),
       ];
 
       const result = adapter.normalize(tasks, 'sync');
       expect(result).toHaveLength(2);
-      expect(result[0].description).toBe('Task 1');
-      expect(result[1].description).toBe('Task 3');
+      expect(result[0].title).toBe('Task 1');
+      expect(result[1].title).toBe('Task 3');
     });
 
     it('should return all tasks when syncTag is empty', () => {
       const tasks = [
-        makeTask({ description: 'Task 1', tags: ['#work'], id: 'id1', originalMarkdown: '- [ ] Task 1 %%[id::id1]%% #work' }),
-        makeTask({ description: 'Task 2', tags: [], id: 'id2', originalMarkdown: '- [ ] Task 2 %%[id::id2]%%' }),
+        makeTask({ description: 'Task 1', tags: ['#work'], id: 'id1', originalMarkdown: '- [ ] Task 1 🆔 id1 #work' }),
+        makeTask({ description: 'Task 2', tags: [], id: 'id2', originalMarkdown: '- [ ] Task 2 🆔 id2' }),
       ];
 
       const result = adapter.normalize(tasks, '');
@@ -134,8 +134,8 @@ describe('ObsidianAdapter', () => {
 
     it('should handle case-insensitive tag matching', () => {
       const tasks = [
-        makeTask({ tags: ['#SYNC'], id: 'id1', originalMarkdown: '- [ ] Task %%[id::id1]%% #SYNC' }),
-        makeTask({ tags: ['#Sync'], id: 'id2', originalMarkdown: '- [ ] Task %%[id::id2]%% #Sync' }),
+        makeTask({ tags: ['#SYNC'], id: 'id1', originalMarkdown: '- [ ] Task 🆔 id1 #SYNC' }),
+        makeTask({ tags: ['#Sync'], id: 'id2', originalMarkdown: '- [ ] Task 🆔 id2 #Sync' }),
       ];
 
       const result = adapter.normalize(tasks, 'sync');
@@ -156,7 +156,7 @@ describe('ObsidianAdapter', () => {
     it('should create markdown with TODO status', () => {
       const task = {
         uid: 'test-id',
-        description: 'Test task',
+        title: 'Test task',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -168,13 +168,13 @@ describe('ObsidianAdapter', () => {
       };
 
       expect(adapter.toMarkdown(task, 'test-id', 'sync'))
-        .toBe('- [ ] Test task %%[id::test-id]%% #sync');
+        .toBe('- [ ] Test task 🆔 test-id #sync');
     });
 
     it('should create markdown with DONE status', () => {
       const task = {
         uid: 'test-id',
-        description: 'Done task',
+        title: 'Done task',
         status: 'DONE' as const,
         dueDate: null,
         startDate: null,
@@ -186,13 +186,13 @@ describe('ObsidianAdapter', () => {
       };
 
       expect(adapter.toMarkdown(task, 'test-id', 'sync'))
-        .toBe('- [x] Done task %%[id::test-id]%% #sync');
+        .toBe('- [x] Done task 🆔 test-id #sync');
     });
 
     it('should include all dates in correct order', () => {
       const task = {
         uid: 'id',
-        description: 'Task',
+        title: 'Task',
         status: 'DONE' as const,
         dueDate: '2025-01-15',
         startDate: '2025-01-08',
@@ -219,7 +219,7 @@ describe('ObsidianAdapter', () => {
     it('should work without sync tag', () => {
       const task = {
         uid: 'id',
-        description: 'No tag',
+        title: 'No tag',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -231,14 +231,14 @@ describe('ObsidianAdapter', () => {
       };
 
       const md = adapter.toMarkdown(task, 'id', '');
-      expect(md).toBe('- [ ] No tag %%[id::id]%%');
+      expect(md).toBe('- [ ] No tag 🆔 id');
       expect(md).not.toContain('#');
     });
 
     it('should add # prefix to tag if missing', () => {
       const task = {
         uid: 'id',
-        description: 'Task',
+        title: 'Task',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -258,7 +258,7 @@ describe('ObsidianAdapter', () => {
     it('should not include priority in markdown (known limitation)', () => {
       const task = {
         uid: 'id',
-        description: 'High priority task',
+        title: 'High priority task',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -277,7 +277,7 @@ describe('ObsidianAdapter', () => {
     it('should not include recurrence rule in markdown (known limitation)', () => {
       const task = {
         uid: 'id',
-        description: 'Recurring task',
+        title: 'Recurring task',
         status: 'TODO' as const,
         dueDate: null,
         startDate: null,
@@ -300,13 +300,8 @@ describe('ObsidianAdapter', () => {
       expect(adapter.extractId(task)).toBe('from-field');
     });
 
-    it('should fall back to extracting from markdown', () => {
-      const task = makeTask({ id: '', originalMarkdown: '- [ ] Task %%[id::from-md]%%' });
-      expect(adapter.extractId(task)).toBe('from-md');
-    });
-
-    it('should return null when no ID present', () => {
-      const task = makeTask({ id: '', originalMarkdown: '- [ ] No ID task' });
+    it('should return null when task.id is empty', () => {
+      const task = makeTask({ id: '' });
       expect(adapter.extractId(task)).toBeNull();
     });
   });
