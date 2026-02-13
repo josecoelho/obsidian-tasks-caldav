@@ -60,8 +60,6 @@ export class SyncEngine {
     try {
       const mode = dryRun ? '[DRY RUN] ' : '';
       new Notice(`${mode}Starting sync...`);
-      console.log(`=== ${mode}Sync Started ===`);
-
       // 1. Connect to CalDAV
       new Notice(`${mode}Connecting to CalDAV server...`);
       await this.caldavClient.connect();
@@ -71,7 +69,6 @@ export class SyncEngine {
       const uidMapping = this.buildUidMapping();
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
-      console.log(`[Sync] CalDAV: ${caldavTasks.length}/${allCaldavTasks.length} tasks (after sync tag filter)`, caldavTasks.map(t => `${t.uid}: ${t.title}`));
 
       // 3. Get Obsidian tasks → filter by sync tag → inject IDs only on matching tasks
       const allObsidianTasks = this.taskManager.getAllTasks();
@@ -86,16 +83,11 @@ export class SyncEngine {
         this.settings.syncTag,
         notesMap,
       );
-      console.log(`[Sync] Obsidian: ${obsidianTasks.length} tasks`, obsidianTasks.map(t => `${t.uid}: ${t.title}`));
-
       // 4. Load baseline — if empty, seed from already-mapped tasks so the
       //    first sync with this engine doesn't duplicate everything.
       let baseline = this.storage.getBaseline();
       if (baseline.length === 0 && Object.keys(this.storage.getMapping().tasks).length > 0) {
         baseline = this.seedBaselineFromMapping(obsidianTasks, caldavTasks);
-        console.log(`Seeded baseline from existing mapping: ${baseline.length} tasks`);
-      } else {
-        console.log(`Baseline has ${baseline.length} tasks`);
       }
 
       // 5. Diff
@@ -103,15 +95,6 @@ export class SyncEngine {
         ? 'obsidian-wins'
         : 'caldav-wins';
       const changeset = diff(obsidianTasks, caldavTasks, baseline, strategy);
-
-      console.log(`[Sync] Baseline: ${baseline.length} tasks`, baseline.map(t => `${t.uid}: ${t.title}`));
-      console.log(`[Sync] Changeset: toObsidian=${changeset.toObsidian.length}, toCalDAV=${changeset.toCalDAV.length}, conflicts=${changeset.conflicts.length}`);
-      for (const c of changeset.toObsidian) {
-        console.log(`[Sync]   → Obsidian: ${c.type} "${c.task.title}" (uid: ${c.task.uid})`);
-      }
-      for (const c of changeset.toCalDAV) {
-        console.log(`[Sync]   → CalDAV: ${c.type} "${c.task.title}" (uid: ${c.task.uid})`);
-      }
 
       const result: SyncResult = {
         success: true,
@@ -144,7 +127,6 @@ export class SyncEngine {
           `To CalDAV: ${result.created.toCalDAV} created, ${result.updated.toCalDAV} updated, ${result.deleted.toCalDAV} deleted\n` +
           `Conflicts: ${result.conflicts}\n\nNo changes were made.`;
         new Notice(result.message, 10000);
-        console.log('=== Dry Run Complete ===');
         return result;
       }
 
@@ -169,7 +151,6 @@ export class SyncEngine {
         `From CalDAV: ${result.created.toObsidian}+${result.updated.toObsidian}+${result.deleted.toObsidian} | ` +
         `To CalDAV: ${result.created.toCalDAV}+${result.updated.toCalDAV}+${result.deleted.toCalDAV}`;
       new Notice(result.message, 5000);
-      console.log('=== Sync Complete ===');
 
       return result;
 
@@ -305,16 +286,12 @@ export class SyncEngine {
 
             // Add mapping: the task's uid from CalDAV becomes mapped to new obsidian task ID
             this.storage.addTaskMapping(taskId, change.task.uid, this.settings.newTasksDestination);
-            console.log(`Created task ${taskId} from CalDAV ${change.task.uid}`);
             break;
           }
 
           case 'update': {
             const existingTask = this.taskManager.findTaskById(change.task.uid);
-            if (!existingTask) {
-              console.warn(`Task ${change.task.uid} not found in vault for update`);
-              continue;
-            }
+            if (!existingTask) continue;
 
             const markdown = this.obsidianAdapter.toMarkdown(
               change.task,
@@ -323,7 +300,6 @@ export class SyncEngine {
             );
 
             await this.taskManager.updateTaskInVault(existingTask, markdown);
-            console.log(`Updated task ${change.task.uid} in Obsidian`);
             break;
           }
 
@@ -331,7 +307,6 @@ export class SyncEngine {
             // For now, log the delete. Full delete from vault requires careful handling.
             // Remove from mapping so it won't be synced back.
             this.storage.removeTaskMapping(change.task.uid);
-            console.log(`Deleted task ${change.task.uid} from sync (removed mapping)`);
             break;
           }
         }
@@ -405,7 +380,7 @@ export class SyncEngine {
           }
         }
       } catch (error) {
-        console.warn(`[SyncEngine] Failed to read file for notes: ${filePath}`, error);
+        console.error(`[SyncEngine] Failed to read file for notes: ${filePath}`, error);
       }
     }
 

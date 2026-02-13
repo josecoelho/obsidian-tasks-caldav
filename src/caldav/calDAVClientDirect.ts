@@ -29,16 +29,12 @@ export class CalDAVClientDirect {
    * Connect to CalDAV server and find the calendar
    */
   async connect(): Promise<void> {
-    console.log('[CalDAV] Connecting to server:', this.settings.serverUrl);
-
     try {
       // Step 1: Discover calendar home URL
       const homeUrl = await this.discoverCalendarHome();
-      console.log('[CalDAV] Calendar home:', homeUrl);
 
       // Step 2: Find calendars
       const calendars = await this.findCalendars(homeUrl);
-      console.log('[CalDAV] Found calendars:', calendars);
 
       // Step 3: Find our specific calendar
       const calendar = calendars.find(c => c.displayName === this.settings.calendarName);
@@ -47,7 +43,6 @@ export class CalDAVClientDirect {
       }
 
       this.calendarUrl = calendar.url;
-      console.log('[CalDAV] Using calendar:', this.calendarUrl);
 
     } catch (error) {
       console.error('[CalDAV] Connection failed:', error);
@@ -63,8 +58,6 @@ export class CalDAVClientDirect {
     const baseUrl = new URL(this.settings.serverUrl);
     const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
 
-    console.log('[CalDAV] Trying well-known URL:', wellKnownUrl);
-
     try {
       const wellKnownResponse = await this.httpClient.request({
         url: wellKnownUrl,
@@ -78,14 +71,12 @@ export class CalDAVClientDirect {
         throw: false
       });
 
-      console.log('[CalDAV] Well-known response status:', wellKnownResponse.status);
-
       // If well-known works, discover from there
       if (wellKnownResponse.status === 207) {
         return await this.discoverFromPrincipal(wellKnownResponse.text, wellKnownUrl);
       }
-    } catch (error) {
-      console.log('[CalDAV] Well-known failed, trying direct:', error);
+    } catch {
+      // Well-known not supported, fall back to direct PROPFIND
     }
 
     // Fall back to direct PROPFIND on server URL
@@ -100,8 +91,6 @@ export class CalDAVClientDirect {
       body: PROPFIND_PRINCIPAL,
       throw: false
     });
-
-    console.log('[CalDAV] PROPFIND response status:', response.status);
 
     if (response.status !== 207) {
       throw new Error(`PROPFIND failed: ${response.status} ${response.text.substring(0, 500)}`);
@@ -127,8 +116,6 @@ export class CalDAVClientDirect {
       const baseUrl = new URL(contextUrl);
       principalUrl = `${baseUrl.protocol}//${baseUrl.host}${principalUrl}`;
     }
-
-    console.log('[CalDAV] Principal URL:', principalUrl);
 
     // Now get calendar-home-set from principal
     const calendarHomeResponse = await this.httpClient.request({
@@ -225,8 +212,6 @@ export class CalDAVClientDirect {
       throw new Error(`PROPFIND calendars failed: ${response.status}`);
     }
 
-    console.log('[CalDAV] Calendars PROPFIND response:', response.text.substring(0, 1000));
-
     return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.settings.serverUrl);
   }
 
@@ -299,11 +284,7 @@ export class CalDAVClientDirect {
       throw new Error(`REPORT VTODOs failed: ${response.status}`);
     }
 
-    console.log('[CalDAV] REPORT response length:', response.text.length);
-
-    const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response.text, this.settings.serverUrl);
-    console.log('[CalDAV] Fetched', vtodos.length, 'VTODOs');
-    return vtodos;
+    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.settings.serverUrl);
   }
 
   /**
@@ -341,7 +322,6 @@ export class CalDAVClientDirect {
       throw new Error(`Create VTODO failed: ${response.status} ${response.text}`);
     }
 
-    console.log('[CalDAV] Created VTODO:', uid);
   }
 
   /**
@@ -370,7 +350,6 @@ export class CalDAVClientDirect {
       throw new Error(`Update VTODO failed: ${response.status}`);
     }
 
-    console.log('[CalDAV] Updated VTODO:', vtodo.url);
   }
 
   /**
@@ -396,7 +375,6 @@ export class CalDAVClientDirect {
       throw new Error(`Delete VTODO failed: ${response.status}`);
     }
 
-    console.log('[CalDAV] Deleted VTODO:', vtodo.url);
   }
 
   /**

@@ -86,7 +86,7 @@ export class CalDAVAdapter {
         case 'update': {
           const existing = await client.fetchVTODOByUID(caldavUID);
           if (!existing) {
-            console.warn(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
+            console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
             continue;
           }
           const newData = this.fromCommonTask(change.task, caldavUID);

@@ -18,7 +18,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 		this.syncEngine = new SyncEngine(this.app, this.settings);
 		this.syncEngine.initialize().then(ready => {
 			if (!ready) {
-				console.warn('CalDAV sync: obsidian-tasks plugin not available');
+				new Notice('CalDAV sync: obsidian-tasks plugin not available');
 			}
 		});
 
@@ -149,7 +149,6 @@ export default class CalDAVSyncPlugin extends Plugin {
 				}
 				const status = await this.syncEngine.getStatus();
 				new Notice(status, 8000);
-				console.log('Sync Status:', status);
 			}
 		});
 
@@ -165,7 +164,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 				} catch (error) {
 					const msg = error instanceof Error ? error.message : String(error);
 					new Notice(`CalDAV dump failed: ${msg}`, 8000);
-					console.error('[CalDAV Dump]', error);
+					console.error('[CalDAV] Dump failed:', error);
 				}
 			}
 		});
@@ -180,11 +179,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 		);
 		this.autoSync.start(this.settings.syncInterval);
 
-		console.log('CalDAV Sync Plugin loaded');
 	}
 
 	onunload() {
-		console.log('CalDAV Sync Plugin unloaded');
 	}
 
 	async loadSettings() {
@@ -214,12 +211,9 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'CalDAV Sync Settings' });
-
-		containerEl.createEl('p', {
-			text: 'Configure CalDAV server connection and sync behavior.',
-			cls: 'setting-item-description'
-		});
+		new Setting(containerEl)
+			.setName('Connection')
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName('Server URL')
@@ -304,7 +298,9 @@ class CalDAVSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		containerEl.createEl('h3', { text: 'Conflict Resolution' });
+		new Setting(containerEl)
+			.setName('Conflict resolution')
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName('Require manual conflict resolution')
