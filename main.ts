@@ -5,11 +5,12 @@ import { TaskManager } from './src/tasks/taskManager';
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
+import { AutoSyncScheduler } from './src/sync/autoSync';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
 	syncEngine: SyncEngine | null = null;
-	private autoSyncIntervalId: number | null = null;
+	private autoSync: AutoSyncScheduler | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -337,7 +338,12 @@ export default class CalDAVSyncPlugin extends Plugin {
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
-		this.startAutoSync();
+		// Auto-sync scheduler
+		this.autoSync = new AutoSyncScheduler(
+			() => this.syncEngine!.sync().then(() => {}),
+			(id) => this.registerInterval(id),
+		);
+		this.autoSync.start(this.settings.syncInterval);
 
 		console.log('CalDAV Sync Plugin loaded');
 	}
@@ -355,30 +361,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 		// Re-initialize sync engine with new settings
 		this.syncEngine = new SyncEngine(this.app, this.settings);
 		await this.syncEngine.initialize();
-		this.startAutoSync();
+		this.autoSync?.start(this.settings.syncInterval);
 	}
 
-	private startAutoSync(): void {
-		this.stopAutoSync();
-		if (this.settings.syncInterval > 0 && this.syncEngine) {
-			const intervalMs = this.settings.syncInterval * 60 * 1000;
-			this.autoSyncIntervalId = window.setInterval(async () => {
-				try {
-					await this.syncEngine?.sync();
-				} catch (error) {
-					console.error('Auto-sync failed:', error);
-				}
-			}, intervalMs);
-			this.registerInterval(this.autoSyncIntervalId);
-		}
-	}
-
-	private stopAutoSync(): void {
-		if (this.autoSyncIntervalId !== null) {
-			window.clearInterval(this.autoSyncIntervalId);
-			this.autoSyncIntervalId = null;
-		}
-	}
 }
 
 class CalDAVSettingTab extends PluginSettingTab {
