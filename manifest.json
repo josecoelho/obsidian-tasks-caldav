@@ -6,5 +6,5 @@
 	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"author": "José Coelho",
 	"authorUrl": "https://github.com/josecoelho",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }
