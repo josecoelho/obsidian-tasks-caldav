@@ -117,6 +117,7 @@ describe('Sync round-trip E2E', () => {
         priority: 'high',
         tags: ['sync'],
         recurrenceRule: '',
+        notes: '',
       },
     ];
 

@@ -79,9 +79,12 @@ export class SyncEngine {
       for (const task of syncTagFiltered) {
         await this.taskManager.ensureTaskHasId(task);
       }
+      const refreshedTasks = this.taskManager.getAllTasks(); // Re-fetch after ID injection
+      const notesMap = await this.buildNotesMap(refreshedTasks);
       const obsidianTasks = this.obsidianAdapter.normalize(
-        this.taskManager.getAllTasks(), // Re-fetch after ID injection
+        refreshedTasks,
         this.settings.syncTag,
+        notesMap,
       );
       console.log(`[Sync] Obsidian: ${obsidianTasks.length} tasks`, obsidianTasks.map(t => `${t.uid}: ${t.title}`));
 
@@ -361,6 +364,52 @@ export class SyncEngine {
     }
 
     // Handle Obsidian-side deletes (already done in applyObsidianChanges)
+  }
+
+  /**
+   * Build a map of taskId → notes by reading vault files and extracting
+   * indented bullets below each task line.
+   */
+  private async buildNotesMap(tasks: ObsidianTask[]): Promise<Map<string, string>> {
+    const notesMap = new Map<string, string>();
+
+    // Group tasks by file to avoid re-reading the same file
+    const tasksByFile = new Map<string, ObsidianTask[]>();
+    for (const task of tasks) {
+      const filePath = task.taskLocation._tasksFile._path;
+      if (!tasksByFile.has(filePath)) {
+        tasksByFile.set(filePath, []);
+      }
+      tasksByFile.get(filePath)!.push(task);
+    }
+
+    for (const [filePath, fileTasks] of tasksByFile) {
+      try {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file) continue;
+        const content = await this.app.vault.read(file as any);
+        const lines = content.split('\n');
+
+        for (const task of fileTasks) {
+          const taskId = this.taskManager.getTaskId(task);
+          if (!taskId) continue;
+
+          const lineIndex = lines.findIndex(
+            line => line.trim() === task.originalMarkdown.trim()
+          );
+          if (lineIndex === -1) continue;
+
+          const notes = this.obsidianAdapter.extractNotesFromFile(content, lineIndex);
+          if (notes) {
+            notesMap.set(taskId, notes);
+          }
+        }
+      } catch (error) {
+        console.warn(`[SyncEngine] Failed to read file for notes: ${filePath}`, error);
+      }
+    }
+
+    return notesMap;
   }
 
   /**

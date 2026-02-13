@@ -72,6 +72,7 @@ const mockEnsureTaskHasId = jest.fn().mockResolvedValue('mock-id');
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
+const mockGetTaskId = jest.fn().mockImplementation((task: any) => task.id || null);
 
 jest.mock('../tasks/taskManager', () => ({
   TaskManager: jest.fn().mockImplementation(() => ({
@@ -81,6 +82,7 @@ jest.mock('../tasks/taskManager', () => ({
     findTaskById: mockFindTaskById,
     createTask: mockCreateTask,
     updateTaskInVault: mockUpdateTaskInVault,
+    getTaskId: mockGetTaskId,
   })),
 }));
 
@@ -140,6 +142,7 @@ describe('SyncEngine', () => {
     mockFindTaskById.mockReturnValue(null);
     mockCreateTask.mockResolvedValue(undefined);
     mockUpdateTaskInVault.mockResolvedValue(undefined);
+    mockGetTaskId.mockImplementation((task: any) => task.id || null);
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
     mockCreateVTODO.mockResolvedValue(undefined);
@@ -309,6 +312,7 @@ describe('SyncEngine', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
+        notes: '',
       }]);
 
       const engine = new SyncEngine(new App(), makeSettings());
@@ -426,6 +430,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
+        notes: '',
       };
 
       const obsTask = makeObsidianTask({
@@ -468,6 +473,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
+        notes: '',
       };
 
       const obsTask = makeObsidianTask({
@@ -747,6 +753,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
+        notes: '',
       };
 
       // Obsidian still has the original

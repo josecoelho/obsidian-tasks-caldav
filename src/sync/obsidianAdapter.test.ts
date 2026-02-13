@@ -35,6 +35,13 @@ describe('ObsidianAdapter', () => {
       expect(common.priority).toBe('none');
       expect(common.dueDate).toBeNull();
       expect(common.tags).toEqual(['sync']);
+      expect(common.notes).toBe('');
+    });
+
+    it('should include notes when provided', () => {
+      const task = makeTask();
+      const common = adapter.toCommonTask(task, '20250105-a4f', 'Some notes here');
+      expect(common.notes).toBe('Some notes here');
     });
 
     it('should map done status', () => {
@@ -188,6 +195,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       expect(adapter.toMarkdown(task, 'test-id', 'sync'))
@@ -206,6 +214,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       expect(adapter.toMarkdown(task, 'test-id', 'sync'))
@@ -224,6 +233,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const md = adapter.toMarkdown(task, 'id', 'sync');
@@ -251,6 +261,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const md = adapter.toMarkdown(task, 'id', '');
@@ -270,6 +281,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const without = adapter.toMarkdown(task, 'id', 'sync');
@@ -290,6 +302,7 @@ describe('ObsidianAdapter', () => {
         priority: 'high' as const,
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
       // Priority is not mapped to obsidian-tasks emoji format — data is lost in CalDAV→Obsidian direction
@@ -309,6 +322,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: 'FREQ=DAILY',
+        notes: '',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
       expect(md).toContain('🔁 every day');
@@ -328,6 +342,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+        notes: '',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
       expect(md).toContain('🔁 every week on Monday');
@@ -345,6 +360,7 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: 'FREQ=DAILY',
+        notes: '',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
       const recIdx = md.indexOf('🔁');
@@ -366,9 +382,122 @@ describe('ObsidianAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: 'INVALID_RRULE',
+        notes: '',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
       expect(md).not.toContain('🔁');
+    });
+
+    it('should append notes as indented bullets', () => {
+      const task = {
+        uid: 'id',
+        title: 'Task with notes',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        notes: 'First note\nSecond note',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      expect(md).toBe('- [ ] Task with notes 🆔 id #sync\n    - First note\n    - Second note');
+    });
+
+    it('should not append notes lines when notes is empty', () => {
+      const task = {
+        uid: 'id',
+        title: 'Task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        notes: '',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      expect(md).toBe('- [ ] Task 🆔 id #sync');
+      expect(md).not.toContain('\n');
+    });
+  });
+
+  describe('extractNotesFromFile', () => {
+    it('should extract indented bullet lines below a task (4-space indent)', () => {
+      const content = '- [ ] Task\n    - Note one\n    - Note two\nNext line';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('Note one\nNote two');
+    });
+
+    it('should extract with 2-space indent', () => {
+      const content = '- [ ] Task\n  - Note one\n  - Note two';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('Note one\nNote two');
+    });
+
+    it('should extract with tab indent', () => {
+      const content = '- [ ] Task\n\t- Note one\n\t- Note two';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('Note one\nNote two');
+    });
+
+    it('should stop at non-indented line', () => {
+      const content = '- [ ] Task\n    - Note one\nNot a note\n    - Not included';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('Note one');
+    });
+
+    it('should stop at end of file', () => {
+      const content = '- [ ] Task\n    - Note one\n    - Note two';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('Note one\nNote two');
+    });
+
+    it('should return empty string when no notes', () => {
+      const content = '- [ ] Task\n- [ ] Next task';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('');
+    });
+
+    it('should handle task in middle of file', () => {
+      const content = '# Header\n- [ ] First task\n- [ ] Target task\n    - Note for target\n- [ ] Other task';
+      const notes = adapter.extractNotesFromFile(content, 2);
+      expect(notes).toBe('Note for target');
+    });
+
+    it('should not treat non-bullet indented lines as notes', () => {
+      const content = '- [ ] Task\n    Not a bullet line\n    - Actual note';
+      const notes = adapter.extractNotesFromFile(content, 0);
+      expect(notes).toBe('');
+    });
+  });
+
+  describe('normalize with notesMap', () => {
+    it('should include notes from notesMap in CommonTask', () => {
+      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
+      const notesMap = new Map([['task-1', 'Some notes']]);
+      const result = adapter.normalize([task], 'sync', notesMap);
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe('Some notes');
+    });
+
+    it('should default to empty notes when not in notesMap', () => {
+      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
+      const notesMap = new Map<string, string>();
+      const result = adapter.normalize([task], 'sync', notesMap);
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe('');
+    });
+
+    it('should default to empty notes when notesMap is not provided', () => {
+      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
+      const result = adapter.normalize([task], 'sync');
+      expect(result).toHaveLength(1);
+      expect(result[0].notes).toBe('');
     });
   });
 

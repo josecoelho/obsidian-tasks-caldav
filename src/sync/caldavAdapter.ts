@@ -46,6 +46,7 @@ export class CalDAVAdapter {
       priority: parsed.priority as TaskPriority,
       tags: parsed.tags,
       recurrenceRule: parsed.recurrenceRule,
+      notes: parsed.notes,
     };
   }
 
@@ -63,6 +64,7 @@ export class CalDAVAdapter {
       priority: task.priority,
       tags: task.tags,
       recurrenceRule: task.recurrenceRule,
+      notes: task.notes,
     };
 
     return this.mapper.taskToVTODO(obsidianTask, caldavUID);

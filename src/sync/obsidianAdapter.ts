@@ -6,8 +6,9 @@ export class ObsidianAdapter {
   /**
    * Normalize obsidian-tasks Task[] into CommonTask[].
    * Only includes tasks that have an ID and pass the sync tag filter.
+   * @param notesMap Optional map of taskId -> notes text (extracted from vault files)
    */
-  normalize(tasks: ObsidianTask[], syncTag?: string): CommonTask[] {
+  normalize(tasks: ObsidianTask[], syncTag?: string, notesMap?: Map<string, string>): CommonTask[] {
     const filtered = this.filterByTag(tasks, syncTag);
     const result: CommonTask[] = [];
 
@@ -15,7 +16,8 @@ export class ObsidianAdapter {
       const taskId = this.extractId(task);
       if (!taskId) continue;
 
-      result.push(this.toCommonTask(task, taskId));
+      const notes = notesMap?.get(taskId) ?? '';
+      result.push(this.toCommonTask(task, taskId, notes));
     }
 
     return result;
@@ -23,8 +25,9 @@ export class ObsidianAdapter {
 
   /**
    * Convert a single obsidian-tasks Task to CommonTask.
+   * @param notes Optional notes text (defaults to '')
    */
-  toCommonTask(task: ObsidianTask, taskId: string): CommonTask {
+  toCommonTask(task: ObsidianTask, taskId: string, notes: string = ''): CommonTask {
     return {
       uid: taskId,
       title: this.cleanDescription(task.description),
@@ -36,6 +39,7 @@ export class ObsidianAdapter {
       priority: this.mapPriority(task.priority),
       tags: this.cleanTags(task.tags || []),
       recurrenceRule: task.recurrence ? this.extractRecurrenceRule(task.recurrence) : '',
+      notes,
     };
   }
 
@@ -78,7 +82,31 @@ export class ObsidianAdapter {
       line += ` ${tag}`;
     }
 
+    // Notes as indented bullet lines
+    if (task.notes) {
+      const noteLines = task.notes.split('\n').map(l => `    - ${l}`);
+      line += '\n' + noteLines.join('\n');
+    }
+
     return line;
+  }
+
+  /**
+   * Extract indented bullet notes from file content below a task line.
+   * Notes are lines matching /^(?:\s{2,}|\t)- (.*)$/ immediately after the task.
+   * Returns joined lines with \n, or '' if no notes found.
+   */
+  extractNotesFromFile(fileContent: string, taskLineIndex: number): string {
+    const lines = fileContent.split('\n');
+    const noteLines: string[] = [];
+
+    for (let i = taskLineIndex + 1; i < lines.length; i++) {
+      const match = lines[i].match(/^(?:\s{2,}|\t)- (.*)$/);
+      if (!match) break;
+      noteLines.push(match[1]);
+    }
+
+    return noteLines.join('\n');
   }
 
   /**
