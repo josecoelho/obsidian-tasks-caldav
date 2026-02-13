@@ -86,29 +86,30 @@ describe('ObsidianAdapter', () => {
       expect(adapter.toCommonTask(task, 'id').dueDate).toBe('2025-01-15');
     });
 
-    it('should extract recurrence rule from rrule object', () => {
+    it('should extract recurrence rule from toText()', () => {
       const task = makeTask({
-        recurrence: {
-          toText: () => 'every day 5 times',
-          rrule: { toString: () => 'RRULE:FREQ=DAILY;COUNT=5' },
-        },
-      });
-      expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY;COUNT=5');
-    });
-
-    it('should extract recurrence rule when DTSTART is present', () => {
-      const task = makeTask({
-        recurrence: {
-          toText: () => 'every day',
-          rrule: { toString: () => 'DTSTART:20260212T000000Z\nRRULE:FREQ=DAILY' },
-        },
+        recurrence: { toText: () => 'every day' },
       });
       expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY');
     });
 
-    it('should return empty recurrence when rrule not accessible', () => {
+    it('should extract weekly recurrence with day', () => {
       const task = makeTask({
-        recurrence: { toText: () => 'every day' },
+        recurrence: { toText: () => 'every week on Monday' },
+      });
+      expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=WEEKLY;BYDAY=MO');
+    });
+
+    it('should strip "when done" from recurrence text', () => {
+      const task = makeTask({
+        recurrence: { toText: () => 'every day when done' },
+      });
+      expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY');
+    });
+
+    it('should return empty recurrence for unparseable text', () => {
+      const task = makeTask({
+        recurrence: { toText: () => 'something unparseable' },
       });
       expect(adapter.toCommonTask(task, 'id').recurrenceRule).toBe('');
     });
@@ -296,12 +297,12 @@ describe('ObsidianAdapter', () => {
       expect(md).not.toContain('🔼');
     });
 
-    it('should not include recurrence rule in markdown (known limitation)', () => {
+    it('should include recurrence rule as human-readable text', () => {
       const task = {
         uid: 'id',
         title: 'Recurring task',
         status: 'TODO' as const,
-        dueDate: null,
+        dueDate: '2026-02-15',
         startDate: null,
         scheduledDate: null,
         completedDate: null,
@@ -310,9 +311,64 @@ describe('ObsidianAdapter', () => {
         recurrenceRule: 'FREQ=DAILY',
       };
       const md = adapter.toMarkdown(task, 'id', 'sync');
-      // Recurrence rules are not mapped to obsidian-tasks format — data is lost
-      expect(md).not.toContain('🔁');
+      expect(md).toContain('🔁 every day');
+      // RRULE format should NOT appear in markdown
       expect(md).not.toContain('FREQ=DAILY');
+    });
+
+    it('should include weekly recurrence with day', () => {
+      const task = {
+        uid: 'id',
+        title: 'Weekly task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      expect(md).toContain('🔁 every week on Monday');
+    });
+
+    it('should place recurrence before ID and tag', () => {
+      const task = {
+        uid: 'id',
+        title: 'Task',
+        status: 'TODO' as const,
+        dueDate: '2026-02-15',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: 'FREQ=DAILY',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      const recIdx = md.indexOf('🔁');
+      const idIdx = md.indexOf('🆔');
+      const tagIdx = md.indexOf('#sync');
+      expect(recIdx).toBeLessThan(idIdx);
+      expect(idIdx).toBeLessThan(tagIdx);
+    });
+
+    it('should skip recurrence for unparseable RRULE', () => {
+      const task = {
+        uid: 'id',
+        title: 'Task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: 'INVALID_RRULE',
+      };
+      const md = adapter.toMarkdown(task, 'id', 'sync');
+      expect(md).not.toContain('🔁');
     });
   });
 
