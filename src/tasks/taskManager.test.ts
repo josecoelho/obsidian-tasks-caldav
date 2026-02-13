@@ -315,6 +315,154 @@ describe('TaskManager', () => {
         });
     });
 
+    describe('createTask', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('tasks.md');
+            jest.clearAllMocks();
+            // Make isReady() return true
+            (taskManager as any).tasksPlugin = { getTasks: jest.fn().mockReturnValue([]) };
+        });
+
+        it('should append task to existing file when no section specified', async () => {
+            const fileContent = '# My Tasks\n\n- [ ] Existing task';
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.createTask('- [ ] New task [id::20251107-abc]', 'tasks.md');
+
+            expect(mockApp.vault.modify).toHaveBeenCalledWith(
+                mockFile,
+                '# My Tasks\n\n- [ ] Existing task\n- [ ] New task [id::20251107-abc]'
+            );
+        });
+
+        it('should create new file when file does not exist', async () => {
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+            mockApp.vault.create.mockResolvedValue(undefined);
+
+            await taskManager.createTask('- [ ] New task', 'new-file.md');
+
+            expect(mockApp.vault.create).toHaveBeenCalledWith('new-file.md', '- [ ] New task\n');
+        });
+
+        it('should insert task under section heading', async () => {
+            const fileContent = '# My Tasks\n\n## CalDAV\n- [ ] Existing CalDAV task\n\n## Other';
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.createTask('- [ ] New CalDAV task', 'tasks.md', 'CalDAV');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            // Section heading is at index 2, task should be inserted at index 3
+            expect(lines[2]).toBe('## CalDAV');
+            expect(lines[3]).toBe('- [ ] New CalDAV task');
+            expect(lines[4]).toBe('- [ ] Existing CalDAV task');
+        });
+
+        it('should create section when heading not found', async () => {
+            const fileContent = '# My Tasks\n\n- [ ] Existing task';
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.createTask('- [ ] New task', 'tasks.md', 'CalDAV');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            expect(updatedContent).toBe(
+                '# My Tasks\n\n- [ ] Existing task\n\n## CalDAV\n- [ ] New task'
+            );
+        });
+
+        it('should match h1 heading for section', async () => {
+            const fileContent = '# CalDAV\n- [ ] Existing task';
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.createTask('- [ ] New task', 'tasks.md', 'CalDAV');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[0]).toBe('# CalDAV');
+            expect(lines[1]).toBe('- [ ] New task');
+            expect(lines[2]).toBe('- [ ] Existing task');
+        });
+
+        it('should throw on non-file path', async () => {
+            // Return a plain object (not instanceof TFile)
+            mockApp.vault.getAbstractFileByPath.mockReturnValue({});
+
+            await expect(
+                taskManager.createTask('- [ ] Task', 'not-a-file')
+            ).rejects.toThrow('Path is not a file: not-a-file');
+        });
+    });
+
+    describe('ensureTaskHasId', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+        });
+
+        it('should return existing ID without updating vault', async () => {
+            const task = createMockTask({
+                id: 'existing-id-123',
+                originalMarkdown: '- [ ] Task with ID [id::existing-id-123]',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            const result = await taskManager.ensureTaskHasId(task);
+
+            expect(result).toBe('existing-id-123');
+            expect(mockApp.vault.modify).not.toHaveBeenCalled();
+        });
+
+        it('should generate and inject new ID when task has none', async () => {
+            const fileContent = '- [ ] Task without ID';
+
+            const task = createMockTask({
+                id: '',
+                description: 'Task without ID',
+                originalMarkdown: '- [ ] Task without ID',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            const result = await taskManager.ensureTaskHasId(task);
+
+            // Should return a non-empty ID
+            expect(result).toBeTruthy();
+            expect(result.length).toBeGreaterThan(0);
+
+            // Should have called updateTaskInVault (which calls vault.modify)
+            expect(mockApp.vault.modify).toHaveBeenCalledTimes(1);
+
+            // The modified content should contain the new ID
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            expect(updatedContent).toContain(`🆔 ${result}`);
+        });
+    });
+
     describe('updateTaskInVault', () => {
         let mockFile: MockTFile;
 

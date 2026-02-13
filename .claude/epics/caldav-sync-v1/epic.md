@@ -1,8 +1,8 @@
 ---
 name: caldav-sync-v1
-status: backlog
+status: in-progress
 created: 2026-02-12T00:20:49Z
-progress: 0%
+progress: 29%
 prd: .claude/prds/caldav-sync-v1.md
 github: https://github.com/josecoelho/obsidian-tasks-caldav/issues/12
 ---
@@ -113,13 +113,13 @@ Extract inline XML strings from `calDAVClientDirect.ts` into string constants in
 **Parallelizable:** Tasks 4, 5, 6 can run in parallel after task 3 or independently.
 
 ## Tasks Created
-- [ ] #13 - Fix VTODO parser — RFC 5545 line folding and VTIMEZONE dates (parallel: true)
+- [x] #13 - Fix VTODO parser — RFC 5545 line folding and VTIMEZONE dates (parallel: true)
 - [ ] #15 - Define CommonTask type and build sync adapters (parallel: false, depends: #13)
 - [ ] #17 - Implement diff engine, changeset application, and sync integration (parallel: false, depends: #15)
 - [ ] #14 - Clean up plugin UI — remove debug commands, add production commands (parallel: true, depends: #17)
 - [ ] #16 - Extract CalDAV XML templates to constants (parallel: true)
 - [ ] #18 - Documentation — README, usage guide, CHANGELOG (parallel: true, depends: #17, #14)
-- [ ] #22 - Set up local CalDAV server for integration testing (parallel: true, depends: #13)
+- [x] #22 - Set up local CalDAV server for integration testing (parallel: true, depends: #13)
 
 Total tasks: 7
 Parallel tasks: 5 (#13, #14, #16, #18, #22)

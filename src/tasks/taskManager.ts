@@ -192,11 +192,10 @@ export class TaskManager {
             return existingId;
         }
 
-        // Generate and inject new ID
+        // Insert ID before obsidian-tasks metadata (dates, priority, tags)
         const result = ensureTaskId(task.originalMarkdown);
 
         if (result.modified) {
-            // Update the task in the file
             await this.updateTaskInVault(task, result.text);
         }
 

@@ -106,7 +106,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 			expect(task.description).toBe('Pedir remedio');
 			expect(task.status).toBe('DONE');
 			expect(task.dueDate).toBe('2025-11-19');
-			expect(task.scheduledDate).toBe('2025-11-19');
+			expect(task.startDate).toBe('2025-11-19');
 		});
 
 		it('parses DAVx5 recurring task with RRULE', async () => {
@@ -118,7 +118,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 			expect(task.status).toBe('TODO');
 			expect(task.recurrenceRule).toBe('FREQ=DAILY');
 			expect(task.dueDate).toBe('2026-02-15');
-			expect(task.scheduledDate).toBe('2026-02-14');
+			expect(task.startDate).toBe('2026-02-14');
 			expect(task.tags).toContain('sync');
 			expect(task.priority).toBe('lowest');
 		});
@@ -440,7 +440,7 @@ describe('CalDAVClientDirect integration (mock server)', () => {
 			expect(task.recurrenceRule).toBe('FREQ=DAILY');
 			expect(task.tags).toContain('sync');
 			expect(task.dueDate).toBe('2026-02-15');
-			expect(task.scheduledDate).toBe('2026-02-14');
+			expect(task.startDate).toBe('2026-02-14');
 
 			const regenerated = mapper.taskToVTODO(task, uid);
 			expect(regenerated).toContain('RRULE:FREQ=DAILY');

@@ -258,7 +258,7 @@ END:VTODO`;
 
       const task = mapper.vtodoToTask(vtodo);
 
-      expect(task.scheduledDate).toBe('2025-01-10');
+      expect(task.startDate).toBe('2025-01-10');
     });
 
     it('should map all VTODO statuses correctly', () => {
@@ -605,7 +605,7 @@ END:VTODO`;
 
       // Dates should be identical after round-trip
       expect(roundTrippedTask.dueDate).toBe('2026-02-11');
-      expect(roundTrippedTask.scheduledDate).toBe('2026-02-10');
+      expect(roundTrippedTask.startDate).toBe('2026-02-10');
     });
 
     it('should handle dates consistently across multiple syncs', () => {
@@ -723,7 +723,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.scheduledDate).toBe('2026-02-14');
+      expect(task.startDate).toBe('2026-02-14');
     });
 
     it('should still parse VALUE=DATE format', () => {
@@ -808,7 +808,7 @@ END:VTODO`;
 
       // TZID dates should extract date portion
       expect(task.dueDate).toBe('2026-02-14');
-      expect(task.scheduledDate).toBe('2026-02-14');
+      expect(task.startDate).toBe('2026-02-14');
 
       // Other properties should parse normally
       expect(task.status).toBe('TODO');
@@ -838,7 +838,7 @@ END:VTODO`;
       // Parse TZID dates
       const task = mapper.vtodoToTask(vtodo);
       expect(task.dueDate).toBe('2026-03-15');
-      expect(task.scheduledDate).toBe('2026-03-10');
+      expect(task.startDate).toBe('2026-03-10');
 
       // Round-trip: convert back to VTODO (will use VALUE=DATE format)
       const vtodoOut = mapper.taskToVTODO(task, 'round-trip-tzid');
@@ -848,7 +848,7 @@ END:VTODO`;
       // Parse again — dates should be stable
       const task2 = mapper.vtodoToTask({ data: vtodoOut, etag: 'e2', url: 'http://test' });
       expect(task2.dueDate).toBe('2026-03-15');
-      expect(task2.scheduledDate).toBe('2026-03-10');
+      expect(task2.startDate).toBe('2026-03-10');
     });
   });
 });
