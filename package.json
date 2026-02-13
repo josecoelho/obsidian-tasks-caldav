@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-tasks-caldav",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Bidirectional sync between Obsidian tasks and CalDAV servers",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

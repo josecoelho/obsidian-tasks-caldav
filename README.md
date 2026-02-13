@@ -1,94 +1,134 @@
-# Obsidian Sample Plugin
+# Tasks CalDAV Sync
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Bidirectional sync between [Obsidian](https://obsidian.md) tasks and any CalDAV server (Nextcloud, Radicale, Fastmail, iCloud, etc.).
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin — syncs task status, dates, priorities, recurrence, tags, and notes as standard VTODO items.
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## Features
 
-## First time developing plugins?
+- **Bidirectional sync** — push tasks to CalDAV servers and pull changes back
+- **Auto-sync** — configurable interval (default: 5 minutes)
+- **Dry-run mode** — preview what will sync before committing changes
+- **Conflict detection** — manual resolution or auto-resolve with Obsidian wins
+- **Tag-based filtering** — sync only tasks with a specific tag (e.g. `#sync`)
+- **Task notes** — indented bullet points below a task round-trip as VTODO DESCRIPTION
+- **Recurrence** — `RRULE` round-trips between CalDAV and obsidian-tasks format
+- **Delete detection** — three-way diff detects deletions on either side
 
-Quick starting guide for new plugin devs:
+## Requirements
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+- Obsidian v0.15.0+
+- [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin (must be installed and enabled)
+- A CalDAV server with VTODO support
 
-## Releasing new releases
+## Installation
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+### From Community Plugins (recommended)
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+1. Open Obsidian Settings → Community Plugins → Browse
+2. Search for "Tasks CalDAV Sync"
+3. Install and enable
 
-## Adding your plugin to the community plugin list
+### Manual
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+1. Download `main.js`, `manifest.json`, and `styles.css` (if present) from the [latest release](https://github.com/josecoelho/obsidian-tasks-caldav/releases)
+2. Create `VaultFolder/.obsidian/plugins/obsidian-tasks-caldav/`
+3. Copy the downloaded files into that folder
+4. Restart Obsidian and enable the plugin in Settings → Community Plugins
 
-## How to use
+## Configuration
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+Open Settings → Tasks CalDAV Sync and fill in:
 
-## Manually installing the plugin
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Server URL** | Your CalDAV server endpoint | — |
+| **Username** | CalDAV account username | — |
+| **Password** | CalDAV account password | — |
+| **Calendar name** | Which calendar to sync with | — |
+| **Sync tag** | Only sync tasks with this tag (empty = all tasks) | `sync` |
+| **Sync interval** | Auto-sync period in minutes | `5` |
+| **New tasks destination** | File where incoming CalDAV tasks are created | `Inbox.md` |
+| **New tasks section** | Optional heading within the destination file | — |
+| **Sync completed tasks** | Include completed tasks in sync | off |
+| **Delete behavior** | What happens when a task is deleted on one side | `ask` |
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+### Conflict resolution
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint ./src/`
+Two modes:
 
-## Funding URL
+- **Manual** (default) — sync pauses when conflicts are detected, requiring review
+- **Auto-resolve Obsidian wins** — automatically keeps the Obsidian version on conflict
 
-You can include funding URLs where people who use your plugin can financially support it.
+## Usage
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+### Commands
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+Open the command palette (`Ctrl/Cmd + P`) to access:
+
+| Command | Description |
+|---------|-------------|
+| **Sync with CalDAV now** | Run an immediate sync |
+| **Preview sync (dry run)** | See what would change without applying |
+| **View sync status** | Show last sync time and any conflicts |
+| **Inject task IDs** | Add unique IDs to selected tasks |
+| **Validate task IDs** | Check document for valid/invalid task IDs |
+
+### Task IDs
+
+Each synced task needs a unique ID. The plugin uses the obsidian-tasks native format:
+
+```
+- [ ] Buy groceries 🆔 20260213-a1b
 ```
 
-If you have multiple URLs, you can also do:
+Use the "Inject task IDs" command to add IDs to existing tasks, or the plugin will assign them automatically during sync.
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+### Metadata mapping
+
+| Obsidian | CalDAV | Direction |
+|----------|--------|-----------|
+| Task text | SUMMARY | ↔ |
+| Indented bullets | DESCRIPTION | ↔ |
+| `📅` due date | DUE | ↔ |
+| `🛫` start date | DTSTART | ↔ |
+| `✅` done date | COMPLETED | ↔ |
+| `🔁` recurrence | RRULE | ↔ |
+| Priority emoji | PRIORITY (1-9) | ↔ |
+| Tags | CATEGORIES | ↔ |
+| Status (done/cancelled) | STATUS | ↔ |
+
+### Task notes
+
+Indented bullet points below a task are synced as the VTODO DESCRIPTION field:
+
+```
+- [ ] Plan vacation 🆔 20260213-x2c
+    - Research flights
+    - Book hotel
+    - Pack list
 ```
 
-## API Documentation
+These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
-See https://github.com/obsidianmd/obsidian-api
+## Tested CalDAV servers
+
+- Radicale (E2E test suite)
+- Fastmail
+
+Should work with any CalDAV server that supports VTODO (Nextcloud, iCloud, Synology, Baikal, etc.).
+
+## Development
+
+```bash
+npm i            # install dependencies
+npm run dev      # watch mode
+npm run build    # production build with type checking
+npm test         # run all tests (unit + E2E, requires Docker for Radicale)
+```
+
+See [CLAUDE.md](CLAUDE.md) for architecture details and testing guidelines.
+
+## License
+
+MIT
