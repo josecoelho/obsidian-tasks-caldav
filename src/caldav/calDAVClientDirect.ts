@@ -1,6 +1,7 @@
 import { CalDAVSettings } from '../types';
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { HttpClient, ObsidianHttpClient } from './httpClient';
+import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_VTODOS } from './templates';
 
 /**
  * Direct CalDAV client implementation.
@@ -73,12 +74,7 @@ export class CalDAVClientDirect {
           'Content-Type': 'application/xml; charset=utf-8',
           'Depth': '0'
         },
-        body: `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <d:current-user-principal />
-  </d:prop>
-</d:propfind>`,
+        body: PROPFIND_PRINCIPAL,
         throw: false
       });
 
@@ -93,13 +89,6 @@ export class CalDAVClientDirect {
     }
 
     // Fall back to direct PROPFIND on server URL
-    const propfindBody = `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <d:current-user-principal />
-  </d:prop>
-</d:propfind>`;
-
     const response = await this.httpClient.request({
       url: this.settings.serverUrl,
       method: 'PROPFIND',
@@ -108,7 +97,7 @@ export class CalDAVClientDirect {
         'Content-Type': 'application/xml; charset=utf-8',
         'Depth': '0'
       },
-      body: propfindBody,
+      body: PROPFIND_PRINCIPAL,
       throw: false
     });
 
@@ -150,12 +139,7 @@ export class CalDAVClientDirect {
         'Content-Type': 'application/xml; charset=utf-8',
         'Depth': '0'
       },
-      body: `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <c:calendar-home-set />
-  </d:prop>
-</d:propfind>`,
+      body: PROPFIND_CALENDAR_HOME,
       throw: false
     });
 
@@ -225,15 +209,6 @@ export class CalDAVClientDirect {
    * Find all calendars in the calendar home
    */
   private async findCalendars(homeUrl: string): Promise<Array<{ url: string; displayName: string; supportsVTODO: boolean }>> {
-    const propfindBody = `<?xml version="1.0" encoding="UTF-8"?>
-<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <d:displayname />
-    <d:resourcetype />
-    <c:supported-calendar-component-set />
-  </d:prop>
-</d:propfind>`;
-
     const response = await this.httpClient.request({
       url: homeUrl,
       method: 'PROPFIND',
@@ -242,7 +217,7 @@ export class CalDAVClientDirect {
         'Content-Type': 'application/xml; charset=utf-8',
         'Depth': '1'
       },
-      body: propfindBody,
+      body: PROPFIND_CALENDARS,
       throw: false
     });
 
@@ -308,19 +283,6 @@ export class CalDAVClientDirect {
     }
 
     // REPORT query to get all VTODOs
-    const reportBody = `<?xml version="1.0" encoding="UTF-8"?>
-<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <d:getetag />
-    <c:calendar-data />
-  </d:prop>
-  <c:filter>
-    <c:comp-filter name="VCALENDAR">
-      <c:comp-filter name="VTODO" />
-    </c:comp-filter>
-  </c:filter>
-</c:calendar-query>`;
-
     const response = await this.httpClient.request({
       url: this.calendarUrl,
       method: 'REPORT',
@@ -329,7 +291,7 @@ export class CalDAVClientDirect {
         'Content-Type': 'application/xml; charset=utf-8',
         'Depth': '1'
       },
-      body: reportBody,
+      body: REPORT_VTODOS,
       throw: false
     });
 

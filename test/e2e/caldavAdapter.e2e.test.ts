@@ -2,9 +2,13 @@ import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { CommonTask } from '../../src/sync/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
-import { RADICALE, ensureCalendarExists, cleanCalendar } from '../helpers/radicaleSetup';
+import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
 
 const httpClient = new FetchHttpClient();
+
+let calendarName: string;
+let clean: () => Promise<void>;
+let cleanup: () => Promise<void>;
 
 function makeClient(): CalDAVClientDirect {
   return new CalDAVClientDirect(
@@ -12,7 +16,7 @@ function makeClient(): CalDAVClientDirect {
       serverUrl: RADICALE.baseUrl,
       username: RADICALE.username,
       password: RADICALE.password,
-      calendarName: RADICALE.calendarName,
+      calendarName,
       syncTag: '',
       syncInterval: 5,
       newTasksDestination: 'Inbox.md',
@@ -43,11 +47,18 @@ function buildVTODO(uid: string, summary: string, extra: string[] = []): string 
 }
 
 beforeAll(async () => {
-  await ensureCalendarExists();
+  const cal = await createIsolatedCalendar();
+  calendarName = cal.calendarName;
+  clean = cal.clean;
+  cleanup = cal.cleanup;
 });
 
 beforeEach(async () => {
-  await cleanCalendar();
+  await clean();
+});
+
+afterAll(async () => {
+  await cleanup();
 });
 
 describe('CalDAVAdapter E2E', () => {
