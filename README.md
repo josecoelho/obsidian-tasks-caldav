@@ -1,6 +1,6 @@
 # Tasks CalDAV Sync
 
-Bidirectional sync between [Obsidian](https://obsidian.md) tasks and any CalDAV server (Nextcloud, Radicale, Fastmail, iCloud, etc.).
+Bidirectional sync between [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) and any CalDAV server (Nextcloud, Radicale, Fastmail, iCloud, etc.).
 
 Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin — syncs task status, dates, priorities, recurrence, tags, and notes as standard VTODO items.
 
