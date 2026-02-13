@@ -6,11 +6,8 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"test": "jest",
-		"test:watch": "jest --watch",
-		"test:coverage": "jest --coverage",
-		"test:e2e": "docker compose up -d --wait && jest --config jest.e2e.config.js --coverage",
-		"test:all": "docker compose up -d --wait && npm run test:coverage && npm run test:e2e",
+		"test": "node scripts/ensure-radicale.mjs && jest --coverage",
+		"test:watch": "jest --selectProjects unit --watch",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],

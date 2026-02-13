@@ -77,44 +77,38 @@ When releasing, these files must be included:
 - Use TDD: write failing test first, then implement
 - Coverage threshold must be met before work is considered done
 
+### Test Commands
+- **`npm test`** - Run all tests (unit + E2E) with coverage and threshold enforcement. Starts Radicale via Docker automatically if not already running. **This is the definitive check — work is done when `npm test` passes.**
+- `npm run test:watch` - Watch mode for unit tests only (no Docker needed)
+- `jest --selectProjects unit` - Run unit tests only (fast, no Docker)
+- `jest --selectProjects e2e` - Run E2E tests only (requires Radicale)
+
 ### Coverage Thresholds
-Enforced per directory via `jest.config.js` and CI:
+Enforced on combined unit + E2E coverage via `jest.config.js`:
 - `src/sync/` — 80% lines, 80% branches
-- `src/caldav/` — 80% lines, 70% branches (CalDAV client error paths tested via E2E)
+- `src/caldav/` — 80% lines, 70% branches
 - `src/tasks/` — 80% lines, 80% branches
 
 Excluded from coverage: `requestDumper.ts` (debug utility), `obsidianTasksApi.ts` (type definitions), `src/ui/` (Obsidian UI requires manual testing).
 
-### Test Commands
-- `npm test` - Run unit tests (mocked Obsidian API, fast, CI-safe)
-- `npm run test:coverage` - Run unit tests with Istanbul coverage report and threshold enforcement
-- `npm run test:e2e` - Run E2E tests with coverage against a real Radicale CalDAV server (starts Docker automatically, outputs to `coverage-e2e/`)
-- `npm run test:all` - Run both unit and E2E tests with coverage (requires Docker). **This is the definitive check — work is done when `test:all` passes.**
+### Test Architecture
+Single `jest.config.js` with two named projects (`unit` and `e2e`). Coverage is merged across both projects.
 
-### Testing Workflow: Discover with E2E, Lock Down with Unit Tests
+**Unit tests** (`src/**/*.test.ts`) — pure logic, fast, no Docker:
+- VTODO parsing / mapping, task ID generation, markdown generation
+- Sync diff engine, adapters, storage
 
-**E2E tests** (`test/e2e/**/*.e2e.test.ts`) are the primary tool for validating CalDAV sync behavior. Use them to:
-- Validate any change to sync, CalDAV client, or VTODO mapping before claiming done
-- Discover real protocol issues (XML namespaces, line folding, server quirks)
-- Test full round-trips (create → fetch → update → delete against a real server)
-- Debug problems interactively with Radicale (`docker compose up -d` keeps it running)
-
-**Once an E2E test reveals an issue**, add a unit test to lock down the fix:
-- Extract the minimal reproducing case (e.g., a specific XML response format)
-- Add it as a unit test or fixture so CI catches regressions without Docker
-- The E2E test stays as broad integration coverage; the unit test is the fast guard
-
-**Unit tests** (`src/**/*.test.ts`) — for pure logic and locked-down behavior:
-- VTODO parsing / mapping
-- Task ID generation, markdown generation
-- Specific server response formats discovered via E2E (add as fixtures)
+**E2E tests** (`test/e2e/**/*.e2e.test.ts`) — real CalDAV server via Docker:
+- CalDAV protocol round-trips (create → fetch → update → delete)
+- Server quirks (line folding, VTIMEZONE, XML namespaces)
+- Full sync pipeline validation
+- Each test file gets an isolated random calendar via `createIsolatedCalendar()` — tests run in parallel safely
 
 ### E2E Test Design
-- **Keep tests broad** — group related assertions in a single test to avoid recreating calendars repeatedly. One well-structured CRUD test is better than five slow isolated ones.
-- **Clean once per describe**, not per test — use `beforeAll` for calendar setup when tests within a group don't conflict. Reserve `beforeEach(cleanCalendar)` for groups where test isolation is essential.
 - **Use `FetchHttpClient`** in E2E tests (not Obsidian's `requestUrl`)
 - **Test the round-trip**: Create via the client, fetch back, verify the data survives the server's processing
-- E2E tests use a local Radicale server via Docker (`docker-compose.yml`). The container stays running between test runs.
+- E2E tests use a local Radicale server via Docker (`docker-compose.yml`). The `ensure-radicale.mjs` script handles idempotent startup.
+- Each test file creates its own calendar — no cross-file interference
 
 ### Manual Testing
 E2E tests replace the manual test loop for CalDAV protocol and sync logic. Manual testing by the user is still required for:

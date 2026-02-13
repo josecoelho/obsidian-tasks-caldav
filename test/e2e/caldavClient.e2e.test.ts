@@ -1,20 +1,14 @@
 import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { VTODOMapper } from '../../src/caldav/vtodoMapper';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
-import { RADICALE, ensureCalendarExists, cleanCalendar } from '../helpers/radicaleSetup';
-
-/**
- * End-to-end tests against a real Radicale CalDAV server.
- *
- * Prerequisites:
- *   docker compose up -d --wait
- *
- * Run:
- *   npm run test:e2e
- */
+import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
 
 const httpClient = new FetchHttpClient();
 const mapper = new VTODOMapper();
+
+let calendarName: string;
+let clean: () => Promise<void>;
+let cleanup: () => Promise<void>;
 
 function makeClient(): CalDAVClientDirect {
   return new CalDAVClientDirect(
@@ -22,7 +16,7 @@ function makeClient(): CalDAVClientDirect {
       serverUrl: RADICALE.baseUrl,
       username: RADICALE.username,
       password: RADICALE.password,
-      calendarName: RADICALE.calendarName,
+      calendarName,
       syncTag: '',
       syncInterval: 5,
       newTasksDestination: 'Inbox.md',
@@ -54,11 +48,18 @@ function buildVTODO(uid: string, summary: string, extra: string[] = []): string 
 }
 
 beforeAll(async () => {
-  await ensureCalendarExists();
+  const cal = await createIsolatedCalendar();
+  calendarName = cal.calendarName;
+  clean = cal.clean;
+  cleanup = cal.cleanup;
 });
 
 beforeEach(async () => {
-  await cleanCalendar();
+  await clean();
+});
+
+afterAll(async () => {
+  await cleanup();
 });
 
 describe('Calendar discovery', () => {
