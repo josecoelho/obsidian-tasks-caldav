@@ -1,4 +1,4 @@
-import { App, TFile, Vault } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import { ensureTaskId, extractTaskId } from '../utils/taskIdGenerator';
 
 /**
@@ -30,7 +30,7 @@ export interface ObsidianTask {
     dueDate: string | null;
     doneDate: string | null;
     cancelledDate: string | null;
-    recurrence: any | null;
+    recurrence: { toText(): string } | null;
     id: string;
 }
 
@@ -39,7 +39,6 @@ export interface ObsidianTask {
  */
 interface ObsidianTasksPlugin {
     getTasks(): ObsidianTask[];
-    apiV1?: any;
 }
 
 /**
@@ -57,16 +56,20 @@ export class TaskManager {
     /**
      * Initialize task manager and verify obsidian-tasks is available
      */
-    async initialize(): Promise<boolean> {
-        // Access obsidian-tasks plugin
-        const plugin = (this.app as any).plugins.plugins['obsidian-tasks-plugin'];
+    initialize(): boolean {
+        // Access obsidian-tasks plugin via Obsidian's internal plugin registry
+        const appWithPlugins = this.app as App & {
+            plugins: { plugins: Record<string, unknown> };
+        };
+        const plugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'] as
+            ObsidianTasksPlugin | undefined;
 
         if (!plugin || typeof plugin.getTasks !== 'function') {
             console.error('obsidian-tasks plugin not found or getTasks() method unavailable');
             return false;
         }
 
-        this.tasksPlugin = plugin as ObsidianTasksPlugin;
+        this.tasksPlugin = plugin;
         return true;
     }
 

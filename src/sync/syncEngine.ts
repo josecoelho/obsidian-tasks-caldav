@@ -1,4 +1,4 @@
-import { App, Notice } from 'obsidian';
+import { App, Notice, TFile } from 'obsidian';
 import { TaskManager, ObsidianTask } from '../tasks/taskManager';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
@@ -46,7 +46,7 @@ export class SyncEngine {
   }
 
   async initialize(): Promise<boolean> {
-    const taskManagerReady = await this.taskManager.initialize();
+    const taskManagerReady = this.taskManager.initialize();
     if (!taskManagerReady) {
       new Notice('obsidian-tasks plugin required for sync');
       return false;
@@ -361,8 +361,8 @@ export class SyncEngine {
     for (const [filePath, fileTasks] of tasksByFile) {
       try {
         const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!file) continue;
-        const content = await this.app.vault.read(file as any);
+        if (!file || !(file instanceof TFile)) continue;
+        const content = await this.app.vault.read(file);
         const lines = content.split('\n');
 
         for (const task of fileTasks) {

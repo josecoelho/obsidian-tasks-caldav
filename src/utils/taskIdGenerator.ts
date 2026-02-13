@@ -62,7 +62,7 @@ export function ensureTaskId(taskText: string): { text: string; id: string; modi
   const idField = `🆔 ${newId}`;
 
   // Insert before obsidian-tasks metadata (emoji markers, tags)
-  const metadataPattern = /\s(?:[📅🛫⏳✅🔁⏫🔼🔽⏬➕]|#[a-zA-Z])/;
+  const metadataPattern = /\s(?:[📅🛫⏳✅🔁⏫🔼🔽⏬➕]|#[a-zA-Z])/u;
   const match = taskText.match(metadataPattern);
 
   let textWithId: string;

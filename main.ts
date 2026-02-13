@@ -16,16 +16,15 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 		// Initialize sync engine
 		this.syncEngine = new SyncEngine(this.app, this.settings);
-		this.syncEngine.initialize().then(ready => {
-			if (!ready) {
-				new Notice('CalDAV sync: obsidian-tasks plugin not available');
-			}
-		});
+		const ready = await this.syncEngine.initialize();
+		if (!ready) {
+			new Notice('CalDAV sync: obsidian-tasks plugin not available');
+		}
 
 		// Command: Inject task IDs into selected lines
 		this.addCommand({
 			id: 'inject-task-ids',
-			name: 'Inject task IDs into selected tasks',
+			name: 'Inject task ids into selected tasks',
 			editorCallback: (editor: Editor, _view: MarkdownView) => {
 				const selection = editor.getSelection();
 
@@ -50,7 +49,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 					if (addedCount > 0) {
 						new Notice(`Added IDs to ${addedCount} task(s)`);
 					} else {
-						new Notice('All tasks already have IDs');
+						new Notice('All tasks already have ids');
 					}
 				} else {
 					// Process current line
@@ -75,7 +74,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 		// Command: Validate task IDs in document
 		this.addCommand({
 			id: 'validate-task-ids',
-			name: 'Validate task IDs in current document',
+			name: 'Validate task ids in current document',
 			editorCallback: (editor: Editor, _view: MarkdownView) => {
 				const content = editor.getValue();
 				const lines = content.split('\n');
@@ -103,7 +102,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 				} else if (validCount > 0) {
 					new Notice(`All ${validCount} task IDs are valid`);
 				} else {
-					new Notice('No task IDs found in document');
+					new Notice('No task ids found in document');
 				}
 			}
 		});
@@ -185,7 +184,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, await this.loadData() as Partial<CalDAVSettings>);
 	}
 
 	async saveSettings() {
@@ -230,7 +229,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 			.setName('Username')
 			.setDesc('CalDAV username')
 			.addText(text => text
-				.setPlaceholder('username')
+				.setPlaceholder('Enter username')
 				.setValue(this.plugin.settings.username)
 				.onChange(async (value) => {
 					this.plugin.settings.username = value;
@@ -243,7 +242,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 			.addText(text => {
 				text.inputEl.type = 'password';
 				text
-					.setPlaceholder('password')
+					.setPlaceholder('Enter password')
 					.setValue(this.plugin.settings.password)
 					.onChange(async (value) => {
 						this.plugin.settings.password = value;
@@ -266,7 +265,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 			.setName('Sync tag')
 			.setDesc('Tag to filter tasks for sync (e.g., "sync" for #sync). Leave empty to sync all tasks.')
 			.addText(text => text
-				.setPlaceholder('sync')
+				.setPlaceholder('Enter tag name')
 				.setValue(this.plugin.settings.syncTag)
 				.onChange(async (value) => {
 					this.plugin.settings.syncTag = value;

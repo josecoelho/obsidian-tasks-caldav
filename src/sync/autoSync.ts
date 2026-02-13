@@ -15,12 +15,10 @@ export class AutoSyncScheduler {
 		this.stop();
 		if (intervalMinutes <= 0) return;
 		const ms = intervalMinutes * 60 * 1000;
-		this.intervalId = setInterval(async () => {
-			try {
-				await this.syncFn();
-			} catch (error) {
+		this.intervalId = setInterval(() => {
+			this.syncFn().catch((error: unknown) => {
 				console.error('Auto-sync failed:', error);
-			}
+			});
 		}, ms);
 		this.registerInterval(this.intervalId as unknown as number);
 	}

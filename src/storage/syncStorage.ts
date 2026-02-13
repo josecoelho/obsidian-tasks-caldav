@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from 'obsidian';
+import { App, normalizePath } from 'obsidian';
 import { MappingData, SyncState, TaskMapping } from '../types';
 import { CommonTask } from '../sync/types';
 
@@ -88,7 +88,7 @@ export class SyncStorage {
     try {
       const adapter = this.app.vault.adapter;
       const content = await adapter.read(this.mappingPath);
-      return JSON.parse(content);
+      return JSON.parse(content) as MappingData;
     } catch (error) {
       console.error('Failed to load mapping data:', error);
       // Return empty mapping if file doesn't exist or is corrupted
@@ -106,7 +106,7 @@ export class SyncStorage {
     try {
       const adapter = this.app.vault.adapter;
       const content = await adapter.read(this.statePath);
-      return JSON.parse(content);
+      return JSON.parse(content) as SyncState;
     } catch (error) {
       console.error('Failed to load sync state:', error);
       // Return default state if file doesn't exist or is corrupted
@@ -322,7 +322,7 @@ export class SyncStorage {
         return [];
       }
       const content = await adapter.read(this.baselinePath);
-      const tasks: CommonTask[] = JSON.parse(content);
+      const tasks = JSON.parse(content) as CommonTask[];
       // Migrate old baselines: default missing `notes` to ''
       return tasks.map(t => ({ ...t, notes: t.notes ?? '' }));
     } catch (error) {

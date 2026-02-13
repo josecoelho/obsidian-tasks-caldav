@@ -1,5 +1,5 @@
 import { SyncStorage } from './syncStorage';
-import { MappingData, SyncState, TaskMapping } from '../types';
+import { MappingData, SyncState } from '../types';
 import { CommonTask } from '../sync/types';
 
 function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {

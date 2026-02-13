@@ -3,28 +3,34 @@
 	"version": "1.0.0",
 	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"main": "main.js",
+	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"test": "node scripts/ensure-radicale.mjs && jest --coverage",
 		"test:watch": "jest --selectProjects unit --watch",
+		"lint": "eslint .",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
+		"@eslint/js": "^9.30.1",
+		"@eslint/json": "^0.14.0",
 		"@types/jest": "^30.0.0",
 		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
-		"builtin-modules": "3.3.0",
 		"esbuild": "0.17.3",
+		"eslint": "^9.39.2",
+		"eslint-plugin-obsidianmd": "^0.1.9",
+		"globals": "^14.0.0",
 		"jest": "^30.2.0",
+		"jiti": "^2.6.1",
 		"obsidian": "latest",
 		"ts-jest": "^29.4.5",
 		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"typescript": "^5.8.3",
+		"typescript-eslint": "^8.35.1"
 	},
 	"dependencies": {
 		"rrule": "^2.8.1"

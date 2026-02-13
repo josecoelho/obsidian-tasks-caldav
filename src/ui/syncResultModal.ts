@@ -18,7 +18,7 @@ export class SyncResultModal extends Modal {
     const { contentEl } = this;
     contentEl.addClass('sync-modal');
 
-    this.setTitle(this.isDryRun ? 'Sync Preview (Dry Run)' : 'Sync Results');
+    this.setTitle(this.isDryRun ? 'Sync preview (dry run)' : 'Sync results');
 
     this.renderSummary(contentEl);
 
@@ -236,20 +236,21 @@ export class SyncResultModal extends Modal {
 
     if (this.isDryRun && this.onApply) {
       const applyBtn = actions.createEl('button', {
-        text: 'Apply Changes',
+        text: 'Apply changes',
         cls: 'mod-cta',
       });
-      applyBtn.addEventListener('click', async () => {
+      applyBtn.addEventListener('click', () => {
         applyBtn.disabled = true;
         applyBtn.textContent = 'Applying...';
-        try {
-          const result = await this.onApply!();
-          this.close();
-          new SyncResultModal(this.app, result, false).open();
-        } catch (error) {
-          applyBtn.textContent = 'Apply Changes';
-          applyBtn.disabled = false;
-        }
+        this.onApply!()
+          .then((result) => {
+            this.close();
+            new SyncResultModal(this.app, result, false).open();
+          })
+          .catch(() => {
+            applyBtn.textContent = 'Apply changes';
+            applyBtn.disabled = false;
+          });
       });
     }
 

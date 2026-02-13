@@ -48,7 +48,12 @@ export interface ObsidianTasksPlugin {
 /**
  * Helper to check if obsidian-tasks plugin is available
  */
-export function getTasksApi(app: any): TasksApiV1 | null {
-    const tasksPlugin = app.plugins.plugins['obsidian-tasks-plugin'] as ObsidianTasksPlugin | undefined;
-    return tasksPlugin?.apiV1 || null;
+import { App } from 'obsidian';
+
+export function getTasksApi(app: App): TasksApiV1 | null {
+    const appWithPlugins = app as App & {
+        plugins: { plugins: Record<string, unknown> };
+    };
+    const tasksPlugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'] as ObsidianTasksPlugin | undefined;
+    return tasksPlugin?.apiV1 ?? null;
 }
