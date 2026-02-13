@@ -121,6 +121,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'high',
         tags: ['sync', 'test'],
         recurrenceRule: '',
+        notes: '',
       };
 
       const caldavUID = `e2e-roundtrip-${Date.now()}`;
@@ -155,6 +156,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const caldavUID = `e2e-done-${Date.now()}`;
@@ -166,6 +168,119 @@ describe('CalDAVAdapter E2E', () => {
 
       expect(tasks[0].status).toBe('DONE');
       expect(tasks[0].completedDate).toBe('2025-06-10');
+    });
+  });
+
+  describe('DESCRIPTION round-trip', () => {
+    it('should round-trip DESCRIPTION through the server', async () => {
+      const client = makeClient();
+      await client.connect();
+
+      const task: CommonTask = {
+        uid: 'desc-rt-id',
+        title: 'Task with notes',
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        notes: 'Remember to check the farmers market\nAlso need cleaning supplies',
+      };
+
+      const caldavUID = `e2e-desc-rt-${Date.now()}`;
+      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      await client.createVTODO(vtodoData, caldavUID);
+
+      const vtodos = await client.fetchVTODOs();
+      const tasks = adapter.normalize(vtodos, new Map());
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('Remember to check the farmers market\nAlso need cleaning supplies');
+    });
+
+    it('should handle DESCRIPTION with special characters', async () => {
+      const client = makeClient();
+      await client.connect();
+
+      const task: CommonTask = {
+        uid: 'desc-special-id',
+        title: 'Special chars test',
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        notes: 'Commas, semicolons; colons: and backslashes\\',
+      };
+
+      const caldavUID = `e2e-desc-special-${Date.now()}`;
+      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      await client.createVTODO(vtodoData, caldavUID);
+
+      const vtodos = await client.fetchVTODOs();
+      const tasks = adapter.normalize(vtodos, new Map());
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('Commas, semicolons; colons: and backslashes\\');
+    });
+
+    it('should return empty notes when VTODO has no DESCRIPTION', async () => {
+      const client = makeClient();
+      await client.connect();
+
+      const caldavUID = `e2e-no-desc-${Date.now()}`;
+      const vtodo = buildVTODO(caldavUID, 'No description task');
+      await client.createVTODO(vtodo, caldavUID);
+
+      const vtodos = await client.fetchVTODOs();
+      const tasks = adapter.normalize(vtodos, new Map());
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('');
+    });
+
+    it('should update DESCRIPTION on existing VTODO', async () => {
+      const client = makeClient();
+      await client.connect();
+
+      // Create initial VTODO without description
+      const caldavUID = `e2e-desc-update-${Date.now()}`;
+      const vtodo = buildVTODO(caldavUID, 'Task to update');
+      await client.createVTODO(vtodo, caldavUID);
+
+      // Update with description
+      const task: CommonTask = {
+        uid: 'update-desc-id',
+        title: 'Task to update',
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        notes: 'New description added',
+      };
+
+      const uidMapping = new Map([[caldavUID, 'update-desc-id']]);
+      await adapter.applyChanges(
+        [{ type: 'update', task }],
+        client,
+        uidMapping,
+      );
+
+      const vtodos = await client.fetchVTODOs();
+      const tasks = adapter.normalize(vtodos, new Map());
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('New description added');
     });
   });
 
@@ -201,6 +316,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'medium',
         tags: ['sync'],
         recurrenceRule: '',
+        notes: '',
       };
 
       const updatedTask: CommonTask = {
@@ -214,6 +330,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       const deletedTask: CommonTask = {
@@ -227,6 +344,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
+        notes: '',
       };
 
       await adapter.applyChanges(

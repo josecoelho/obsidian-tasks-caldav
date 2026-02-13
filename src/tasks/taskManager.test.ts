@@ -597,6 +597,111 @@ More text`;
             ).rejects.toThrow('File not found: nonexistent.md');
         });
 
+        it('should replace task with existing notes when updating', async () => {
+            const fileContent = `- [ ] Task with notes
+    - Old note one
+    - Old note two
+- [ ] Next task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task with notes',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task with notes 🆔 abc\n    - New note');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[0]).toBe('- [ ] Task with notes 🆔 abc');
+            expect(lines[1]).toBe('    - New note');
+            expect(lines[2]).toBe('- [ ] Next task');
+        });
+
+        it('should remove notes when updating to noteless content', async () => {
+            const fileContent = `- [ ] Task with notes
+    - Old note one
+    - Old note two
+- [ ] Next task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task with notes',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task with notes 🆔 abc');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[0]).toBe('- [ ] Task with notes 🆔 abc');
+            expect(lines[1]).toBe('- [ ] Next task');
+        });
+
+        it('should add notes to task that had none', async () => {
+            const fileContent = `- [ ] Task without notes
+- [ ] Next task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task without notes',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task without notes 🆔 abc\n    - New note');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[0]).toBe('- [ ] Task without notes 🆔 abc');
+            expect(lines[1]).toBe('    - New note');
+            expect(lines[2]).toBe('- [ ] Next task');
+        });
+
+        it('should not treat non-bullet indented lines as notes', async () => {
+            const fileContent = `- [ ] Task
+    Not a bullet line
+- [ ] Next task`;
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Task',
+                taskLocation: {
+                    _tasksFile: { _path: 'test.md' },
+                    _lineNumber: 1
+                }
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await taskManager.updateTaskInVault(task, '- [ ] Task 🆔 abc');
+
+            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const lines = updatedContent.split('\n');
+            expect(lines[0]).toBe('- [ ] Task 🆔 abc');
+            // Non-bullet indented line should be preserved
+            expect(lines[1]).toBe('    Not a bullet line');
+            expect(lines[2]).toBe('- [ ] Next task');
+        });
+
         it('should not create duplicate tasks when adding ID', async () => {
             // This test simulates the bug that was fixed
             const fileContent = `# Tasks

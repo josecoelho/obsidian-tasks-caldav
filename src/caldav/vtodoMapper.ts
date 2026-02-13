@@ -20,6 +20,7 @@ export interface ObsidianTask {
   priority: string;
   recurrenceRule: string;
   tags: string[];
+  notes: string;
 }
 
 /**
@@ -43,6 +44,11 @@ export class VTODOMapper {
     lines.push(`DTSTAMP:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`SUMMARY:${this.escapeText(task.description)}`);
+
+    // Description (notes/body text)
+    if (task.notes) {
+      lines.push(`DESCRIPTION:${this.escapeText(task.notes)}`);
+    }
 
     // Status mapping
     lines.push(`STATUS:${this.mapStatusToVTODO(task.status)}`);
@@ -103,7 +109,8 @@ export class VTODOMapper {
       completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0'),
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
-      tags: this.extractCategories(data)
+      tags: this.extractCategories(data),
+      notes: this.extractRawProperty(data, 'DESCRIPTION') || '',
     };
   }
 
@@ -232,6 +239,17 @@ export class VTODOMapper {
     }
 
     return null;
+  }
+
+  /**
+   * Extract a property value without splitting on colons within the value.
+   * Used for DESCRIPTION and other text properties where colons are valid content.
+   */
+  private extractRawProperty(data: string, property: string): string | null {
+    const regex = new RegExp(`^${property}:(.+)$`, 'm');
+    const match = data.match(regex);
+    if (!match) return null;
+    return this.unescapeText(match[1].trim());
   }
 
   /**

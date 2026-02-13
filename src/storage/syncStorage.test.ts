@@ -14,6 +14,7 @@ function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
     priority: 'none',
     tags: [],
     recurrenceRule: '',
+    notes: '',
     ...overrides,
   };
 }
@@ -475,6 +476,35 @@ describe('SyncStorage', () => {
       await storage.initialize();
 
       expect(storage.getBaseline()).toEqual(baseline);
+    });
+  });
+
+  describe('baseline migration', () => {
+    it('should default missing notes field to empty string when loading baseline', async () => {
+      // Simulate a baseline saved by older code without the `notes` field
+      const oldBaseline = [
+        {
+          uid: 'old-task',
+          title: 'Task from old version',
+          status: 'TODO',
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: null,
+          priority: 'none',
+          tags: [],
+          recurrenceRule: '',
+          // No `notes` field
+        },
+      ];
+
+      setupExistingAdapter(adapter, { baseline: oldBaseline as any });
+
+      await storage.initialize();
+
+      const baseline = storage.getBaseline();
+      expect(baseline).toHaveLength(1);
+      expect(baseline[0].notes).toBe('');
     });
   });
 

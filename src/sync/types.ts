@@ -12,6 +12,7 @@ export interface CommonTask {
   priority: TaskPriority;
   tags: string[];               // without # prefix
   recurrenceRule: string;       // RRULE string or ''
+  notes: string;                // multi-line notes/body text, '' = no notes
 }
 
 export interface SyncChange {

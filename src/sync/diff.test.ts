@@ -13,6 +13,7 @@ function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
     priority: 'none',
     tags: [],
     recurrenceRule: '',
+    notes: '',
     ...overrides,
   };
 }
@@ -63,6 +64,24 @@ describe('tasksEqual', () => {
   it('should handle null vs non-null dates', () => {
     const a = makeCommonTask({ dueDate: null });
     const b = makeCommonTask({ dueDate: '2025-01-15' });
+    expect(tasksEqual(a, b)).toBe(false);
+  });
+
+  it('should detect notes change', () => {
+    const a = makeCommonTask({ notes: 'Note A' });
+    const b = makeCommonTask({ notes: 'Note B' });
+    expect(tasksEqual(a, b)).toBe(false);
+  });
+
+  it('should treat empty notes as equal', () => {
+    const a = makeCommonTask({ notes: '' });
+    const b = makeCommonTask({ notes: '' });
+    expect(tasksEqual(a, b)).toBe(true);
+  });
+
+  it('should detect notes added where there were none', () => {
+    const a = makeCommonTask({ notes: '' });
+    const b = makeCommonTask({ notes: 'New note' });
     expect(tasksEqual(a, b)).toBe(false);
   });
 });
