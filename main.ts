@@ -168,6 +168,16 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
+		// Ribbon icon for quick sync
+		this.addRibbonIcon('refresh-cw', 'Sync with CalDAV', async () => {
+			if (!this.syncEngine) {
+				new Notice('Sync engine not initialized');
+				return;
+			}
+			const result = await this.syncEngine.sync();
+			new SyncResultModal(this.app, result, false).open();
+		});
+
 		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
