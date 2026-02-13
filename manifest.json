@@ -1,10 +1,10 @@
 {
 	"id": "obsidian-tasks-caldav",
 	"name": "Tasks CalDAV Sync",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Bidirectional sync between Obsidian tasks and CalDAV servers",
 	"author": "José Coelho",
-	"authorUrl": "",
+	"authorUrl": "https://github.com/josecoelho",
 	"isDesktopOnly": false
 }
