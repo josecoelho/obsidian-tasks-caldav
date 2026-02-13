@@ -16,11 +16,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 		// Initialize sync engine
 		this.syncEngine = new SyncEngine(this.app, this.settings);
-		this.syncEngine.initialize().then(ready => {
-			if (!ready) {
-				new Notice('CalDAV sync: obsidian-tasks plugin not available');
-			}
-		});
+		const ready = await this.syncEngine.initialize();
+		if (!ready) {
+			new Notice('CalDAV sync: Obsidian-tasks plugin not available');
+		}
 
 		// Command: Inject task IDs into selected lines
 		this.addCommand({
