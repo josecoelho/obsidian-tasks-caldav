@@ -66,7 +66,7 @@ function makeCalObj(uid: string, summary: string, extra: string[] = []): Calenda
 // All mock fns are declared at module level so jest.mock() can reference them,
 // but each test can reconfigure via mockReturnValue / mockImplementation.
 
-const mockTaskManagerInitialize = jest.fn().mockResolvedValue(true);
+const mockTaskManagerInitialize = jest.fn().mockReturnValue(true);
 const mockGetAllTasks = jest.fn().mockReturnValue([]);
 const mockEnsureTaskHasId = jest.fn().mockResolvedValue('mock-id');
 const mockFindTaskById = jest.fn().mockReturnValue(null);
@@ -136,7 +136,7 @@ describe('SyncEngine', () => {
     // Re-set implementations that individual tests may override.
     // clearAllMocks clears call counts but not implementations,
     // so we must explicitly reset any fn that a test reconfigures.
-    mockTaskManagerInitialize.mockResolvedValue(true);
+    mockTaskManagerInitialize.mockReturnValue(true);
     mockGetAllTasks.mockReturnValue([]);
     mockEnsureTaskHasId.mockResolvedValue('mock-id');
     mockFindTaskById.mockReturnValue(null);
@@ -165,7 +165,7 @@ describe('SyncEngine', () => {
     });
 
     it('should return false when obsidian-tasks plugin is unavailable', async () => {
-      mockTaskManagerInitialize.mockResolvedValue(false);
+      mockTaskManagerInitialize.mockReturnValue(false);
       const engine = new SyncEngine(new App(), makeSettings());
       expect(await engine.initialize()).toBe(false);
       // Should not initialize storage if taskManager failed
@@ -287,7 +287,7 @@ describe('SyncEngine', () => {
     it('should remove mapping when deleting a task', async () => {
       // Task exists in baseline but not in Obsidian or CalDAV → delete
       // Simulate: CalDAV has task that was in baseline, Obsidian deleted it
-      const task = makeObsidianTask({
+      makeObsidianTask({
         description: 'Task to delete on CalDAV',
         id: '20250101-del',
         tags: ['#sync'],
@@ -881,7 +881,7 @@ describe('SyncEngine', () => {
       // baseline has it, and mapping has it.
       jest.clearAllMocks();
       // Re-set default implementations after clearAllMocks
-      mockTaskManagerInitialize.mockResolvedValue(true);
+      mockTaskManagerInitialize.mockReturnValue(true);
       mockConnect.mockResolvedValue(undefined);
       mockStorageInitialize.mockResolvedValue(undefined);
       mockSave.mockResolvedValue(undefined);

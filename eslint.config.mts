@@ -22,8 +22,9 @@ export default tseslint.config(
 		},
 	},
 	...obsidianmd.configs.recommended,
-	// Project-specific rule overrides
+	// Project-specific rule overrides — must include plugin ref so ESLint can resolve rule names
 	{
+		plugins: { obsidianmd },
 		rules: {
 			"obsidianmd/ui/sentence-case": ["error", {
 				brands: ["CalDAV", "Obsidian", "obsidian-tasks"],

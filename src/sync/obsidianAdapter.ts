@@ -178,7 +178,7 @@ export class ObsidianAdapter {
    * Uses rrule.js to parse the human-readable text from toText(),
    * avoiding access to obsidian-tasks private properties.
    */
-  private extractRecurrenceRule(recurrence: any): string {
+  private extractRecurrenceRule(recurrence: { toText(): string }): string {
     try {
       const text = recurrence.toText();
       if (!text) return '';
@@ -207,7 +207,7 @@ export class ObsidianAdapter {
   /**
    * Format obsidian-tasks date (moment-like with .format()) to YYYY-MM-DD string.
    */
-  private formatDate(date: any): string | null {
+  private formatDate(date: string | { format(fmt: string): string } | null | undefined): string | null {
     if (!date) return null;
     if (typeof date === 'string') return date;
     if (typeof date.format === 'function') return date.format('YYYY-MM-DD');
