@@ -12,6 +12,14 @@ export default class CalDAVSyncPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		// Initialize sync engine
+		this.syncEngine = new SyncEngine(this.app, this.settings);
+		this.syncEngine.initialize().then(ready => {
+			if (!ready) {
+				console.warn('CalDAV sync: obsidian-tasks plugin not available');
+			}
+		});
+
 		// Command: Inject task IDs into selected lines
 		this.addCommand({
 			id: 'inject-task-ids',
@@ -103,18 +111,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 			id: 'sync-now',
 			name: 'Sync with CalDAV now',
 			callback: async () => {
-				// Initialize sync engine if not already done
 				if (!this.syncEngine) {
-					this.syncEngine = new SyncEngine(this.app, this.settings);
-					const initialized = await this.syncEngine.initialize();
-
-					if (!initialized) {
-						new Notice('❌ Failed to initialize sync engine');
-						return;
-					}
+					new Notice('Sync engine not initialized');
+					return;
 				}
-
-				// Perform sync and show results
 				const result = await this.syncEngine.sync();
 				new SyncResultModal(this.app, result, false).open();
 			}
@@ -125,18 +125,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 			id: 'sync-dry-run',
 			name: 'Preview sync (dry run - no changes)',
 			callback: async () => {
-				// Initialize sync engine if not already done
 				if (!this.syncEngine) {
-					this.syncEngine = new SyncEngine(this.app, this.settings);
-					const initialized = await this.syncEngine.initialize();
-
-					if (!initialized) {
-						new Notice('❌ Failed to initialize sync engine');
-						return;
-					}
+					new Notice('Sync engine not initialized');
+					return;
 				}
-
-				// Perform dry run and show preview modal
 				const result = await this.syncEngine.sync(true);
 				new SyncResultModal(this.app, result, true, async () => {
 					return await this.syncEngine!.sync(false);
@@ -150,10 +142,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 			name: 'View sync status',
 			callback: async () => {
 				if (!this.syncEngine) {
-					this.syncEngine = new SyncEngine(this.app, this.settings);
-					await this.syncEngine.initialize();
+					new Notice('Sync engine not initialized');
+					return;
 				}
-
 				const status = await this.syncEngine.getStatus();
 				new Notice(status, 8000);
 				console.log('Sync Status:', status);
