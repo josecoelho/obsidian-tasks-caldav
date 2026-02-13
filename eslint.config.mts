@@ -22,6 +22,15 @@ export default tseslint.config(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	// Project-specific rule overrides
+	{
+		rules: {
+			"obsidianmd/ui/sentence-case": ["error", {
+				brands: ["CalDAV", "Obsidian", "obsidian-tasks"],
+				acronyms: ["ID", "URL"],
+			}],
+		},
+	},
 	// Test files: add jest globals and relax some rules
 	{
 		files: ["src/**/*.test.ts", "__mocks__/**/*.ts"],
