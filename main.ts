@@ -2,6 +2,7 @@ import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } 
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine } from './src/sync/syncEngine';
+import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 
 export default class CalDAVSyncPlugin extends Plugin {
@@ -156,6 +157,23 @@ export default class CalDAVSyncPlugin extends Plugin {
 				const status = await this.syncEngine.getStatus();
 				new Notice(status, 8000);
 				console.log('Sync Status:', status);
+			}
+		});
+
+		// Command: Dump CalDAV requests for debugging
+		this.addCommand({
+			id: 'dump-caldav-requests',
+			name: 'Dump CalDAV requests for debugging',
+			callback: async () => {
+				new Notice('Dumping CalDAV requests...');
+				try {
+					const result = await dumpCalDAVRequests(this.app, this.settings);
+					new Notice(`${result}\nCheck .caldav-sync/test-caldav-requests/ in your vault.`, 10000);
+				} catch (error) {
+					const msg = error instanceof Error ? error.message : String(error);
+					new Notice(`CalDAV dump failed: ${msg}`, 8000);
+					console.error('[CalDAV Dump]', error);
+				}
 			}
 		});
 
