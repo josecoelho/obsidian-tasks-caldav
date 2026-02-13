@@ -1,9 +1,7 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
-import { TaskManager } from './src/tasks/taskManager';
 import { SyncEngine } from './src/sync/syncEngine';
-import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 
 export default class CalDAVSyncPlugin extends Plugin {
@@ -99,117 +97,6 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
-		// TEST Command: Access obsidian-tasks getTasks()
-		this.addCommand({
-			id: 'test-obsidian-tasks-access',
-			name: '[TEST] Access obsidian-tasks cache',
-			callback: () => {
-				console.log('=== Testing obsidian-tasks access ===');
-
-				// Try to access obsidian-tasks plugin
-				const tasksPlugin = (this.app as any).plugins.plugins['obsidian-tasks-plugin'];
-
-				if (!tasksPlugin) {
-					new Notice('❌ obsidian-tasks plugin not found');
-					console.error('obsidian-tasks plugin not available');
-					return;
-				}
-
-				console.log('✅ obsidian-tasks plugin found:', tasksPlugin);
-
-				// Check if getTasks method exists
-				if (typeof tasksPlugin.getTasks !== 'function') {
-					new Notice('❌ getTasks() method not found on plugin');
-					console.error('getTasks method not available. Available methods:', Object.keys(tasksPlugin));
-					return;
-				}
-
-				console.log('✅ getTasks() method exists');
-
-				// Try to get tasks
-				try {
-					const allTasks = tasksPlugin.getTasks();
-					console.log('✅ getTasks() returned:', allTasks);
-					console.log('Total tasks found:', allTasks.length);
-
-					if (allTasks.length === 0) {
-						new Notice('✅ getTasks() works but no tasks found');
-						return;
-					}
-
-					// Log first task details
-					const firstTask = allTasks[0];
-					console.log('First task sample:', {
-						description: firstTask.description,
-						status: firstTask.status,
-						isDone: firstTask.isDone,
-						priority: firstTask.priority,
-						tags: firstTask.tags,
-						path: firstTask.taskLocation?.path,
-						lineNumber: firstTask.taskLocation?.lineNumber,
-						originalMarkdown: firstTask.originalMarkdown,
-						dueDate: firstTask.dueDate,
-						scheduledDate: firstTask.scheduledDate,
-						availableProperties: Object.keys(firstTask)
-					});
-
-					new Notice(`✅ Found ${allTasks.length} tasks! Check console for details.`);
-
-				} catch (error) {
-					new Notice('❌ Error calling getTasks()');
-					console.error('Error accessing getTasks():', error);
-				}
-			}
-		});
-
-		// TEST Command: Test TaskManager
-		this.addCommand({
-			id: 'test-task-manager',
-			name: '[TEST] Test TaskManager functionality',
-			callback: async () => {
-				console.log('=== Testing TaskManager ===');
-
-				const taskManager = new TaskManager(this.app);
-
-				// Initialize
-				const initialized = await taskManager.initialize();
-
-				if (!initialized) {
-					new Notice('❌ TaskManager failed to initialize - obsidian-tasks plugin required');
-					console.error('TaskManager initialization failed');
-					return;
-				}
-
-				new Notice('✅ TaskManager initialized');
-				console.log('✅ TaskManager initialized');
-
-				// Get all tasks
-				const allTasks = taskManager.getAllTasks();
-				console.log(`Found ${allTasks.length} total tasks`);
-
-				// Test filtering
-				const notDoneTasks = taskManager.getTasksToSync('not done');
-				const doneTasks = taskManager.getTasksToSync('done');
-
-				console.log(`Not done tasks: ${notDoneTasks.length}`);
-				console.log(`Done tasks: ${doneTasks.length}`);
-
-				// Get stats
-				const stats = taskManager.getTaskStats(allTasks);
-				console.log('Task statistics:', stats);
-
-				// Check for tasks without IDs
-				const tasksWithoutIds = allTasks.filter(t => !taskManager.taskHasId(t));
-				console.log(`Tasks without IDs: ${tasksWithoutIds.length}`);
-
-				if (tasksWithoutIds.length > 0) {
-					console.log('Sample task without ID:', tasksWithoutIds[0]);
-				}
-
-				new Notice(`✅ TaskManager test complete! ${allTasks.length} tasks found. Check console for details.`);
-			}
-		});
-
 		// Command: Sync Now - Manual sync with CalDAV
 		this.addCommand({
 			id: 'sync-now',
@@ -269,67 +156,6 @@ export default class CalDAVSyncPlugin extends Plugin {
 				const status = await this.syncEngine.getStatus();
 				new Notice(status, 8000);
 				console.log('Sync Status:', status);
-			}
-		});
-
-		// Command: Add sync tag to all mapped tasks
-		this.addCommand({
-			id: 'add-sync-tag-to-mapped-tasks',
-			name: 'Add sync tag to all mapped CalDAV tasks',
-			callback: async () => {
-				const taskManager = new TaskManager(this.app);
-				await taskManager.initialize();
-
-				// Load mapping
-				const { SyncStorage } = require('./src/storage/syncStorage');
-				const storage = new SyncStorage(this.app);
-				await storage.initialize();
-				const mapping = storage.getMapping();
-
-				let updated = 0;
-				const allTasks = taskManager.getAllTasks();
-
-				for (const task of allTasks) {
-					const taskId = taskManager.getTaskId(task);
-					if (!taskId) continue;
-
-					// Check if this task is mapped to CalDAV
-					const caldavUID = mapping.tasks[taskId]?.caldavUID;
-					if (!caldavUID) continue;
-
-					// Check if task already has the sync tag
-					const syncTag = this.settings.syncTag.toLowerCase().replace(/^#/, '');
-					const hasSyncTag = task.tags?.some((t: string) =>
-						t.toLowerCase().replace(/^#/, '') === syncTag
-					);
-
-					if (!hasSyncTag) {
-						// Add the sync tag
-						const tag = this.settings.syncTag.startsWith('#') ? this.settings.syncTag : `#${this.settings.syncTag}`;
-						const newLine = task.originalMarkdown + ` ${tag}`;
-						await taskManager.updateTaskInVault(task, newLine);
-						updated++;
-					}
-				}
-
-				new Notice(`Added #${this.settings.syncTag} tag to ${updated} tasks`);
-			}
-		});
-
-		// Command: Dump CalDAV requests for testing
-		this.addCommand({
-			id: 'dump-caldav-requests',
-			name: '[DEV] Dump CalDAV requests for testing',
-			callback: async () => {
-				new Notice('Starting CalDAV request dump...');
-				try {
-					const result = await dumpCalDAVRequests(this.app, this.settings);
-					new Notice(result, 8000);
-				} catch (error) {
-					const msg = error instanceof Error ? error.message : String(error);
-					new Notice(`CalDAV dump failed: ${msg}`, 8000);
-					console.error('[CalDAV Dump]', error);
-				}
 			}
 		});
 
