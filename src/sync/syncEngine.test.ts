@@ -789,6 +789,63 @@ describe('SyncEngine', () => {
       // First arg should be the existing obsidian task
       expect(mockUpdateTaskInVault.mock.calls[0][0]).toBe(obsTask);
     });
+
+    it('should include completion date when CalDAV marks task as done', async () => {
+      // Baseline: task is TODO
+      const baseline = {
+        uid: '20250101-abc',
+        description: 'Task to complete',
+        status: 'TODO' as const,
+        dueDate: '2025-07-01',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [] as string[],
+        recurrenceRule: '',
+        notes: '',
+      };
+
+      // Obsidian still has TODO
+      const obsTask = makeObsidianTask({
+        description: 'Task to complete',
+        id: '20250101-abc',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Task to complete 📅 2025-07-01 🆔 20250101-abc #sync',
+      });
+
+      // CalDAV has completed the task with a completion date
+      const vtodo = makeCalObj('caldav-abc', 'Task to complete', [
+        'DUE;VALUE=DATE:20250701',
+        'STATUS:COMPLETED',
+        'COMPLETED:20250715T140000Z',
+        'PERCENT-COMPLETE:100',
+      ]);
+
+      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetMapping.mockReturnValue({
+        tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
+        caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+      mockFindTaskById.mockReturnValue(obsTask);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+      expect(result.updated.toObsidian).toBe(1);
+      expect(mockUpdateTaskInVault).toHaveBeenCalledTimes(1);
+
+      // The markdown written to vault should have [x], the due date, AND the completion date
+      const newMarkdown = mockUpdateTaskInVault.mock.calls[0][1] as string;
+      expect(newMarkdown).toContain('- [x]');
+      expect(newMarkdown).toContain('📅 2025-07-01');
+      expect(newMarkdown).toContain('✅ 2025-07-15');
+      expect(newMarkdown).toContain('🆔 20250101-abc');
+    });
   });
 
   describe('mapping updates after sync', () => {

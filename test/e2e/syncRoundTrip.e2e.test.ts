@@ -175,6 +175,7 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.toObsidian).toHaveLength(1);
     expect(changeset.toObsidian[0].type).toBe('update');
     expect(changeset.toObsidian[0].task.status).toBe('DONE');
+    expect(changeset.toObsidian[0].task.completedDate).toBe('2025-07-01');
     expect(changeset.toCalDAV).toHaveLength(0);
   });
 
