@@ -171,7 +171,7 @@ export class SyncEngine {
     }
   }
 
-  async getStatus(): Promise<string> {
+  getStatus(): string {
     const state = this.storage.getState();
     const mapping = this.storage.getMapping();
     const baseline = this.storage.getBaseline();

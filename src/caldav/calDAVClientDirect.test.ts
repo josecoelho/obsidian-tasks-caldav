@@ -26,7 +26,7 @@ describe('CalDAVClientDirect', () => {
 
     describe('Authentication', () => {
         it('should encode credentials correctly for Basic Auth', () => {
-            const authHeader = (client as any).authHeader;
+            const authHeader = (client as unknown as {authHeader: string}).authHeader;
             const decoded = atob(authHeader.replace('Basic ', ''));
             expect(decoded).toBe('testuser:testpass');
         });
@@ -38,7 +38,7 @@ describe('CalDAVClientDirect', () => {
         });
 
         it('should report connected after calendar URL is set', () => {
-            (client as any).calendarUrl = 'https://caldav.example.com/calendars/test/';
+            (client as unknown as {calendarUrl: string}).calendarUrl = 'https://caldav.example.com/calendars/test/';
             expect(client.isConnected()).toBe(true);
         });
 

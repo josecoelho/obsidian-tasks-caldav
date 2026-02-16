@@ -146,7 +146,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 					new Notice('Sync engine not initialized');
 					return;
 				}
-				const status = await this.syncEngine.getStatus();
+				const status = this.syncEngine.getStatus();
 				new Notice(status, 8000);
 			}
 		});

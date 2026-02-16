@@ -1,3 +1,4 @@
+import { App } from 'obsidian';
 import { SyncStorage } from './syncStorage';
 import { MappingData, SyncState } from '../types';
 import { CommonTask } from '../sync/types';
@@ -31,7 +32,7 @@ function createMockAdapter() {
 function createMockApp(adapter: ReturnType<typeof createMockAdapter>) {
   return {
     vault: { adapter },
-  } as any;
+  } as unknown as App;
 }
 
 /**
@@ -40,15 +41,12 @@ function createMockApp(adapter: ReturnType<typeof createMockAdapter>) {
  * - read returns valid JSON for mapping and state, baseline doesn't exist
  */
 function setupFreshAdapter(adapter: ReturnType<typeof createMockAdapter>) {
-  adapter.exists.mockImplementation(async (path: string) => {
-    return false; // nothing exists yet
+  adapter.exists.mockImplementation((path: string) => {
+    return false;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
-  // After initialize writes the files, loadIntoCache reads them back.
-  // The read calls happen for mapping, state, and baseline.
-  // mapping.json and state.json are read; baseline.json check via exists returns false.
-  adapter.read.mockImplementation(async (path: string) => {
+  adapter.read.mockImplementation((path: string) => {
     if (path.includes('mapping.json')) {
       return JSON.stringify({ tasks: {}, caldavToTask: {} });
     }
@@ -74,13 +72,13 @@ function setupExistingAdapter(
   const state = opts.state ?? { lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] };
   const baseline = opts.baseline;
 
-  adapter.exists.mockImplementation(async (path: string) => {
+  adapter.exists.mockImplementation((path: string) => {
     if (path.includes('baseline.json')) return baseline !== undefined;
-    return true; // dir, mapping.json, state.json all exist
+    return true;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
-  adapter.read.mockImplementation(async (path: string) => {
+  adapter.read.mockImplementation((path: string) => {
     if (path.includes('mapping.json')) return JSON.stringify(mapping);
     if (path.includes('state.json')) return JSON.stringify(state);
     if (path.includes('baseline.json') && baseline) return JSON.stringify(baseline);
@@ -114,12 +112,9 @@ describe('SyncStorage', () => {
 
       await storage.initialize();
 
-      // Should check existence of dir, mapping, state, baseline
       expect(adapter.exists).toHaveBeenCalled();
-      // Should create directory
       expect(adapter.mkdir).toHaveBeenCalledWith(expect.stringContaining('.caldav-sync'));
-      // Should write initial mapping.json and state.json
-      const writeCalls = adapter.write.mock.calls.map((c: any[]) => c[0]);
+      const writeCalls = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
       expect(writeCalls.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(writeCalls.some((p: string) => p.includes('state.json'))).toBe(true);
     });
@@ -311,7 +306,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(3);
-      const paths = adapter.write.mock.calls.map((c: any[]) => c[0]);
+      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
       expect(paths.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
@@ -498,7 +493,7 @@ describe('SyncStorage', () => {
         },
       ];
 
-      setupExistingAdapter(adapter, { baseline: oldBaseline as any });
+      setupExistingAdapter(adapter, { baseline: oldBaseline as unknown as CommonTask[] });
 
       await storage.initialize();
 
@@ -543,7 +538,7 @@ describe('SyncStorage', () => {
       await storage.clearAll();
 
       expect(adapter.write).toHaveBeenCalledTimes(3);
-      const paths = adapter.write.mock.calls.map((c: any[]) => c[0]);
+      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
       expect(paths.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
@@ -554,7 +549,7 @@ describe('SyncStorage', () => {
     it('returns default mapping when mapping.json is corrupted', async () => {
       adapter.exists.mockResolvedValue(true);
       adapter.write.mockResolvedValue(undefined);
-      adapter.read.mockImplementation(async (path: string) => {
+      adapter.read.mockImplementation((path: string) => {
         if (path.includes('mapping.json')) return '{invalid json!!!';
         if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
         throw new Error('File not found');
@@ -570,7 +565,7 @@ describe('SyncStorage', () => {
     it('returns default state when state.json is corrupted', async () => {
       adapter.exists.mockResolvedValue(true);
       adapter.write.mockResolvedValue(undefined);
-      adapter.read.mockImplementation(async (path: string) => {
+      adapter.read.mockImplementation((path: string) => {
         if (path.includes('mapping.json')) return JSON.stringify({ tasks: {}, caldavToTask: {} });
         if (path.includes('state.json')) return 'not valid json at all';
         throw new Error('File not found');
@@ -586,7 +581,7 @@ describe('SyncStorage', () => {
     it('returns empty baseline when baseline.json is corrupted', async () => {
       adapter.exists.mockResolvedValue(true);
       adapter.write.mockResolvedValue(undefined);
-      adapter.read.mockImplementation(async (path: string) => {
+      adapter.read.mockImplementation((path: string) => {
         if (path.includes('mapping.json')) return JSON.stringify({ tasks: {}, caldavToTask: {} });
         if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
         if (path.includes('baseline.json')) return '<<<corrupted>>>';

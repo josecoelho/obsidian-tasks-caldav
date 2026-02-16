@@ -2,10 +2,12 @@ import { App } from 'obsidian';
 import { SyncEngine } from './syncEngine';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
 import { CalendarObject } from '../caldav/vtodoMapper';
+import { ObsidianTask } from '../tasks/taskManager';
+import { CommonTask } from './types';
 
 // --- Helpers ---
 
-function makeObsidianTask(overrides: Partial<any> = {}): any {
+function makeObsidianTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
     description: 'Test task',
     status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
@@ -72,7 +74,7 @@ const mockEnsureTaskHasId = jest.fn().mockResolvedValue('mock-id');
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
-const mockGetTaskId = jest.fn().mockImplementation((task: any) => task.id || null);
+const mockGetTaskId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
 
 jest.mock('../tasks/taskManager', () => ({
   TaskManager: jest.fn().mockImplementation(() => ({
@@ -142,7 +144,7 @@ describe('SyncEngine', () => {
     mockFindTaskById.mockReturnValue(null);
     mockCreateTask.mockResolvedValue(undefined);
     mockUpdateTaskInVault.mockResolvedValue(undefined);
-    mockGetTaskId.mockImplementation((task: any) => task.id || null);
+    mockGetTaskId.mockImplementation((task: ObsidianTask) => task.id || null);
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
     mockCreateVTODO.mockResolvedValue(undefined);
@@ -844,10 +846,10 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(mockSetBaseline).toHaveBeenCalledTimes(1);
 
-      const newBaseline: any[] = mockSetBaseline.mock.calls[0][0];
+      const newBaseline: CommonTask[] = mockSetBaseline.mock.calls[0][0];
       // Should contain both tasks
       expect(newBaseline.length).toBe(2);
-      const uids = newBaseline.map((t: any) => t.uid).sort();
+      const uids = newBaseline.map((t: CommonTask) => t.uid).sort();
       expect(uids).toContain('20250101-aaa');
       expect(uids).toContain('caldav-bbb');
     });

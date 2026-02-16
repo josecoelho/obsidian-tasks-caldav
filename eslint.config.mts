@@ -49,6 +49,7 @@ export default tseslint.config(
 			"@typescript-eslint/no-unsafe-argument": "off",
 			"@typescript-eslint/no-empty-object-type": "off",
 			"@typescript-eslint/no-unsafe-function-type": "off",
+			"@typescript-eslint/unbound-method": "off",
 		},
 	},
 	globalIgnores([
