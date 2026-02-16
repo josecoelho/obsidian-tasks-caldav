@@ -4,11 +4,21 @@ import { HttpClient, ObsidianHttpClient } from './httpClient';
 import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_VTODOS } from './templates';
 
 /**
+ * Interface for CalDAV client operations used by adapters.
+ */
+export interface CalDAVClient {
+  createVTODO(vtodoData: string, uid: string): Promise<void>;
+  updateVTODO(vtodo: { data: string; url: string; etag?: string }, newData: string): Promise<void>;
+  deleteVTODOByUID(uid: string): Promise<void>;
+  fetchVTODOByUID(uid: string): Promise<{ data: string; url: string; etag?: string } | null>;
+}
+
+/**
  * Direct CalDAV client implementation.
  * Uses an HttpClient abstraction so the transport layer can be swapped
  * (ObsidianHttpClient in production, FetchHttpClient in E2E tests).
  */
-export class CalDAVClientDirect {
+export class CalDAVClientDirect implements CalDAVClient {
   private settings: CalDAVSettings;
   private mapper: VTODOMapper;
   private calendarUrl: string | null = null;

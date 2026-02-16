@@ -1,5 +1,5 @@
 import { TaskManager, ObsidianTask } from './taskManager';
-import { TFile } from 'obsidian';
+import { App, TFile } from 'obsidian';
 
 // Mock TFile class
 class MockTFile extends TFile {
@@ -21,7 +21,12 @@ const mockApp = {
     plugins: {
         plugins: {}
     }
-} as any;
+};
+
+// Mock version of ObsidianTasksPlugin with jest.Mock methods
+interface MockTasksPlugin {
+    getTasks: jest.Mock;
+}
 
 // Helper to create mock task
 function createMockTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
@@ -60,7 +65,7 @@ describe('TaskManager', () => {
     let taskManager: TaskManager;
 
     beforeEach(() => {
-        taskManager = new TaskManager(mockApp);
+        taskManager = new TaskManager(mockApp as unknown as App);
     });
 
     describe('filterTasks', () => {
@@ -197,14 +202,14 @@ describe('TaskManager', () => {
             const mockTasksPlugin = {
                 getTasks: jest.fn()
             };
-            (taskManager as any).tasksPlugin = mockTasksPlugin;
+            (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin = mockTasksPlugin;
         });
 
         it('should find task by obsidian-tasks id', () => {
             const task1 = createMockTask({ id: 'task-1', description: 'First task' });
             const task2 = createMockTask({ id: 'task-2', description: 'Second task' });
 
-            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            const mockTasksPlugin = (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin;
             mockTasksPlugin.getTasks.mockReturnValue([task1, task2]);
 
             const found = taskManager.findTaskById('task-2');
@@ -220,7 +225,7 @@ describe('TaskManager', () => {
             });
             const task2 = createMockTask({ id: 'other-id', description: 'Other task' });
 
-            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            const mockTasksPlugin = (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin;
             mockTasksPlugin.getTasks.mockReturnValue([task1, task2]);
 
             const found = taskManager.findTaskById('abc-123');
@@ -231,7 +236,7 @@ describe('TaskManager', () => {
         it('should return null if task not found', () => {
             const task1 = createMockTask({ id: 'task-1' });
 
-            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            const mockTasksPlugin = (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin;
             mockTasksPlugin.getTasks.mockReturnValue([task1]);
 
             const found = taskManager.findTaskById('nonexistent-id');
@@ -239,7 +244,7 @@ describe('TaskManager', () => {
         });
 
         it('should return null if no tasks exist', () => {
-            const mockTasksPlugin = (taskManager as any).tasksPlugin;
+            const mockTasksPlugin = (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin;
             mockTasksPlugin.getTasks.mockReturnValue([]);
 
             const found = taskManager.findTaskById('any-id');
@@ -322,7 +327,7 @@ describe('TaskManager', () => {
             mockFile = new MockTFile('tasks.md');
             jest.clearAllMocks();
             // Make isReady() return true
-            (taskManager as any).tasksPlugin = { getTasks: jest.fn().mockReturnValue([]) };
+            (taskManager as unknown as { tasksPlugin: MockTasksPlugin }).tasksPlugin = { getTasks: jest.fn().mockReturnValue([]) };
         });
 
         it('should append task to existing file when no section specified', async () => {

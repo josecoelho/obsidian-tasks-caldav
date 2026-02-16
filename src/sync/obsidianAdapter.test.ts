@@ -1,6 +1,7 @@
 import { ObsidianAdapter } from './obsidianAdapter';
+import { ObsidianTask } from '../tasks/taskManager';
 
-function makeTask(overrides: Partial<any> = {}): any {
+function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
     description: 'Buy groceries',
     status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },

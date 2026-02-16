@@ -1,5 +1,6 @@
 import { CalDAVAdapter } from './caldavAdapter';
 import { CalendarObject } from '../caldav/vtodoMapper';
+import { CalDAVClient } from '../caldav/calDAVClientDirect';
 
 function buildVTODO(uid: string, summary: string, extra: string[] = []): string {
   const hasStatus = extra.some(l => l.startsWith('STATUS:'));
@@ -226,12 +227,12 @@ describe('CalDAVAdapter', () => {
 
   describe('applyChanges', () => {
     it('should call create for create changes', async () => {
-      const mockClient = {
+      const mockClient: CalDAVClient = {
         createVTODO: jest.fn(),
         updateVTODO: jest.fn(),
         deleteVTODOByUID: jest.fn(),
         fetchVTODOByUID: jest.fn(),
-      } as any;
+      };
 
       const task = {
         uid: 'new-task',
@@ -254,16 +255,16 @@ describe('CalDAVAdapter', () => {
       );
 
       expect(mockClient.createVTODO).toHaveBeenCalledTimes(1);
-      expect(mockClient.createVTODO.mock.calls[0][1]).toBe('obsidian-new-task');
+      expect((mockClient.createVTODO as jest.Mock).mock.calls[0][1]).toBe('obsidian-new-task');
     });
 
     it('should call delete for delete changes', async () => {
-      const mockClient = {
+      const mockClient: CalDAVClient = {
         createVTODO: jest.fn(),
         updateVTODO: jest.fn(),
         deleteVTODOByUID: jest.fn(),
         fetchVTODOByUID: jest.fn(),
-      } as any;
+      };
 
       const task = {
         uid: 'del-task',
@@ -289,7 +290,7 @@ describe('CalDAVAdapter', () => {
     });
 
     it('should call update for update changes', async () => {
-      const mockClient = {
+      const mockClient: CalDAVClient = {
         createVTODO: jest.fn(),
         updateVTODO: jest.fn(),
         deleteVTODOByUID: jest.fn(),
@@ -298,7 +299,7 @@ describe('CalDAVAdapter', () => {
           url: 'http://example.com/task.ics',
           etag: 'old-etag',
         }),
-      } as any;
+      };
 
       const task = {
         uid: 'upd-task',

@@ -1,6 +1,6 @@
 import { CommonTask, TaskStatus, TaskPriority, SyncChange } from './types';
 import { VTODOMapper, CalendarObject, ObsidianTask } from '../caldav/vtodoMapper';
-import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
+import { CalDAVClient } from '../caldav/calDAVClientDirect';
 
 export class CalDAVAdapter {
   private mapper: VTODOMapper;
@@ -73,7 +73,7 @@ export class CalDAVAdapter {
   /**
    * Apply a set of sync changes to the CalDAV server.
    */
-  async applyChanges(changes: SyncChange[], client: CalDAVClientDirect, uidMapping: Map<string, string>): Promise<void> {
+  async applyChanges(changes: SyncChange[], client: CalDAVClient, uidMapping: Map<string, string>): Promise<void> {
     for (const change of changes) {
       const caldavUID = this.resolveCaldavUID(change.task.uid, uidMapping);
 

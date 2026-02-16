@@ -24,12 +24,12 @@ export interface ObsidianTask {
         _lineNumber: number;
     };
     originalMarkdown: string;
-    createdDate: string | null;
-    startDate: string | null;
-    scheduledDate: string | null;
-    dueDate: string | null;
-    doneDate: string | null;
-    cancelledDate: string | null;
+    createdDate: string | { format(fmt: string): string } | null;
+    startDate: string | { format(fmt: string): string } | null;
+    scheduledDate: string | { format(fmt: string): string } | null;
+    dueDate: string | { format(fmt: string): string } | null;
+    doneDate: string | { format(fmt: string): string } | null;
+    cancelledDate: string | { format(fmt: string): string } | null;
     recurrence: { toText(): string } | null;
     id: string;
 }
@@ -37,7 +37,7 @@ export interface ObsidianTask {
 /**
  * Interface for obsidian-tasks plugin
  */
-interface ObsidianTasksPlugin {
+export interface ObsidianTasksPlugin {
     getTasks(): ObsidianTask[];
 }
 
