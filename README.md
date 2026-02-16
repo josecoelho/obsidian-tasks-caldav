@@ -111,6 +111,12 @@ Indented bullet points below a task are synced as the VTODO DESCRIPTION field:
 
 These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
+## Known limitations
+
+- **Recurring task completion from CalDAV** — When a recurring task is completed on a CalDAV client, the sync updates the Obsidian task status directly instead of using obsidian-tasks' completion mechanism. This means no next occurrence is generated. To preserve the recurrence chain, complete recurring tasks from Obsidian. ([#40](https://github.com/josecoelho/obsidian-tasks-caldav/issues/40))
+- **Priority round-trip is lossy** — obsidian-tasks uses emoji-based priorities (⏫🔼🔽) while CalDAV uses numeric PRIORITY (1-9). Obsidian→CalDAV maps correctly, but CalDAV→Obsidian does not write priority emojis back into the task markdown.
+- **Internal obsidian-tasks API** — This plugin accesses obsidian-tasks' internal `getTasks()` method, which is not part of the official public API. Future obsidian-tasks updates could break this integration.
+
 ## Tested CalDAV servers
 
 - Radicale (E2E test suite)
