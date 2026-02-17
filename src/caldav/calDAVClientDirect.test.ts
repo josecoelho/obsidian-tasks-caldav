@@ -181,7 +181,7 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos).toHaveLength(1);
             expect(vtodos[0]).toEqual({
                 url: 'https://caldav.example.com/calendars/user/tasks/todo1.ics',
-                data: expect.stringContaining('UID:todo-1'),
+                data: expect.stringContaining('UID:todo-1') as string,
                 etag: 'etag-123'
             });
         });

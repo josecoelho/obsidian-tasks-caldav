@@ -787,7 +787,7 @@ describe('SyncEngine', () => {
       expect(result.updated.toObsidian).toBe(1);
       expect(mockUpdateTaskInVault).toHaveBeenCalledTimes(1);
       // First arg should be the existing obsidian task
-      expect(mockUpdateTaskInVault.mock.calls[0][0]).toBe(obsTask);
+      expect((mockUpdateTaskInVault.mock.calls[0] as [ObsidianTask, string])[0]).toBe(obsTask);
     });
 
     it('should include completion date when CalDAV marks task as done', async () => {
@@ -840,7 +840,7 @@ describe('SyncEngine', () => {
       expect(mockUpdateTaskInVault).toHaveBeenCalledTimes(1);
 
       // The markdown written to vault should have [x], the due date, AND the completion date
-      const newMarkdown = mockUpdateTaskInVault.mock.calls[0][1] as string;
+      const newMarkdown = (mockUpdateTaskInVault.mock.calls[0] as [ObsidianTask, string])[1];
       expect(newMarkdown).toContain('- [x]');
       expect(newMarkdown).toContain('📅 2025-07-01');
       expect(newMarkdown).toContain('✅ 2025-07-15');
@@ -873,7 +873,7 @@ describe('SyncEngine', () => {
       expect(mockAddTaskMapping).toHaveBeenCalledTimes(1);
       // Should be called with (taskUid, caldavUID, sourceFile)
       // caldavUID should start with 'obsidian-'
-      const callArgs = mockAddTaskMapping.mock.calls[0];
+      const callArgs = mockAddTaskMapping.mock.calls[0] as string[];
       expect(callArgs[0]).toBe('20250101-new');
       expect(callArgs[1]).toMatch(/^obsidian-/);
     });
@@ -903,7 +903,7 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(mockSetBaseline).toHaveBeenCalledTimes(1);
 
-      const newBaseline: CommonTask[] = mockSetBaseline.mock.calls[0][0];
+      const newBaseline = (mockSetBaseline.mock.calls[0] as [CommonTask[]])[0];
       // Should contain both tasks
       expect(newBaseline.length).toBe(2);
       const uids = newBaseline.map((t: CommonTask) => t.uid).sort();
@@ -934,7 +934,7 @@ describe('SyncEngine', () => {
       expect(result1.created.toCalDAV).toBe(1);
 
       // Capture the baseline that was saved
-      const savedBaseline = mockSetBaseline.mock.calls[0][0];
+      const savedBaseline = (mockSetBaseline.mock.calls[0] as [CommonTask[]])[0];
 
       // Second sync: now CalDAV also has the task (it was created in first sync),
       // baseline has it, and mapping has it.

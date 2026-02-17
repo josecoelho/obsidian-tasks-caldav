@@ -363,7 +363,7 @@ describe('TaskManager', () => {
 
             await taskManager.createTask('- [ ] New CalDAV task', 'tasks.md', 'CalDAV');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             // Section heading is at index 2, task should be inserted at index 3
             expect(lines[2]).toBe('## CalDAV');
@@ -380,7 +380,7 @@ describe('TaskManager', () => {
 
             await taskManager.createTask('- [ ] New task', 'tasks.md', 'CalDAV');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             expect(updatedContent).toBe(
                 '# My Tasks\n\n- [ ] Existing task\n\n## CalDAV\n- [ ] New task'
             );
@@ -395,7 +395,7 @@ describe('TaskManager', () => {
 
             await taskManager.createTask('- [ ] New task', 'tasks.md', 'CalDAV');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[0]).toBe('# CalDAV');
             expect(lines[1]).toBe('- [ ] New task');
@@ -463,7 +463,7 @@ describe('TaskManager', () => {
             expect(mockApp.vault.modify).toHaveBeenCalledTimes(1);
 
             // The modified content should contain the new ID
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             expect(updatedContent).toContain(`🆔 ${result}`);
         });
     });
@@ -507,7 +507,7 @@ More text`;
                 expect.stringContaining('- [ ] Target task to update [id::20251107-abc]')
             );
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[5]).toBe('- [ ] Target task to update [id::20251107-abc]');
             expect(lines[4]).toBe('- [ ] First task');
@@ -535,7 +535,7 @@ More text`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Target task [id::xyz]');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
 
             // Should find and update at actual line 3 (index 3), not line 10
@@ -563,7 +563,7 @@ More text`;
             await taskManager.updateTaskInVault(task, '- [ ] Task with spaces [id::abc]');
 
             expect(mockApp.vault.modify).toHaveBeenCalled();
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             expect(updatedContent).toBe('- [ ] Task with spaces [id::abc]');
         });
 
@@ -622,7 +622,7 @@ More text`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Task with notes 🆔 abc\n    - New note');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[0]).toBe('- [ ] Task with notes 🆔 abc');
             expect(lines[1]).toBe('    - New note');
@@ -649,7 +649,7 @@ More text`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Task with notes 🆔 abc');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[0]).toBe('- [ ] Task with notes 🆔 abc');
             expect(lines[1]).toBe('- [ ] Next task');
@@ -673,7 +673,7 @@ More text`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Task without notes 🆔 abc\n    - New note');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[0]).toBe('- [ ] Task without notes 🆔 abc');
             expect(lines[1]).toBe('    - New note');
@@ -699,7 +699,7 @@ More text`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Task 🆔 abc');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
             expect(lines[0]).toBe('- [ ] Task 🆔 abc');
             // Non-bullet indented line should be preserved
@@ -729,7 +729,7 @@ More content`;
 
             await taskManager.updateTaskInVault(task, '- [ ] Task without ID #sync [id::20251107-abc]');
 
-            const updatedContent = mockApp.vault.modify.mock.calls[0][1];
+            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             const lines = updatedContent.split('\n');
 
             // Should have exactly one task with ID, not duplicate

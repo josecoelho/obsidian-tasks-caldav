@@ -171,7 +171,7 @@ describe('SyncStorage', () => {
 
       // Only mapping.json should be written (not state.json or baseline.json)
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('mapping.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
   });
 
@@ -197,7 +197,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('mapping.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
 
     it('does nothing for non-existent task', () => {
@@ -277,7 +277,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('mapping.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
 
     it('writes only state.json when only state changed', async () => {
@@ -286,7 +286,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('state.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('state.json');
     });
 
     it('writes only baseline.json when only baseline changed', async () => {
@@ -295,7 +295,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('baseline.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('baseline.json');
     });
 
     it('writes all files when all are dirty', async () => {
@@ -352,7 +352,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('state.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('state.json');
     });
   });
 
@@ -379,7 +379,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('mapping.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
 
     it('does nothing for non-existent task', async () => {
@@ -417,7 +417,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('mapping.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
 
     it('does nothing for non-existent task', async () => {
@@ -461,7 +461,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect(adapter.write.mock.calls[0][0]).toContain('baseline.json');
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('baseline.json');
     });
 
     it('loads existing baseline from disk on initialize', async () => {

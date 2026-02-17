@@ -40,12 +40,7 @@ export default tseslint.config(
 				...globals.jest,
 			},
 		},
-		rules: {
-			// These rules have false positives with Jest mocks (jest.fn() returns any)
-			"@typescript-eslint/no-unsafe-assignment": "off",
-			"@typescript-eslint/no-unsafe-member-access": "off",
-			"@typescript-eslint/no-unsafe-call": "off",
-		},
+		rules: {},
 	},
 	globalIgnores([
 		"node_modules/",

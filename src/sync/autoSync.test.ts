@@ -56,7 +56,7 @@ describe('AutoSyncScheduler', () => {
 		const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval');
 
 		scheduler.start(5);
-		const firstId = registerInterval.mock.calls[0][0];
+		const firstId = (registerInterval.mock.calls[0] as [number])[0];
 
 		scheduler.start(10);
 		expect(clearIntervalSpy).toHaveBeenCalledWith(firstId);

@@ -256,7 +256,7 @@ describe('CalDAVAdapter', () => {
       );
 
       expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
-      expect(mockCreateVTODO.mock.calls[0][1]).toBe('obsidian-new-task');
+      expect((mockCreateVTODO.mock.calls[0] as [string, string])[1]).toBe('obsidian-new-task');
     });
 
     it('should call delete for delete changes', async () => {
