@@ -141,7 +141,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 		this.addCommand({
 			id: 'view-sync-status',
 			name: 'View sync status',
-			callback: async () => {
+			callback: () => {
 				if (!this.syncEngine) {
 					new Notice('Sync engine not initialized');
 					return;

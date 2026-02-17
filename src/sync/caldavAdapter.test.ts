@@ -227,8 +227,9 @@ describe('CalDAVAdapter', () => {
 
   describe('applyChanges', () => {
     it('should call create for create changes', async () => {
+      const mockCreateVTODO = jest.fn();
       const mockClient: CalDAVClient = {
-        createVTODO: jest.fn(),
+        createVTODO: mockCreateVTODO,
         updateVTODO: jest.fn(),
         deleteVTODOByUID: jest.fn(),
         fetchVTODOByUID: jest.fn(),
@@ -254,15 +255,16 @@ describe('CalDAVAdapter', () => {
         new Map(),
       );
 
-      expect(mockClient.createVTODO).toHaveBeenCalledTimes(1);
-      expect((mockClient.createVTODO as jest.Mock).mock.calls[0][1]).toBe('obsidian-new-task');
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      expect(mockCreateVTODO.mock.calls[0][1]).toBe('obsidian-new-task');
     });
 
     it('should call delete for delete changes', async () => {
+      const mockDeleteVTODOByUID = jest.fn();
       const mockClient: CalDAVClient = {
         createVTODO: jest.fn(),
         updateVTODO: jest.fn(),
-        deleteVTODOByUID: jest.fn(),
+        deleteVTODOByUID: mockDeleteVTODOByUID,
         fetchVTODOByUID: jest.fn(),
       };
 
@@ -286,19 +288,21 @@ describe('CalDAVAdapter', () => {
         new Map([['caldav-del', 'del-task']]),
       );
 
-      expect(mockClient.deleteVTODOByUID).toHaveBeenCalledWith('caldav-del');
+      expect(mockDeleteVTODOByUID).toHaveBeenCalledWith('caldav-del');
     });
 
     it('should call update for update changes', async () => {
+      const mockFetchVTODOByUID = jest.fn().mockResolvedValue({
+        data: 'old vtodo data',
+        url: 'http://example.com/task.ics',
+        etag: 'old-etag',
+      });
+      const mockUpdateVTODO = jest.fn();
       const mockClient: CalDAVClient = {
         createVTODO: jest.fn(),
-        updateVTODO: jest.fn(),
+        updateVTODO: mockUpdateVTODO,
         deleteVTODOByUID: jest.fn(),
-        fetchVTODOByUID: jest.fn().mockResolvedValue({
-          data: 'old vtodo data',
-          url: 'http://example.com/task.ics',
-          etag: 'old-etag',
-        }),
+        fetchVTODOByUID: mockFetchVTODOByUID,
       };
 
       const task = {
@@ -321,8 +325,8 @@ describe('CalDAVAdapter', () => {
         new Map([['caldav-upd', 'upd-task']]),
       );
 
-      expect(mockClient.fetchVTODOByUID).toHaveBeenCalledWith('caldav-upd');
-      expect(mockClient.updateVTODO).toHaveBeenCalledTimes(1);
+      expect(mockFetchVTODOByUID).toHaveBeenCalledWith('caldav-upd');
+      expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
     });
   });
 });

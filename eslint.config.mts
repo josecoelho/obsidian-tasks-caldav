@@ -41,15 +41,10 @@ export default tseslint.config(
 			},
 		},
 		rules: {
-			"@typescript-eslint/no-explicit-any": "off",
+			// These rules have false positives with Jest mocks (jest.fn() returns any)
 			"@typescript-eslint/no-unsafe-assignment": "off",
 			"@typescript-eslint/no-unsafe-member-access": "off",
 			"@typescript-eslint/no-unsafe-call": "off",
-			"@typescript-eslint/no-unsafe-return": "off",
-			"@typescript-eslint/no-unsafe-argument": "off",
-			"@typescript-eslint/no-empty-object-type": "off",
-			"@typescript-eslint/no-unsafe-function-type": "off",
-			"@typescript-eslint/unbound-method": "off",
 		},
 	},
 	globalIgnores([
