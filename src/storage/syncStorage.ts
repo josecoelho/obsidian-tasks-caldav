@@ -323,8 +323,8 @@ export class SyncStorage {
       }
       const content = await adapter.read(this.baselinePath);
       const tasks = JSON.parse(content) as CommonTask[];
-      // Migrate old baselines: default missing `notes` to ''
-      return tasks.map(t => ({ ...t, notes: t.notes ?? '' }));
+      // Migrate old baselines: default missing `body` to ''
+      return tasks.map(t => ({ ...t, body: t.body ?? '' }));
     } catch (error) {
       console.error('Failed to load baseline:', error);
       return [];

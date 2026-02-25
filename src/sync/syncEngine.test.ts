@@ -311,7 +311,7 @@ describe('SyncEngine', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       }]);
 
       const engine = new SyncEngine(new App(), makeSettings());
@@ -429,7 +429,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const obsTask = makeObsidianTask({
@@ -472,7 +472,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const obsTask = makeObsidianTask({
@@ -739,7 +739,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       // Obsidian still has the original
@@ -787,7 +787,7 @@ describe('SyncEngine', () => {
         priority: 'none' as const,
         tags: [] as string[],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       // Obsidian still has TODO

@@ -47,13 +47,13 @@ describe('CalDAVAdapter', () => {
       expect(task.completedDate).toBeNull();
       expect(task.tags).toEqual([]);
       expect(task.recurrenceRule).toBe('');
-      expect(task.notes).toBe('');
+      expect(task.body).toBe('');
     });
 
     it('should extract notes from DESCRIPTION', () => {
       const vtodo = makeCalObj('caldav-notes', 'Task with notes', ['DESCRIPTION:Remember to check']);
       const task = adapter.toCommonTask(vtodo, 'my-id');
-      expect(task.notes).toBe('Remember to check');
+      expect(task.body).toBe('Remember to check');
     });
 
     it('should map VTODO status correctly', () => {
@@ -150,7 +150,7 @@ describe('CalDAVAdapter', () => {
         priority: 'high' as const,
         tags: ['sync', 'work'],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-uid-001');
@@ -176,7 +176,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: 'Remember to bring supplies',
+        body: 'Remember to bring supplies',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-notes');
@@ -195,7 +195,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-no-notes');
@@ -214,7 +214,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const vtodo = adapter.fromCommonTask(task, 'caldav-done');
@@ -246,7 +246,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       await adapter.applyChanges(
@@ -279,7 +279,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       await adapter.applyChanges(
@@ -316,7 +316,7 @@ describe('CalDAVAdapter', () => {
         priority: 'none' as const,
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       await adapter.applyChanges(

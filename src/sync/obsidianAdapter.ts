@@ -3,9 +3,9 @@ import { CommonTask, TaskStatus, TaskPriority } from './types';
 import { ObsidianTask } from '../tasks/taskManager';
 import { generateTaskId } from '../utils/taskIdGenerator';
 
-export interface TaskWithNotes {
+export interface TaskWithBody {
   task: ObsidianTask;
-  notes: string;
+  body: string;
 }
 
 export interface NormalizeResult {
@@ -19,18 +19,18 @@ export class ObsidianAdapter {
    * Filters by sync tag, generates in-memory IDs for tasks without one.
    * Returns both the normalized tasks and a map from uid → original ObsidianTask.
    */
-  normalize(taskInputs: TaskWithNotes[], syncTag?: string): NormalizeResult {
+  normalize(taskInputs: TaskWithBody[], syncTag?: string): NormalizeResult {
     const filtered = this.filterByTag(taskInputs, syncTag);
     const tasks: CommonTask[] = [];
     const tasksById = new Map<string, ObsidianTask>();
 
-    for (const { task, notes } of filtered) {
+    for (const { task, body } of filtered) {
       let taskId = this.extractId(task);
       if (!taskId) {
         taskId = generateTaskId();
       }
       tasksById.set(taskId, task);
-      tasks.push(this.toCommonTask(task, taskId, notes));
+      tasks.push(this.toCommonTask(task, taskId, body));
     }
 
     return { tasks, tasksById };
@@ -38,9 +38,9 @@ export class ObsidianAdapter {
 
   /**
    * Convert a single obsidian-tasks Task to CommonTask.
-   * @param notes Optional notes text (defaults to '')
+   * @param body Optional body text (defaults to '')
    */
-  toCommonTask(task: ObsidianTask, taskId: string, notes: string = ''): CommonTask {
+  toCommonTask(task: ObsidianTask, taskId: string, body: string = ''): CommonTask {
     return {
       uid: taskId,
       title: this.cleanDescription(task.description),
@@ -52,7 +52,7 @@ export class ObsidianAdapter {
       priority: this.mapPriority(task.priority),
       tags: this.cleanTags(task.tags || []),
       recurrenceRule: task.recurrence ? this.extractRecurrenceRule(task.recurrence) : '',
-      notes,
+      body,
     };
   }
 
@@ -95,10 +95,10 @@ export class ObsidianAdapter {
       line += ` ${tag}`;
     }
 
-    // Notes as indented bullet lines
-    if (task.notes) {
-      const noteLines = task.notes.split('\n').map(l => `    - ${l}`);
-      line += '\n' + noteLines.join('\n');
+    // Body as indented bullet lines
+    if (task.body) {
+      const bodyLines = task.body.split('\n').map(l => `    - ${l}`);
+      line += '\n' + bodyLines.join('\n');
     }
 
     return line;
@@ -109,7 +109,7 @@ export class ObsidianAdapter {
    * Notes are lines matching /^(?:\s{2,}|\t)- (.*)$/ immediately after the task.
    * Returns joined lines with \n, or '' if no notes found.
    */
-  extractNotesFromFile(fileContent: string, taskLineIndex: number): string {
+  extractBodyFromFile(fileContent: string, taskLineIndex: number): string {
     const lines = fileContent.split('\n');
     const noteLines: string[] = [];
 
@@ -230,7 +230,7 @@ export class ObsidianAdapter {
   /**
    * Filter tasks by sync tag.
    */
-  private filterByTag(inputs: TaskWithNotes[], syncTag?: string): TaskWithNotes[] {
+  private filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
     if (!syncTag || syncTag.trim() === '') return inputs;
 
     const tagLower = syncTag.toLowerCase().replace(/^#/, '');

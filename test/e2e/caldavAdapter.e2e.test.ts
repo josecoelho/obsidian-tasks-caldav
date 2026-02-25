@@ -121,7 +121,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'high',
         tags: ['sync', 'test'],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const caldavUID = `e2e-roundtrip-${Date.now()}`;
@@ -156,7 +156,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const caldavUID = `e2e-done-${Date.now()}`;
@@ -187,7 +187,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: 'Remember to check the farmers market\nAlso need cleaning supplies',
+        body: 'Remember to check the farmers market\nAlso need cleaning supplies',
       };
 
       const caldavUID = `e2e-desc-rt-${Date.now()}`;
@@ -198,7 +198,7 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, new Map());
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].notes).toBe('Remember to check the farmers market\nAlso need cleaning supplies');
+      expect(tasks[0].body).toBe('Remember to check the farmers market\nAlso need cleaning supplies');
     });
 
     it('should handle DESCRIPTION with special characters', async () => {
@@ -216,7 +216,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: 'Commas, semicolons; colons: and backslashes\\',
+        body: 'Commas, semicolons; colons: and backslashes\\',
       };
 
       const caldavUID = `e2e-desc-special-${Date.now()}`;
@@ -227,10 +227,10 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, new Map());
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].notes).toBe('Commas, semicolons; colons: and backslashes\\');
+      expect(tasks[0].body).toBe('Commas, semicolons; colons: and backslashes\\');
     });
 
-    it('should return empty notes when VTODO has no DESCRIPTION', async () => {
+    it('should return empty body when VTODO has no DESCRIPTION', async () => {
       const client = makeClient();
       await client.connect();
 
@@ -242,7 +242,7 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, new Map());
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].notes).toBe('');
+      expect(tasks[0].body).toBe('');
     });
 
     it('should update DESCRIPTION on existing VTODO', async () => {
@@ -266,7 +266,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: 'New description added',
+        body: 'New description added',
       };
 
       const uidMapping = new Map([[caldavUID, 'update-desc-id']]);
@@ -280,7 +280,7 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, new Map());
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].notes).toBe('New description added');
+      expect(tasks[0].body).toBe('New description added');
     });
   });
 
@@ -316,7 +316,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'medium',
         tags: ['sync'],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const updatedTask: CommonTask = {
@@ -330,7 +330,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       const deletedTask: CommonTask = {
@@ -344,7 +344,7 @@ describe('CalDAVAdapter E2E', () => {
         priority: 'none',
         tags: [],
         recurrenceRule: '',
-        notes: '',
+        body: '',
       };
 
       await adapter.applyChanges(

@@ -19,7 +19,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid-123');
@@ -42,7 +42,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -61,7 +61,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -88,7 +88,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
           priority: 'none',
           recurrenceRule: '',
           tags: [],
-          notes: '',
+          body: '',
         };
 
         const result = mapper.taskToVTODO(task, 'test-uid');
@@ -117,7 +117,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
           priority: obsidian,
           recurrenceRule: '',
           tags: [],
-          notes: '',
+          body: '',
         };
 
         const result = mapper.taskToVTODO(task, 'test-uid');
@@ -136,7 +136,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -156,7 +156,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: ['work', 'urgent', 'project-a'],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -175,7 +175,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -194,7 +194,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         priority: 'none',
         recurrenceRule: 'FREQ=DAILY;COUNT=10',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -446,7 +446,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       // Escape: task to VTODO
@@ -481,7 +481,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       // Round-trip: task → VTODO → task
@@ -510,7 +510,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       // First sync: task → VTODO → task
@@ -544,7 +544,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: ['home,work', 'urgent'],
-        notes: '',
+        body: '',
       };
 
       // Escape: task to VTODO
@@ -570,7 +570,7 @@ END:VTODO`;
     });
   });
 
-  describe('DESCRIPTION (notes) handling', () => {
+  describe('DESCRIPTION (body) handling', () => {
     it('should extract DESCRIPTION from VTODO', () => {
       const vtodoData = `BEGIN:VTODO
 UID:desc-test
@@ -586,7 +586,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('Remember to check the farmers market');
+      expect(task.body).toBe('Remember to check the farmers market');
     });
 
     it('should return empty string when DESCRIPTION is missing', () => {
@@ -603,7 +603,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('');
+      expect(task.body).toBe('');
     });
 
     it('should handle multi-line DESCRIPTION with escaped newlines', () => {
@@ -621,7 +621,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('Line one\nLine two\nLine three');
+      expect(task.body).toBe('Line one\nLine two\nLine three');
     });
 
     it('should handle DESCRIPTION with colons', () => {
@@ -639,7 +639,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('Meeting at 10:30 with team: discuss roadmap');
+      expect(task.body).toBe('Meeting at 10:30 with team: discuss roadmap');
     });
 
     it('should handle folded DESCRIPTION lines', () => {
@@ -652,10 +652,10 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('A very long description that has been folded by the server into multiple lines');
+      expect(task.body).toBe('A very long description that has been folded by the server into multiple lines');
     });
 
-    it('should write DESCRIPTION to VTODO when notes is non-empty', () => {
+    it('should write DESCRIPTION to VTODO when body is non-empty', () => {
       const task: ObsidianTask = {
         description: 'Task',
         status: 'TODO',
@@ -666,14 +666,14 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: 'Remember to bring supplies',
+        body: 'Remember to bring supplies',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
       expect(vtodo).toContain('DESCRIPTION:Remember to bring supplies');
     });
 
-    it('should not write DESCRIPTION when notes is empty', () => {
+    it('should not write DESCRIPTION when body is empty', () => {
       const task: ObsidianTask = {
         description: 'Task',
         status: 'TODO',
@@ -684,7 +684,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -702,7 +702,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: 'Line 1\nLine 2; with semicolons, commas',
+        body: 'Line 1\nLine 2; with semicolons, commas',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -720,14 +720,14 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: 'Meeting at 10:30\nBring items: laptop, notebook\nNote; important',
+        body: 'Meeting at 10:30\nBring items: laptop, notebook\nNote; important',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
       const calObj: CalendarObject = { data: vtodo, etag: 'e1', url: 'http://test' };
       const parsed = mapper.vtodoToTask(calObj);
 
-      expect(parsed.notes).toBe('Meeting at 10:30\nBring items: laptop, notebook\nNote; important');
+      expect(parsed.body).toBe('Meeting at 10:30\nBring items: laptop, notebook\nNote; important');
     });
 
     it('should not extract DESCRIPTION from VALARM component', () => {
@@ -749,7 +749,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.notes).toBe('Real task notes');
+      expect(task.body).toBe('Real task notes');
     });
   });
 
@@ -767,7 +767,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       const vtodo = mapper.taskToVTODO(task, 'test-uid');
@@ -789,7 +789,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       // Convert to VTODO and back
@@ -818,7 +818,7 @@ END:VTODO`;
         priority: 'none',
         recurrenceRule: '',
         tags: [],
-        notes: '',
+        body: '',
       };
 
       // Sync 1: task → VTODO → task
@@ -1016,7 +1016,7 @@ END:VTODO`;
       expect(task.recurrenceRule).toBe('FREQ=WEEKLY;BYDAY=SA');
 
       // Folded DESCRIPTION should be unfolded and unescaped
-      expect(task.notes).toBe(
+      expect(task.body).toBe(
         'Buy the following items from the store: bread,' +
         ' milk, eggs, cheese, and other essentials for' +
         ' the week ahead.'

@@ -13,7 +13,7 @@ function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
     priority: 'none',
     tags: [],
     recurrenceRule: '',
-    notes: '',
+    body: '',
     ...overrides,
   };
 }
@@ -67,21 +67,21 @@ describe('tasksEqual', () => {
     expect(tasksEqual(a, b)).toBe(false);
   });
 
-  it('should detect notes change', () => {
-    const a = makeCommonTask({ notes: 'Note A' });
-    const b = makeCommonTask({ notes: 'Note B' });
+  it('should detect body change', () => {
+    const a = makeCommonTask({ body: 'Note A' });
+    const b = makeCommonTask({ body: 'Note B' });
     expect(tasksEqual(a, b)).toBe(false);
   });
 
-  it('should treat empty notes as equal', () => {
-    const a = makeCommonTask({ notes: '' });
-    const b = makeCommonTask({ notes: '' });
+  it('should treat empty body as equal', () => {
+    const a = makeCommonTask({ body: '' });
+    const b = makeCommonTask({ body: '' });
     expect(tasksEqual(a, b)).toBe(true);
   });
 
-  it('should detect notes added where there were none', () => {
-    const a = makeCommonTask({ notes: '' });
-    const b = makeCommonTask({ notes: 'New note' });
+  it('should detect body added where there was none', () => {
+    const a = makeCommonTask({ body: '' });
+    const b = makeCommonTask({ body: 'New note' });
     expect(tasksEqual(a, b)).toBe(false);
   });
 });

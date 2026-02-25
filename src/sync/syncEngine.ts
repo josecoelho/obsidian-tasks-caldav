@@ -4,7 +4,7 @@ import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
 import { CalDAVAdapter } from './caldavAdapter';
-import { ObsidianAdapter, TaskWithNotes } from './obsidianAdapter';
+import { ObsidianAdapter, TaskWithBody } from './obsidianAdapter';
 import { diff } from './diff';
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from './types';
 import { generateTaskId } from '../utils/taskIdGenerator';
@@ -70,7 +70,7 @@ export class SyncEngine {
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
 
-      // 3. Get Obsidian tasks → pair with notes → normalize (IDs generated in memory)
+      // 3. Get Obsidian tasks → pair with body → normalize (IDs generated in memory)
       const allObsidianTasks = this.taskManager.getAllTasks();
       const taskInputs = await this.buildTaskInputs(allObsidianTasks);
       const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(
@@ -335,8 +335,8 @@ export class SyncEngine {
    * Pair each task with its notes extracted from vault files.
    * Groups tasks by file to avoid re-reading the same file multiple times.
    */
-  private async buildTaskInputs(tasks: ObsidianTask[]): Promise<TaskWithNotes[]> {
-    const result: TaskWithNotes[] = [];
+  private async buildTaskInputs(tasks: ObsidianTask[]): Promise<TaskWithBody[]> {
+    const result: TaskWithBody[] = [];
 
     // Group tasks by file to avoid re-reading the same file
     const tasksByFile = new Map<string, ObsidianTask[]>();
@@ -353,7 +353,7 @@ export class SyncEngine {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!file || !(file instanceof TFile)) {
           for (const task of fileTasks) {
-            result.push({ task, notes: '' });
+            result.push({ task, body: '' });
           }
           continue;
         }
@@ -365,17 +365,17 @@ export class SyncEngine {
             line => line.trim() === task.originalMarkdown.trim()
           );
           if (lineIndex === -1) {
-            result.push({ task, notes: '' });
+            result.push({ task, body: '' });
             continue;
           }
 
-          const notes = this.obsidianAdapter.extractNotesFromFile(content, lineIndex);
-          result.push({ task, notes });
+          const body = this.obsidianAdapter.extractBodyFromFile(content, lineIndex);
+          result.push({ task, body });
         }
       } catch (error) {
-        console.error(`[SyncEngine] Failed to read file for notes: ${filePath}`, error);
+        console.error(`[SyncEngine] Failed to read file for body: ${filePath}`, error);
         for (const task of fileTasks) {
-          result.push({ task, notes: '' });
+          result.push({ task, body: '' });
         }
       }
     }

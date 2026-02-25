@@ -20,7 +20,7 @@ export interface ObsidianTask {
   priority: string;
   recurrenceRule: string;
   tags: string[];
-  notes: string;
+  body: string;
 }
 
 /**
@@ -45,9 +45,9 @@ export class VTODOMapper {
     lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`SUMMARY:${this.escapeText(task.description)}`);
 
-    // Description (notes/body text)
-    if (task.notes) {
-      lines.push(`DESCRIPTION:${this.escapeText(task.notes)}`);
+    // Description (body text)
+    if (task.body) {
+      lines.push(`DESCRIPTION:${this.escapeText(task.body)}`);
     }
 
     // Status mapping
@@ -110,7 +110,7 @@ export class VTODOMapper {
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0'),
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
       tags: this.extractCategories(data),
-      notes: this.extractRawProperty(data, 'DESCRIPTION') || '',
+      body: this.extractRawProperty(data, 'DESCRIPTION') || '',
     };
   }
 
