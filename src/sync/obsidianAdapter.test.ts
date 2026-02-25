@@ -1,5 +1,5 @@
 import { ObsidianAdapter, TaskWithBody } from './obsidianAdapter';
-import { ObsidianTask } from '../tasks/taskManager';
+import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {

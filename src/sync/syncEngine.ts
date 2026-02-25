@@ -1,5 +1,5 @@
 import { App, Notice, TFile } from 'obsidian';
-import { TaskManager, ObsidianTask } from '../tasks/taskManager';
+import { ObsidianTasksWrapper, ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
@@ -29,7 +29,7 @@ export interface SyncResult {
 export class SyncEngine {
   private app: App;
   private settings: CalDAVSettings;
-  private taskManager: TaskManager;
+  private wrapper: ObsidianTasksWrapper;
   private caldavClient: CalDAVClientDirect;
   private storage: SyncStorage;
   private caldavAdapter: CalDAVAdapter;
@@ -38,7 +38,7 @@ export class SyncEngine {
   constructor(app: App, settings: CalDAVSettings) {
     this.app = app;
     this.settings = settings;
-    this.taskManager = new TaskManager(app);
+    this.wrapper = new ObsidianTasksWrapper(app);
     this.caldavClient = new CalDAVClientDirect(settings);
     this.storage = new SyncStorage(app);
     this.caldavAdapter = new CalDAVAdapter();
@@ -46,8 +46,8 @@ export class SyncEngine {
   }
 
   async initialize(): Promise<boolean> {
-    const taskManagerReady = this.taskManager.initialize();
-    if (!taskManagerReady) {
+    const wrapperReady = this.wrapper.initialize();
+    if (!wrapperReady) {
       new Notice('obsidian-tasks plugin required for sync');
       return false;
     }
@@ -71,7 +71,7 @@ export class SyncEngine {
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
 
       // 3. Get Obsidian tasks → pair with body → normalize (IDs generated in memory)
-      const allObsidianTasks = this.taskManager.getAllTasks();
+      const allObsidianTasks = this.wrapper.getAllTasks();
       const taskInputs = await this.buildTaskInputs(allObsidianTasks);
       const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(
         taskInputs,
@@ -263,7 +263,7 @@ export class SyncEngine {
               this.settings.syncTag,
             );
 
-            await this.taskManager.createTask(
+            await this.wrapper.createTask(
               markdown,
               this.settings.newTasksDestination,
               this.settings.newTasksSection,
@@ -276,7 +276,7 @@ export class SyncEngine {
 
           case 'update': {
             const existingTask = tasksById.get(change.task.uid)
-              ?? this.taskManager.findTaskById(change.task.uid);
+              ?? this.wrapper.findTaskById(change.task.uid);
             if (!existingTask) continue;
 
             const markdown = this.obsidianAdapter.toMarkdown(
@@ -285,7 +285,7 @@ export class SyncEngine {
               this.settings.syncTag,
             );
 
-            await this.taskManager.updateTaskInVault(existingTask, markdown);
+            await this.wrapper.updateTaskInVault(existingTask, markdown);
             break;
           }
 
@@ -316,7 +316,7 @@ export class SyncEngine {
       if (change.type === 'create') {
         const caldavUID = `obsidian-${change.task.uid}`;
         const existingTask = tasksById.get(change.task.uid)
-          ?? this.taskManager.findTaskById(change.task.uid);
+          ?? this.wrapper.findTaskById(change.task.uid);
         const sourceFile = existingTask
           ? existingTask.taskLocation._tasksFile._path
           : this.settings.newTasksDestination;
@@ -403,7 +403,7 @@ export class SyncEngine {
           task.uid,
           this.settings.syncTag,
         );
-        await this.taskManager.updateTaskInVault(original, markdown);
+        await this.wrapper.updateTaskInVault(original, markdown);
       } catch (error) {
         console.error(`[SyncEngine] Failed to write back ID for task ${task.uid}:`, error);
       }

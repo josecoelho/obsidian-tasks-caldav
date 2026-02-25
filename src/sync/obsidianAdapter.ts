@@ -1,6 +1,6 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from './types';
-import { ObsidianTask } from '../tasks/taskManager';
+import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { generateTaskId } from '../utils/taskIdGenerator';
 
 export interface TaskWithBody {

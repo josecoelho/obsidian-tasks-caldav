@@ -45,7 +45,7 @@ export interface ObsidianTasksPlugin {
  * Manages tasks from obsidian-tasks plugin
  * Handles filtering, ID injection, and CRUD operations
  */
-export class TaskManager {
+export class ObsidianTasksWrapper {
     private app: App;
     private tasksPlugin: ObsidianTasksPlugin | null = null;
 

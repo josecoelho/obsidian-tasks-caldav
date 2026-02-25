@@ -2,7 +2,7 @@ import { App } from 'obsidian';
 import { SyncEngine } from './syncEngine';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
 import { CalendarObject } from '../caldav/vtodoMapper';
-import { ObsidianTask } from '../tasks/taskManager';
+import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CommonTask } from './types';
 
 // --- Helpers ---
@@ -68,16 +68,16 @@ function makeCalObj(uid: string, summary: string, extra: string[] = []): Calenda
 // All mock fns are declared at module level so jest.mock() can reference them,
 // but each test can reconfigure via mockReturnValue / mockImplementation.
 
-const mockTaskManagerInitialize = jest.fn().mockReturnValue(true);
+const mockWrapperInitialize = jest.fn().mockReturnValue(true);
 const mockGetAllTasks = jest.fn().mockReturnValue([]);
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
 const mockGetTaskId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
 
-jest.mock('../tasks/taskManager', () => ({
-  TaskManager: jest.fn().mockImplementation(() => ({
-    initialize: mockTaskManagerInitialize,
+jest.mock('../tasks/obsidianTasksWrapper', () => ({
+  ObsidianTasksWrapper: jest.fn().mockImplementation(() => ({
+    initialize: mockWrapperInitialize,
     getAllTasks: mockGetAllTasks,
     findTaskById: mockFindTaskById,
     createTask: mockCreateTask,
@@ -136,7 +136,7 @@ describe('SyncEngine', () => {
     // Re-set implementations that individual tests may override.
     // clearAllMocks clears call counts but not implementations,
     // so we must explicitly reset any fn that a test reconfigures.
-    mockTaskManagerInitialize.mockReturnValue(true);
+    mockWrapperInitialize.mockReturnValue(true);
     mockGetAllTasks.mockReturnValue([]);
     mockFindTaskById.mockReturnValue(null);
     mockCreateTask.mockResolvedValue(undefined);
@@ -159,15 +159,15 @@ describe('SyncEngine', () => {
     it('should return true when obsidian-tasks plugin is available', async () => {
       const engine = new SyncEngine(new App(), makeSettings());
       expect(await engine.initialize()).toBe(true);
-      expect(mockTaskManagerInitialize).toHaveBeenCalled();
+      expect(mockWrapperInitialize).toHaveBeenCalled();
       expect(mockStorageInitialize).toHaveBeenCalled();
     });
 
     it('should return false when obsidian-tasks plugin is unavailable', async () => {
-      mockTaskManagerInitialize.mockReturnValue(false);
+      mockWrapperInitialize.mockReturnValue(false);
       const engine = new SyncEngine(new App(), makeSettings());
       expect(await engine.initialize()).toBe(false);
-      // Should not initialize storage if taskManager failed
+      // Should not initialize storage if wrapper failed
       expect(mockStorageInitialize).not.toHaveBeenCalled();
     });
   });
@@ -924,7 +924,7 @@ describe('SyncEngine', () => {
       // baseline has it, and mapping has it.
       jest.clearAllMocks();
       // Re-set default implementations after clearAllMocks
-      mockTaskManagerInitialize.mockReturnValue(true);
+      mockWrapperInitialize.mockReturnValue(true);
       mockConnect.mockResolvedValue(undefined);
       mockStorageInitialize.mockResolvedValue(undefined);
       mockSave.mockResolvedValue(undefined);
