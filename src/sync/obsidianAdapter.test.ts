@@ -1,4 +1,4 @@
-import { ObsidianAdapter } from './obsidianAdapter';
+import { ObsidianAdapter, TaskWithNotes } from './obsidianAdapter';
 import { ObsidianTask } from '../tasks/taskManager';
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
@@ -20,6 +20,10 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     id: '20250105-a4f',
     ...overrides,
   };
+}
+
+function withNotes(task: ObsidianTask, notes: string = ''): TaskWithNotes {
+  return { task, notes };
 }
 
 describe('ObsidianAdapter', () => {
@@ -132,54 +136,85 @@ describe('ObsidianAdapter', () => {
 
   describe('normalize', () => {
     it('should filter by sync tag', () => {
-      const tasks = [
-        makeTask({ description: 'Task 1', tags: ['#sync'] }),
-        makeTask({ description: 'Task 2', tags: ['#work'], id: '20250105-b00', originalMarkdown: '- [ ] Task 2 🆔 20250105-b00 #work' }),
-        makeTask({ description: 'Task 3', tags: ['#sync', '#work'], id: '20250105-c00', originalMarkdown: '- [ ] Task 3 🆔 20250105-c00 #sync #work' }),
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ description: 'Task 1', tags: ['#sync'] })),
+        withNotes(makeTask({ description: 'Task 2', tags: ['#work'], id: '20250105-b00', originalMarkdown: '- [ ] Task 2 🆔 20250105-b00 #work' })),
+        withNotes(makeTask({ description: 'Task 3', tags: ['#sync', '#work'], id: '20250105-c00', originalMarkdown: '- [ ] Task 3 🆔 20250105-c00 #sync #work' })),
       ];
 
-      const result = adapter.normalize(tasks, 'sync');
-      expect(result).toHaveLength(2);
-      expect(result[0].title).toBe('Task 1');
-      expect(result[1].title).toBe('Task 3');
+      const { tasks } = adapter.normalize(inputs, 'sync');
+      expect(tasks).toHaveLength(2);
+      expect(tasks[0].title).toBe('Task 1');
+      expect(tasks[1].title).toBe('Task 3');
     });
 
     it('should return all tasks when syncTag is empty', () => {
-      const tasks = [
-        makeTask({ description: 'Task 1', tags: ['#work'], id: 'id1', originalMarkdown: '- [ ] Task 1 🆔 id1 #work' }),
-        makeTask({ description: 'Task 2', tags: [], id: 'id2', originalMarkdown: '- [ ] Task 2 🆔 id2' }),
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ description: 'Task 1', tags: ['#work'], id: 'id1', originalMarkdown: '- [ ] Task 1 🆔 id1 #work' })),
+        withNotes(makeTask({ description: 'Task 2', tags: [], id: 'id2', originalMarkdown: '- [ ] Task 2 🆔 id2' })),
       ];
 
-      const result = adapter.normalize(tasks, '');
-      expect(result).toHaveLength(2);
+      const { tasks } = adapter.normalize(inputs, '');
+      expect(tasks).toHaveLength(2);
     });
 
-    it('should skip tasks without IDs', () => {
-      const tasks = [
-        makeTask({ id: '', originalMarkdown: '- [ ] No ID #sync' }),
+    it('should generate IDs for tasks without them', () => {
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ id: '', originalMarkdown: '- [ ] No ID #sync' })),
       ];
 
-      const result = adapter.normalize(tasks, 'sync');
-      expect(result).toHaveLength(0);
+      const { tasks, tasksById } = adapter.normalize(inputs, 'sync');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].uid).toMatch(/^\d{8}-[0-9a-f]{3}$/);
+      // tasksById should map the generated ID to the original task
+      expect(tasksById.get(tasks[0].uid)).toBe(inputs[0].task);
+    });
+
+    it('should preserve existing IDs', () => {
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ id: '20250105-a4f' })),
+      ];
+
+      const { tasks, tasksById } = adapter.normalize(inputs, 'sync');
+      expect(tasks[0].uid).toBe('20250105-a4f');
+      expect(tasksById.get('20250105-a4f')).toBe(inputs[0].task);
     });
 
     it('should handle case-insensitive tag matching', () => {
-      const tasks = [
-        makeTask({ tags: ['#SYNC'], id: 'id1', originalMarkdown: '- [ ] Task 🆔 id1 #SYNC' }),
-        makeTask({ tags: ['#Sync'], id: 'id2', originalMarkdown: '- [ ] Task 🆔 id2 #Sync' }),
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ tags: ['#SYNC'], id: 'id1', originalMarkdown: '- [ ] Task 🆔 id1 #SYNC' })),
+        withNotes(makeTask({ tags: ['#Sync'], id: 'id2', originalMarkdown: '- [ ] Task 🆔 id2 #Sync' })),
       ];
 
-      const result = adapter.normalize(tasks, 'sync');
-      expect(result).toHaveLength(2);
+      const { tasks } = adapter.normalize(inputs, 'sync');
+      expect(tasks).toHaveLength(2);
     });
 
     it('should handle syncTag with # prefix', () => {
-      const tasks = [
-        makeTask({ tags: ['#sync'] }),
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ tags: ['#sync'] })),
       ];
 
-      const result = adapter.normalize(tasks, '#sync');
-      expect(result).toHaveLength(1);
+      const { tasks } = adapter.normalize(inputs, '#sync');
+      expect(tasks).toHaveLength(1);
+    });
+
+    it('should include notes from task inputs', () => {
+      const inputs: TaskWithNotes[] = [
+        { task: makeTask({ id: 'task-1', tags: ['#sync'] }), notes: 'Some notes' },
+      ];
+      const { tasks } = adapter.normalize(inputs, 'sync');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('Some notes');
+    });
+
+    it('should default to empty notes', () => {
+      const inputs: TaskWithNotes[] = [
+        withNotes(makeTask({ id: 'task-1', tags: ['#sync'] })),
+      ];
+      const { tasks } = adapter.normalize(inputs, 'sync');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].notes).toBe('');
     });
   });
 
@@ -474,31 +509,6 @@ describe('ObsidianAdapter', () => {
       const content = '- [ ] Task\n    Not a bullet line\n    - Actual note';
       const notes = adapter.extractNotesFromFile(content, 0);
       expect(notes).toBe('');
-    });
-  });
-
-  describe('normalize with notesMap', () => {
-    it('should include notes from notesMap in CommonTask', () => {
-      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
-      const notesMap = new Map([['task-1', 'Some notes']]);
-      const result = adapter.normalize([task], 'sync', notesMap);
-      expect(result).toHaveLength(1);
-      expect(result[0].notes).toBe('Some notes');
-    });
-
-    it('should default to empty notes when not in notesMap', () => {
-      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
-      const notesMap = new Map<string, string>();
-      const result = adapter.normalize([task], 'sync', notesMap);
-      expect(result).toHaveLength(1);
-      expect(result[0].notes).toBe('');
-    });
-
-    it('should default to empty notes when notesMap is not provided', () => {
-      const task = makeTask({ id: 'task-1', tags: ['#sync'] });
-      const result = adapter.normalize([task], 'sync');
-      expect(result).toHaveLength(1);
-      expect(result[0].notes).toBe('');
     });
   });
 

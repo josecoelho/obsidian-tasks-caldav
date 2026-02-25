@@ -1,7 +1,6 @@
 import {
   generateTaskId,
   extractTaskId,
-  ensureTaskId,
   isValidTaskId
 } from './taskIdGenerator';
 
@@ -74,77 +73,6 @@ describe('taskIdGenerator', () => {
       const taskText = '- [ ] Task [id::20250105-f9e]';
       const id = extractTaskId(taskText);
       expect(id).toBe('20250105-f9e');
-    });
-  });
-
-  describe('ensureTaskId', () => {
-    it('should return existing ID when present', () => {
-      const taskText = '- [ ] Task [id::20250105-abc]';
-      const result = ensureTaskId(taskText);
-
-      expect(result.id).toBe('20250105-abc');
-      expect(result.text).toBe(taskText);
-      expect(result.modified).toBe(false);
-    });
-
-    it('should inject ID into task text', () => {
-      const taskText = '- [ ] Task without ID';
-      const result = ensureTaskId(taskText);
-
-      expect(result.id).toMatch(/^\d{8}-[0-9a-f]{3}$/);
-      expect(result.text).toContain(`🆔 ${result.id}`);
-      expect(result.modified).toBe(true);
-    });
-
-    it('should append ID at end when no metadata present', () => {
-      const taskText = '- [ ] Some task';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toMatch(/^- \[ \] Some task 🆔 \d{8}-[0-9a-f]{3}$/);
-    });
-
-    it('should insert ID before date emojis', () => {
-      const taskText = '- [ ] Buy groceries 📅 2025-01-15';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toMatch(/^- \[ \] Buy groceries 🆔 \d{8}-[0-9a-f]{3} 📅 2025-01-15$/);
-    });
-
-    it('should insert ID before multiple date emojis', () => {
-      const taskText = '- [ ] Task 🛫 2025-01-08 ⏳ 2025-01-10 📅 2025-01-15';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toMatch(/^- \[ \] Task 🆔 \S+ 🛫 2025-01-08 ⏳ 2025-01-10 📅 2025-01-15$/);
-    });
-
-    it('should insert ID before tags', () => {
-      const taskText = '- [ ] Task #sync #work';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toMatch(/^- \[ \] Task 🆔 \S+ #sync #work$/);
-    });
-
-    it('should insert ID before priority emoji', () => {
-      const taskText = '- [ ] Task ⏫ 📅 2025-01-15';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toMatch(/^- \[ \] Task 🆔 \S+ ⏫ 📅 2025-01-15$/);
-    });
-
-    it('should not modify text that already has dataview ID', () => {
-      const taskText = '- [ ] Task [id::20250105-abc] with extra text';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toBe(taskText);
-      expect(result.modified).toBe(false);
-    });
-
-    it('should not modify text that already has emoji ID', () => {
-      const taskText = '- [ ] Task 🆔 20250105-abc with extra text';
-      const result = ensureTaskId(taskText);
-
-      expect(result.text).toBe(taskText);
-      expect(result.modified).toBe(false);
     });
   });
 

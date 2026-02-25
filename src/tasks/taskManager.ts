@@ -1,5 +1,5 @@
 import { App, TFile } from 'obsidian';
-import { ensureTaskId, extractTaskId } from '../utils/taskIdGenerator';
+import { extractTaskId } from '../utils/taskIdGenerator';
 
 /**
  * Represents a task from obsidian-tasks plugin
@@ -183,26 +183,6 @@ export class TaskManager {
         }
 
         return null;
-    }
-
-    /**
-     * Ensure a task has an ID, inject if missing
-     * @returns The task ID (existing or newly generated)
-     */
-    async ensureTaskHasId(task: ObsidianTask): Promise<string> {
-        const existingId = this.getTaskId(task);
-        if (existingId) {
-            return existingId;
-        }
-
-        // Insert ID before obsidian-tasks metadata (dates, priority, tags)
-        const result = ensureTaskId(task.originalMarkdown);
-
-        if (result.modified) {
-            await this.updateTaskInVault(task, result.text);
-        }
-
-        return result.id;
     }
 
     /**

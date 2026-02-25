@@ -46,36 +46,6 @@ export function extractTaskId(taskText: string): string | null {
 }
 
 /**
- * Inject task ID into task text if not already present.
- * Uses obsidian-tasks emoji format: 🆔 xxx
- * @param taskText The original task text
- * @returns Task text with ID injected (or original if ID already present)
- */
-export function ensureTaskId(taskText: string): { text: string; id: string; modified: boolean } {
-  const existingId = extractTaskId(taskText);
-
-  if (existingId) {
-    return { text: taskText, id: existingId, modified: false };
-  }
-
-  const newId = generateTaskId();
-  const idField = `🆔 ${newId}`;
-
-  // Insert before obsidian-tasks metadata (emoji markers, tags)
-  const metadataPattern = /\s(?:[📅🛫⏳✅🔁⏫🔼🔽⏬➕]|#[a-zA-Z])/u;
-  const match = taskText.match(metadataPattern);
-
-  let textWithId: string;
-  if (match && match.index !== undefined) {
-    textWithId = taskText.slice(0, match.index) + ` ${idField}` + taskText.slice(match.index);
-  } else {
-    textWithId = `${taskText} ${idField}`;
-  }
-
-  return { text: textWithId, id: newId, modified: true };
-}
-
-/**
  * Validate task ID format
  * @param id The task ID to validate
  * @returns true if valid, false otherwise

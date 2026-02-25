@@ -1,26 +1,39 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from './types';
 import { ObsidianTask } from '../tasks/taskManager';
+import { generateTaskId } from '../utils/taskIdGenerator';
+
+export interface TaskWithNotes {
+  task: ObsidianTask;
+  notes: string;
+}
+
+export interface NormalizeResult {
+  tasks: CommonTask[];
+  tasksById: Map<string, ObsidianTask>;
+}
 
 export class ObsidianAdapter {
   /**
    * Normalize obsidian-tasks Task[] into CommonTask[].
-   * Only includes tasks that have an ID and pass the sync tag filter.
-   * @param notesMap Optional map of taskId -> notes text (extracted from vault files)
+   * Filters by sync tag, generates in-memory IDs for tasks without one.
+   * Returns both the normalized tasks and a map from uid → original ObsidianTask.
    */
-  normalize(tasks: ObsidianTask[], syncTag?: string, notesMap?: Map<string, string>): CommonTask[] {
-    const filtered = this.filterByTag(tasks, syncTag);
-    const result: CommonTask[] = [];
+  normalize(taskInputs: TaskWithNotes[], syncTag?: string): NormalizeResult {
+    const filtered = this.filterByTag(taskInputs, syncTag);
+    const tasks: CommonTask[] = [];
+    const tasksById = new Map<string, ObsidianTask>();
 
-    for (const task of filtered) {
-      const taskId = this.extractId(task);
-      if (!taskId) continue;
-
-      const notes = notesMap?.get(taskId) ?? '';
-      result.push(this.toCommonTask(task, taskId, notes));
+    for (const { task, notes } of filtered) {
+      let taskId = this.extractId(task);
+      if (!taskId) {
+        taskId = generateTaskId();
+      }
+      tasksById.set(taskId, task);
+      tasks.push(this.toCommonTask(task, taskId, notes));
     }
 
-    return result;
+    return { tasks, tasksById };
   }
 
   /**
@@ -217,11 +230,11 @@ export class ObsidianAdapter {
   /**
    * Filter tasks by sync tag.
    */
-  private filterByTag(tasks: ObsidianTask[], syncTag?: string): ObsidianTask[] {
-    if (!syncTag || syncTag.trim() === '') return tasks;
+  private filterByTag(inputs: TaskWithNotes[], syncTag?: string): TaskWithNotes[] {
+    if (!syncTag || syncTag.trim() === '') return inputs;
 
     const tagLower = syncTag.toLowerCase().replace(/^#/, '');
-    return tasks.filter(task => {
+    return inputs.filter(({ task }) => {
       if (!task.tags || task.tags.length === 0) return false;
       return task.tags.some((tag: string) =>
         tag.toLowerCase().replace(/^#/, '') === tagLower

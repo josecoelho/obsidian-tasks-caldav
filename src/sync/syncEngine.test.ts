@@ -70,7 +70,6 @@ function makeCalObj(uid: string, summary: string, extra: string[] = []): Calenda
 
 const mockTaskManagerInitialize = jest.fn().mockReturnValue(true);
 const mockGetAllTasks = jest.fn().mockReturnValue([]);
-const mockEnsureTaskHasId = jest.fn().mockResolvedValue('mock-id');
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
@@ -80,7 +79,6 @@ jest.mock('../tasks/taskManager', () => ({
   TaskManager: jest.fn().mockImplementation(() => ({
     initialize: mockTaskManagerInitialize,
     getAllTasks: mockGetAllTasks,
-    ensureTaskHasId: mockEnsureTaskHasId,
     findTaskById: mockFindTaskById,
     createTask: mockCreateTask,
     updateTaskInVault: mockUpdateTaskInVault,
@@ -140,7 +138,6 @@ describe('SyncEngine', () => {
     // so we must explicitly reset any fn that a test reconfigures.
     mockTaskManagerInitialize.mockReturnValue(true);
     mockGetAllTasks.mockReturnValue([]);
-    mockEnsureTaskHasId.mockResolvedValue('mock-id');
     mockFindTaskById.mockReturnValue(null);
     mockCreateTask.mockResolvedValue(undefined);
     mockUpdateTaskInVault.mockResolvedValue(undefined);
@@ -507,8 +504,66 @@ describe('SyncEngine', () => {
     });
   });
 
-  describe('sync tag filtering for ID injection', () => {
-    it('should only inject IDs into tasks matching the sync tag', async () => {
+  describe('ID writeback after sync', () => {
+    it('should write IDs to vault after successful sync for tasks without IDs', async () => {
+      const task = makeObsidianTask({
+        description: 'Task without ID',
+        tags: ['#sync'],
+        id: '',
+        originalMarkdown: '- [ ] Task without ID #sync',
+      });
+
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+      // Should write ID back to vault via updateTaskInVault
+      expect(mockUpdateTaskInVault).toHaveBeenCalledTimes(1);
+      const newMarkdown = (mockUpdateTaskInVault.mock.calls[0] as [ObsidianTask, string])[1];
+      expect(newMarkdown).toContain('🆔');
+    });
+
+    it('should not write IDs during dry run', async () => {
+      const task = makeObsidianTask({
+        description: 'Task without ID',
+        tags: ['#sync'],
+        id: '',
+        originalMarkdown: '- [ ] Task without ID #sync',
+      });
+
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.success).toBe(true);
+      expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
+    });
+
+    it('should not write IDs for tasks that already have them', async () => {
+      const task = makeObsidianTask({
+        description: 'Task with ID',
+        tags: ['#sync'],
+        id: '20250101-abc',
+        originalMarkdown: '- [ ] Task with ID 🆔 20250101-abc #sync',
+      });
+
+      mockGetAllTasks.mockReturnValue([task]);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      await engine.sync(false);
+
+      // updateTaskInVault should NOT be called for ID writeback
+      // (it might be called for other sync changes, but not for this task's ID)
+      expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
+    });
+
+    it('should only write IDs for tasks matching the sync tag', async () => {
       const syncedTask = makeObsidianTask({
         description: 'Synced task',
         tags: ['#sync'],
@@ -526,85 +581,14 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
       await engine.initialize();
-      await engine.sync(true);
+      await engine.sync(false);
 
-      expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(1);
-      expect(mockEnsureTaskHasId).toHaveBeenCalledWith(syncedTask);
-    });
-
-    it('should not inject IDs into any task when none match the sync tag', async () => {
-      const task1 = makeObsidianTask({
-        description: 'Work task',
-        tags: ['#work'],
-        originalMarkdown: '- [ ] Work task #work',
-      });
-      const task2 = makeObsidianTask({
-        description: 'Personal task',
-        tags: ['#personal'],
-        originalMarkdown: '- [ ] Personal task #personal',
-      });
-
-      mockGetAllTasks.mockReturnValue([task1, task2]);
-
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
-      await engine.initialize();
-      await engine.sync(true);
-
-      expect(mockEnsureTaskHasId).not.toHaveBeenCalled();
-    });
-
-    it('should inject IDs into all tasks when sync tag is empty', async () => {
-      const task1 = makeObsidianTask({
-        description: 'Task A',
-        tags: ['#work'],
-        originalMarkdown: '- [ ] Task A #work',
-      });
-      const task2 = makeObsidianTask({
-        description: 'Task B',
-        tags: [],
-        originalMarkdown: '- [ ] Task B',
-      });
-
-      mockGetAllTasks.mockReturnValue([task1, task2]);
-
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '' }));
-      await engine.initialize();
-      await engine.sync(true);
-
-      expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(2);
-    });
-
-    it('should match sync tag case-insensitively', async () => {
-      const task = makeObsidianTask({
-        description: 'Mixed case',
-        tags: ['#Sync'],
-        originalMarkdown: '- [ ] Mixed case #Sync',
-      });
-
-      mockGetAllTasks.mockReturnValue([task]);
-
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
-      await engine.initialize();
-      await engine.sync(true);
-
-      expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(1);
-      expect(mockEnsureTaskHasId).toHaveBeenCalledWith(task);
-    });
-
-    it('should handle sync tag with # prefix in settings', async () => {
-      const task = makeObsidianTask({
-        description: 'Tagged task',
-        tags: ['#sync'],
-        originalMarkdown: '- [ ] Tagged task #sync',
-      });
-
-      mockGetAllTasks.mockReturnValue([task]);
-
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '#sync' }));
-      await engine.initialize();
-      await engine.sync(true);
-
-      expect(mockEnsureTaskHasId).toHaveBeenCalledTimes(1);
+      // Only the synced task should get an ID written back
+      const writebackCalls = mockUpdateTaskInVault.mock.calls.filter(
+        (call: [ObsidianTask, string]) => call[1].includes('🆔')
+      );
+      expect(writebackCalls).toHaveLength(1);
+      expect((writebackCalls[0] as [ObsidianTask, string])[0]).toBe(syncedTask);
     });
   });
 
@@ -949,7 +933,6 @@ describe('SyncEngine', () => {
       mockDeleteVTODOByUID.mockResolvedValue(undefined);
       mockCreateTask.mockResolvedValue(undefined);
       mockUpdateTaskInVault.mockResolvedValue(undefined);
-      mockEnsureTaskHasId.mockResolvedValue('20250101-aaa');
       mockFetchVTODOByUID.mockResolvedValue(null);
 
       // Obsidian still has the same task

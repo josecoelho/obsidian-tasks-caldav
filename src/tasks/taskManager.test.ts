@@ -412,62 +412,6 @@ describe('TaskManager', () => {
         });
     });
 
-    describe('ensureTaskHasId', () => {
-        let mockFile: MockTFile;
-
-        beforeEach(() => {
-            mockFile = new MockTFile('test.md');
-            jest.clearAllMocks();
-        });
-
-        it('should return existing ID without updating vault', async () => {
-            const task = createMockTask({
-                id: 'existing-id-123',
-                originalMarkdown: '- [ ] Task with ID [id::existing-id-123]',
-                taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
-                    _lineNumber: 1
-                }
-            });
-
-            const result = await taskManager.ensureTaskHasId(task);
-
-            expect(result).toBe('existing-id-123');
-            expect(mockApp.vault.modify).not.toHaveBeenCalled();
-        });
-
-        it('should generate and inject new ID when task has none', async () => {
-            const fileContent = '- [ ] Task without ID';
-
-            const task = createMockTask({
-                id: '',
-                description: 'Task without ID',
-                originalMarkdown: '- [ ] Task without ID',
-                taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
-                    _lineNumber: 1
-                }
-            });
-
-            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
-            mockApp.vault.read.mockResolvedValue(fileContent);
-            mockApp.vault.modify.mockResolvedValue(undefined);
-
-            const result = await taskManager.ensureTaskHasId(task);
-
-            // Should return a non-empty ID
-            expect(result).toBeTruthy();
-            expect(result.length).toBeGreaterThan(0);
-
-            // Should have called updateTaskInVault (which calls vault.modify)
-            expect(mockApp.vault.modify).toHaveBeenCalledTimes(1);
-
-            // The modified content should contain the new ID
-            const updatedContent = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
-            expect(updatedContent).toContain(`🆔 ${result}`);
-        });
-    });
-
     describe('updateTaskInVault', () => {
         let mockFile: MockTFile;
 

@@ -4,7 +4,7 @@ import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
 import { CalDAVAdapter } from './caldavAdapter';
-import { ObsidianAdapter } from './obsidianAdapter';
+import { ObsidianAdapter, TaskWithNotes } from './obsidianAdapter';
 import { diff } from './diff';
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from './types';
 import { generateTaskId } from '../utils/taskIdGenerator';
@@ -70,18 +70,12 @@ export class SyncEngine {
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
 
-      // 3. Get Obsidian tasks → filter by sync tag → inject IDs only on matching tasks
+      // 3. Get Obsidian tasks → pair with notes → normalize (IDs generated in memory)
       const allObsidianTasks = this.taskManager.getAllTasks();
-      const syncTagFiltered = this.filterBySyncTag(allObsidianTasks);
-      for (const task of syncTagFiltered) {
-        await this.taskManager.ensureTaskHasId(task);
-      }
-      const refreshedTasks = this.taskManager.getAllTasks(); // Re-fetch after ID injection
-      const notesMap = await this.buildNotesMap(refreshedTasks);
-      const obsidianTasks = this.obsidianAdapter.normalize(
-        refreshedTasks,
+      const taskInputs = await this.buildTaskInputs(allObsidianTasks);
+      const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(
+        taskInputs,
         this.settings.syncTag,
-        notesMap,
       );
       // 4. Load baseline — if empty, seed from already-mapped tasks so the
       //    first sync with this engine doesn't duplicate everything.
@@ -131,19 +125,22 @@ export class SyncEngine {
       }
 
       // 6. Apply changes to Obsidian
-      await this.applyObsidianChanges(changeset.toObsidian);
+      await this.applyObsidianChanges(changeset.toObsidian, tasksById);
 
       // 7. Apply changes to CalDAV
       await this.caldavAdapter.applyChanges(changeset.toCalDAV, this.caldavClient, uidMapping);
 
-      // 8. Update mappings for new tasks
-      this.updateMappingsAfterSync(changeset);
+      // 8. Write back IDs for tasks that got in-memory IDs
+      await this.writeBackIds(obsidianTasks, tasksById);
 
-      // 9. Save new baseline (union of current state after applying changes)
+      // 9. Update mappings for new tasks
+      this.updateMappingsAfterSync(changeset, tasksById);
+
+      // 10. Save new baseline (union of current state after applying changes)
       const newBaseline = this.computeNewBaseline(obsidianTasks, caldavTasks, changeset);
       this.storage.setBaseline(newBaseline);
 
-      // 10. Save state
+      // 11. Save state
       this.storage.updateLastSyncTime();
       await this.storage.save();
 
@@ -182,23 +179,6 @@ export class SyncEngine {
     const conflicts = state.conflicts.length;
 
     return `Last sync: ${lastSync}\nMapped tasks: ${mappedTasks}\nBaseline tasks: ${baselineTasks}\nConflicts: ${conflicts}`;
-  }
-
-  /**
-   * Filter Obsidian tasks by the configured sync tag.
-   * Only these tasks should get IDs injected and be synced.
-   */
-  private filterBySyncTag(tasks: ObsidianTask[]): ObsidianTask[] {
-    const syncTag = this.settings.syncTag;
-    if (!syncTag || syncTag.trim() === '') return tasks;
-
-    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
-    return tasks.filter(task => {
-      if (!task.tags || task.tags.length === 0) return false;
-      return task.tags.some((tag: string) =>
-        tag.toLowerCase().replace(/^#/, '') === tagLower
-      );
-    });
   }
 
   /**
@@ -265,8 +245,13 @@ export class SyncEngine {
 
   /**
    * Apply changes to Obsidian vault (creates, updates, deletes).
+   * @param tasksById Map from uid → original ObsidianTask, used to find tasks
+   *   that may not yet be in obsidian-tasks cache (e.g. tasks with in-memory IDs).
    */
-  private async applyObsidianChanges(changes: SyncChange[]): Promise<void> {
+  private async applyObsidianChanges(
+    changes: SyncChange[],
+    tasksById: Map<string, ObsidianTask>,
+  ): Promise<void> {
     for (const change of changes) {
       try {
         switch (change.type) {
@@ -290,7 +275,8 @@ export class SyncEngine {
           }
 
           case 'update': {
-            const existingTask = this.taskManager.findTaskById(change.task.uid);
+            const existingTask = tasksById.get(change.task.uid)
+              ?? this.taskManager.findTaskById(change.task.uid);
             if (!existingTask) continue;
 
             const markdown = this.obsidianAdapter.toMarkdown(
@@ -319,14 +305,18 @@ export class SyncEngine {
   /**
    * Update mappings after sync to track newly created tasks.
    */
-  private updateMappingsAfterSync(changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] }): void {
+  private updateMappingsAfterSync(
+    changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
+    tasksById: Map<string, ObsidianTask>,
+  ): void {
     // For tasks created on CalDAV side, the mapping was already added in applyObsidianChanges.
 
     // For tasks created on CalDAV from Obsidian, add mapping.
     for (const change of changeset.toCalDAV) {
       if (change.type === 'create') {
         const caldavUID = `obsidian-${change.task.uid}`;
-        const existingTask = this.taskManager.findTaskById(change.task.uid);
+        const existingTask = tasksById.get(change.task.uid)
+          ?? this.taskManager.findTaskById(change.task.uid);
         const sourceFile = existingTask
           ? existingTask.taskLocation._tasksFile._path
           : this.settings.newTasksDestination;
@@ -342,11 +332,11 @@ export class SyncEngine {
   }
 
   /**
-   * Build a map of taskId → notes by reading vault files and extracting
-   * indented bullets below each task line.
+   * Pair each task with its notes extracted from vault files.
+   * Groups tasks by file to avoid re-reading the same file multiple times.
    */
-  private async buildNotesMap(tasks: ObsidianTask[]): Promise<Map<string, string>> {
-    const notesMap = new Map<string, string>();
+  private async buildTaskInputs(tasks: ObsidianTask[]): Promise<TaskWithNotes[]> {
+    const result: TaskWithNotes[] = [];
 
     // Group tasks by file to avoid re-reading the same file
     const tasksByFile = new Map<string, ObsidianTask[]>();
@@ -361,30 +351,63 @@ export class SyncEngine {
     for (const [filePath, fileTasks] of tasksByFile) {
       try {
         const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!file || !(file instanceof TFile)) continue;
+        if (!file || !(file instanceof TFile)) {
+          for (const task of fileTasks) {
+            result.push({ task, notes: '' });
+          }
+          continue;
+        }
         const content = await this.app.vault.read(file);
         const lines = content.split('\n');
 
         for (const task of fileTasks) {
-          const taskId = this.taskManager.getTaskId(task);
-          if (!taskId) continue;
-
           const lineIndex = lines.findIndex(
             line => line.trim() === task.originalMarkdown.trim()
           );
-          if (lineIndex === -1) continue;
+          if (lineIndex === -1) {
+            result.push({ task, notes: '' });
+            continue;
+          }
 
           const notes = this.obsidianAdapter.extractNotesFromFile(content, lineIndex);
-          if (notes) {
-            notesMap.set(taskId, notes);
-          }
+          result.push({ task, notes });
         }
       } catch (error) {
         console.error(`[SyncEngine] Failed to read file for notes: ${filePath}`, error);
+        for (const task of fileTasks) {
+          result.push({ task, notes: '' });
+        }
       }
     }
 
-    return notesMap;
+    return result;
+  }
+
+  /**
+   * Write IDs back to vault for tasks that had in-memory IDs generated during normalize.
+   * Only called after sync succeeds, so IDs are only persisted when sync completes.
+   */
+  private async writeBackIds(
+    obsidianTasks: CommonTask[],
+    tasksById: Map<string, ObsidianTask>,
+  ): Promise<void> {
+    for (const task of obsidianTasks) {
+      const original = tasksById.get(task.uid);
+      if (!original) continue;
+      // Only write back if the original task had no ID
+      if (this.obsidianAdapter.extractId(original)) continue;
+
+      try {
+        const markdown = this.obsidianAdapter.toMarkdown(
+          task,
+          task.uid,
+          this.settings.syncTag,
+        );
+        await this.taskManager.updateTaskInVault(original, markdown);
+      } catch (error) {
+        console.error(`[SyncEngine] Failed to write back ID for task ${task.uid}:`, error);
+      }
+    }
   }
 
   /**

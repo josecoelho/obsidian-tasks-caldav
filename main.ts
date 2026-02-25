@@ -1,6 +1,6 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
-import { ensureTaskId, extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
+import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
@@ -20,56 +20,6 @@ export default class CalDAVSyncPlugin extends Plugin {
 		if (!ready) {
 			new Notice('CalDAV sync: obsidian-tasks plugin not available');
 		}
-
-		// Command: Inject task IDs into selected lines
-		this.addCommand({
-			id: 'inject-task-ids',
-			name: 'Inject task ids into selected tasks',
-			editorCallback: (editor: Editor, _view: MarkdownView) => {
-				const selection = editor.getSelection();
-
-				if (selection) {
-					// Process selected text
-					const lines = selection.split('\n');
-					const processedLines = lines.map(line => {
-						// Only process lines that look like tasks
-						if (line.trim().match(/^-\s*\[.\]\s+/)) {
-							const result = ensureTaskId(line);
-							if (result.modified) {
-								return result.text;
-							}
-						}
-						return line;
-					});
-
-					const newText = processedLines.join('\n');
-					editor.replaceSelection(newText);
-
-					const addedCount = processedLines.filter((line, i) => line !== lines[i]).length;
-					if (addedCount > 0) {
-						new Notice(`Added IDs to ${addedCount} task(s)`);
-					} else {
-						new Notice('All tasks already have ids');
-					}
-				} else {
-					// Process current line
-					const cursor = editor.getCursor();
-					const line = editor.getLine(cursor.line);
-
-					if (line.trim().match(/^-\s*\[.\]\s+/)) {
-						const result = ensureTaskId(line);
-						if (result.modified) {
-							editor.setLine(cursor.line, result.text);
-							new Notice('Added task ID');
-						} else {
-							new Notice('Task already has an ID');
-						}
-					} else {
-						new Notice('Current line is not a task');
-					}
-				}
-			}
-		});
 
 		// Command: Validate task IDs in document
 		this.addCommand({
