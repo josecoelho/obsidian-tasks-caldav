@@ -128,6 +128,34 @@ export class ObsidianAdapter {
   }
 
   /**
+   * Reverse-map a CommonTask to obsidian-tasks constructor fields.
+   * Useful when building or updating an ObsidianTask from CalDAV data.
+   */
+  toTaskFields(common: CommonTask): {
+    description: string;
+    id: string;
+    isDone: boolean;
+    priority: string;
+    tags: string[];
+    dueDate: string | null;
+    startDate: string | null;
+    scheduledDate: string | null;
+    doneDate: string | null;
+  } {
+    return {
+      description: common.title,
+      id: common.uid,
+      isDone: common.status === 'DONE',
+      priority: this.reversePriority(common.priority),
+      tags: common.tags.map(t => `#${t}`),
+      dueDate: common.dueDate,
+      startDate: common.startDate,
+      scheduledDate: common.scheduledDate,
+      doneDate: common.completedDate,
+    };
+  }
+
+  /**
    * Extract task ID from an obsidian-tasks Task.
    * obsidian-tasks populates task.id for both 🆔 and [id::] formats.
    */
@@ -182,6 +210,21 @@ export class ObsidianAdapter {
       '6': 'lowest',
     };
     return map[priority] || 'none';
+  }
+
+  /**
+   * Reverse-map TaskPriority to obsidian-tasks priority string (1-6).
+   */
+  private reversePriority(priority: TaskPriority): string {
+    const map: Record<TaskPriority, string> = {
+      'highest': '1',
+      'high': '2',
+      'medium': '3',
+      'low': '5',
+      'lowest': '6',
+      'none': '0',
+    };
+    return map[priority] || '0';
   }
 
   /**

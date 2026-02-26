@@ -530,4 +530,80 @@ describe('ObsidianAdapter', () => {
       expect(adapter.getContentHash(task)).toBe('- [ ] Task');
     });
   });
+
+  describe('toTaskFields', () => {
+    it('should reverse-map a TODO CommonTask', () => {
+      const common = {
+        uid: 'task-123',
+        title: 'Buy groceries',
+        status: 'TODO' as const,
+        dueDate: '2025-01-15',
+        startDate: '2025-01-08',
+        scheduledDate: '2025-01-10',
+        completedDate: null,
+        priority: 'high' as const,
+        tags: ['sync', 'shopping'],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      const fields = adapter.toTaskFields(common);
+      expect(fields.description).toBe('Buy groceries');
+      expect(fields.id).toBe('task-123');
+      expect(fields.isDone).toBe(false);
+      expect(fields.priority).toBe('2');
+      expect(fields.tags).toEqual(['#sync', '#shopping']);
+      expect(fields.dueDate).toBe('2025-01-15');
+      expect(fields.startDate).toBe('2025-01-08');
+      expect(fields.scheduledDate).toBe('2025-01-10');
+      expect(fields.doneDate).toBeNull();
+    });
+
+    it('should reverse-map a DONE CommonTask', () => {
+      const common = {
+        uid: 'task-456',
+        title: 'Done task',
+        status: 'DONE' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: '2025-01-20',
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      const fields = adapter.toTaskFields(common);
+      expect(fields.isDone).toBe(true);
+      expect(fields.doneDate).toBe('2025-01-20');
+      expect(fields.priority).toBe('0');
+      expect(fields.tags).toEqual([]);
+    });
+
+    it('should reverse-map all priorities', () => {
+      const base = {
+        uid: 'id', title: 'T', status: 'TODO' as const,
+        dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+        tags: [], recurrenceRule: '', body: '',
+      };
+
+      expect(adapter.toTaskFields({ ...base, priority: 'highest' }).priority).toBe('1');
+      expect(adapter.toTaskFields({ ...base, priority: 'high' }).priority).toBe('2');
+      expect(adapter.toTaskFields({ ...base, priority: 'medium' }).priority).toBe('3');
+      expect(adapter.toTaskFields({ ...base, priority: 'low' }).priority).toBe('5');
+      expect(adapter.toTaskFields({ ...base, priority: 'lowest' }).priority).toBe('6');
+      expect(adapter.toTaskFields({ ...base, priority: 'none' }).priority).toBe('0');
+    });
+
+    it('should add # prefix to tags', () => {
+      const common = {
+        uid: 'id', title: 'T', status: 'TODO' as const,
+        dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+        priority: 'none' as const, tags: ['work', 'urgent'], recurrenceRule: '', body: '',
+      };
+
+      expect(adapter.toTaskFields(common).tags).toEqual(['#work', '#urgent']);
+    });
+  });
 });
