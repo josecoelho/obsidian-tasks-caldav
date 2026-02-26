@@ -32,6 +32,10 @@ export interface ObsidianTask {
     cancelledDate: string | { format(fmt: string): string } | null;
     recurrence: { toText(): string } | null;
     id: string;
+    /** Native serialization (obsidian-tasks ≥ 7.x). Respects user's format settings. */
+    toFileLineString?(): string;
+    /** String representation of the task. */
+    toString?(): string;
 }
 
 export interface TaskWithBody {
