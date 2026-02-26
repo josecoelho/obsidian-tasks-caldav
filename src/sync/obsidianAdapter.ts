@@ -1,7 +1,6 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from './types';
 import { ObsidianTask, TaskWithBody } from '../tasks/obsidianTasksWrapper';
-import { generateTaskId } from '../utils/taskIdGenerator';
 
 // Re-export for backwards compatibility
 export type { TaskWithBody } from '../tasks/obsidianTasksWrapper';
@@ -13,20 +12,15 @@ export interface NormalizeResult {
 
 export class ObsidianAdapter {
   /**
-   * Normalize obsidian-tasks Task[] into CommonTask[].
-   * Filters by sync tag, generates in-memory IDs for tasks without one.
-   * Returns both the normalized tasks and a map from uid → original ObsidianTask.
+   * Normalize pre-filtered TaskWithBody[] into CommonTask[].
+   * Each input must already have a taskId assigned.
+   * Pure field mapping — no filtering or ID generation.
    */
-  normalize(taskInputs: TaskWithBody[], syncTag?: string): NormalizeResult {
-    const filtered = this.filterByTag(taskInputs, syncTag);
+  normalize(inputs: Array<TaskWithBody & { taskId: string }>): NormalizeResult {
     const tasks: CommonTask[] = [];
     const tasksById = new Map<string, ObsidianTask>();
 
-    for (const { task, body } of filtered) {
-      let taskId = this.extractId(task);
-      if (!taskId) {
-        taskId = generateTaskId();
-      }
+    for (const { task, body, taskId } of inputs) {
       tasksById.set(taskId, task);
       tasks.push(this.toCommonTask(task, taskId, body));
     }
@@ -103,24 +97,6 @@ export class ObsidianAdapter {
   }
 
   /**
-   * Extract indented bullet notes from file content below a task line.
-   * Notes are lines matching /^(?:\s{2,}|\t)- (.*)$/ immediately after the task.
-   * Returns joined lines with \n, or '' if no notes found.
-   */
-  extractBodyFromFile(fileContent: string, taskLineIndex: number): string {
-    const lines = fileContent.split('\n');
-    const noteLines: string[] = [];
-
-    for (let i = taskLineIndex + 1; i < lines.length; i++) {
-      const match = lines[i].match(/^(?:\s{2,}|\t)- (.*)$/);
-      if (!match) break;
-      noteLines.push(match[1]);
-    }
-
-    return noteLines.join('\n');
-  }
-
-  /**
    * Get the content hash for change detection (matches old SyncEngine behavior).
    */
   getContentHash(task: ObsidianTask): string {
@@ -153,15 +129,6 @@ export class ObsidianAdapter {
       scheduledDate: common.scheduledDate,
       doneDate: common.completedDate,
     };
-  }
-
-  /**
-   * Extract task ID from an obsidian-tasks Task.
-   * obsidian-tasks populates task.id for both 🆔 and [id::] formats.
-   */
-  extractId(task: ObsidianTask): string | null {
-    if (task.id && task.id.length > 0) return task.id;
-    return null;
   }
 
   /**
@@ -268,18 +235,4 @@ export class ObsidianAdapter {
     return null;
   }
 
-  /**
-   * Filter tasks by sync tag.
-   */
-  private filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
-    if (!syncTag || syncTag.trim() === '') return inputs;
-
-    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
-    return inputs.filter(({ task }) => {
-      if (!task.tags || task.tags.length === 0) return false;
-      return task.tags.some((tag: string) =>
-        tag.toLowerCase().replace(/^#/, '') === tagLower
-      );
-    });
-  }
 }

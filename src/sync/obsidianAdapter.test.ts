@@ -135,86 +135,50 @@ describe('ObsidianAdapter', () => {
   });
 
   describe('normalize', () => {
-    it('should filter by sync tag', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ description: 'Task 1', tags: ['#sync'] })),
-        withBody(makeTask({ description: 'Task 2', tags: ['#work'], id: '20250105-b00', originalMarkdown: '- [ ] Task 2 🆔 20250105-b00 #work' })),
-        withBody(makeTask({ description: 'Task 3', tags: ['#sync', '#work'], id: '20250105-c00', originalMarkdown: '- [ ] Task 3 🆔 20250105-c00 #sync #work' })),
+    it('should map pre-filtered inputs to CommonTask[]', () => {
+      const inputs = [
+        { ...withBody(makeTask({ description: 'Task 1' })), taskId: 'id-1' },
+        { ...withBody(makeTask({ description: 'Task 2' })), taskId: 'id-2' },
       ];
 
-      const { tasks } = adapter.normalize(inputs, 'sync');
+      const { tasks } = adapter.normalize(inputs);
       expect(tasks).toHaveLength(2);
-      expect(tasks[0].title).toBe('Task 1');
-      expect(tasks[1].title).toBe('Task 3');
+      expect(tasks[0].uid).toBe('id-1');
+      expect(tasks[1].uid).toBe('id-2');
     });
 
-    it('should return all tasks when syncTag is empty', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ description: 'Task 1', tags: ['#work'], id: 'id1', originalMarkdown: '- [ ] Task 1 🆔 id1 #work' })),
-        withBody(makeTask({ description: 'Task 2', tags: [], id: 'id2', originalMarkdown: '- [ ] Task 2 🆔 id2' })),
+    it('should use provided taskId (no longer generates IDs)', () => {
+      const inputs = [
+        { ...withBody(makeTask({ id: '' })), taskId: 'assigned-id' },
       ];
 
-      const { tasks } = adapter.normalize(inputs, '');
-      expect(tasks).toHaveLength(2);
-    });
-
-    it('should generate IDs for tasks without them', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ id: '', originalMarkdown: '- [ ] No ID #sync' })),
-      ];
-
-      const { tasks, tasksById } = adapter.normalize(inputs, 'sync');
-      expect(tasks).toHaveLength(1);
-      expect(tasks[0].uid).toMatch(/^\d{8}-[0-9a-f]{3}$/);
-      // tasksById should map the generated ID to the original task
-      expect(tasksById.get(tasks[0].uid)).toBe(inputs[0].task);
-    });
-
-    it('should preserve existing IDs', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ id: '20250105-a4f' })),
-      ];
-
-      const { tasks, tasksById } = adapter.normalize(inputs, 'sync');
-      expect(tasks[0].uid).toBe('20250105-a4f');
-      expect(tasksById.get('20250105-a4f')).toBe(inputs[0].task);
-    });
-
-    it('should handle case-insensitive tag matching', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ tags: ['#SYNC'], id: 'id1', originalMarkdown: '- [ ] Task 🆔 id1 #SYNC' })),
-        withBody(makeTask({ tags: ['#Sync'], id: 'id2', originalMarkdown: '- [ ] Task 🆔 id2 #Sync' })),
-      ];
-
-      const { tasks } = adapter.normalize(inputs, 'sync');
-      expect(tasks).toHaveLength(2);
-    });
-
-    it('should handle syncTag with # prefix', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ tags: ['#sync'] })),
-      ];
-
-      const { tasks } = adapter.normalize(inputs, '#sync');
-      expect(tasks).toHaveLength(1);
+      const { tasks, tasksById } = adapter.normalize(inputs);
+      expect(tasks[0].uid).toBe('assigned-id');
+      expect(tasksById.get('assigned-id')).toBe(inputs[0].task);
     });
 
     it('should include body from task inputs', () => {
-      const inputs: TaskWithBody[] = [
-        { task: makeTask({ id: 'task-1', tags: ['#sync'] }), body: 'Some body' },
+      const inputs = [
+        { task: makeTask({ id: 'task-1' }), body: 'Some body', taskId: 'task-1' },
       ];
-      const { tasks } = adapter.normalize(inputs, 'sync');
-      expect(tasks).toHaveLength(1);
+      const { tasks } = adapter.normalize(inputs);
       expect(tasks[0].body).toBe('Some body');
     });
 
     it('should default to empty body', () => {
-      const inputs: TaskWithBody[] = [
-        withBody(makeTask({ id: 'task-1', tags: ['#sync'] })),
+      const inputs = [
+        { ...withBody(makeTask()), taskId: 'task-1' },
       ];
-      const { tasks } = adapter.normalize(inputs, 'sync');
-      expect(tasks).toHaveLength(1);
+      const { tasks } = adapter.normalize(inputs);
       expect(tasks[0].body).toBe('');
+    });
+
+    it('should build tasksById map', () => {
+      const task = makeTask({ description: 'Test' });
+      const inputs = [{ task, body: '', taskId: 'my-id' }];
+
+      const { tasksById } = adapter.normalize(inputs);
+      expect(tasksById.get('my-id')).toBe(task);
     });
   });
 
@@ -459,68 +423,6 @@ describe('ObsidianAdapter', () => {
       const md = adapter.toMarkdown(task, 'id', 'sync');
       expect(md).toBe('- [ ] Task 🆔 id #sync');
       expect(md).not.toContain('\n');
-    });
-  });
-
-  describe('extractBodyFromFile', () => {
-    it('should extract indented bullet lines below a task (4-space indent)', () => {
-      const content = '- [ ] Task\n    - Note one\n    - Note two\nNext line';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('Note one\nNote two');
-    });
-
-    it('should extract with 2-space indent', () => {
-      const content = '- [ ] Task\n  - Note one\n  - Note two';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('Note one\nNote two');
-    });
-
-    it('should extract with tab indent', () => {
-      const content = '- [ ] Task\n\t- Note one\n\t- Note two';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('Note one\nNote two');
-    });
-
-    it('should stop at non-indented line', () => {
-      const content = '- [ ] Task\n    - Note one\nNot a note\n    - Not included';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('Note one');
-    });
-
-    it('should stop at end of file', () => {
-      const content = '- [ ] Task\n    - Note one\n    - Note two';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('Note one\nNote two');
-    });
-
-    it('should return empty string when no notes', () => {
-      const content = '- [ ] Task\n- [ ] Next task';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('');
-    });
-
-    it('should handle task in middle of file', () => {
-      const content = '# Header\n- [ ] First task\n- [ ] Target task\n    - Note for target\n- [ ] Other task';
-      const notes = adapter.extractBodyFromFile(content, 2);
-      expect(notes).toBe('Note for target');
-    });
-
-    it('should not treat non-bullet indented lines as notes', () => {
-      const content = '- [ ] Task\n    Not a bullet line\n    - Actual note';
-      const notes = adapter.extractBodyFromFile(content, 0);
-      expect(notes).toBe('');
-    });
-  });
-
-  describe('extractId', () => {
-    it('should prefer task.id field', () => {
-      const task = makeTask({ id: 'from-field' });
-      expect(adapter.extractId(task)).toBe('from-field');
-    });
-
-    it('should return null when task.id is empty', () => {
-      const task = makeTask({ id: '' });
-      expect(adapter.extractId(task)).toBeNull();
     });
   });
 

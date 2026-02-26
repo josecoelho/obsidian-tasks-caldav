@@ -74,6 +74,18 @@ const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
 const mockGetTaskId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
+const mockFilterByTag = jest.fn().mockImplementation(
+  (inputs: Array<{ task: ObsidianTask }>, syncTag?: string) => {
+    if (!syncTag || syncTag.trim() === '') return inputs;
+    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+    return inputs.filter(({ task }) => {
+      if (!task.tags || task.tags.length === 0) return false;
+      return task.tags.some((tag: string) => tag.toLowerCase().replace(/^#/, '') === tagLower);
+    });
+  },
+);
+const mockExtractId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
+const mockExtractBodyFromFile = jest.fn().mockReturnValue('');
 
 jest.mock('../tasks/obsidianTasksWrapper', () => ({
   ObsidianTasksWrapper: jest.fn().mockImplementation(() => ({
@@ -83,6 +95,9 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
     createTask: mockCreateTask,
     updateTaskInVault: mockUpdateTaskInVault,
     getTaskId: mockGetTaskId,
+    filterByTag: mockFilterByTag,
+    extractId: mockExtractId,
+    extractBodyFromFile: mockExtractBodyFromFile,
   })),
 }));
 
@@ -142,6 +157,18 @@ describe('SyncEngine', () => {
     mockCreateTask.mockResolvedValue(undefined);
     mockUpdateTaskInVault.mockResolvedValue(undefined);
     mockGetTaskId.mockImplementation((task: ObsidianTask) => task.id || null);
+    mockFilterByTag.mockImplementation(
+      (inputs: Array<{ task: ObsidianTask }>, syncTag?: string) => {
+        if (!syncTag || syncTag.trim() === '') return inputs;
+        const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        return inputs.filter(({ task }) => {
+          if (!task.tags || task.tags.length === 0) return false;
+          return task.tags.some((tag: string) => tag.toLowerCase().replace(/^#/, '') === tagLower);
+        });
+      },
+    );
+    mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
+    mockExtractBodyFromFile.mockReturnValue('');
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
     mockCreateVTODO.mockResolvedValue(undefined);
@@ -934,6 +961,18 @@ describe('SyncEngine', () => {
       mockCreateTask.mockResolvedValue(undefined);
       mockUpdateTaskInVault.mockResolvedValue(undefined);
       mockFetchVTODOByUID.mockResolvedValue(null);
+      mockFilterByTag.mockImplementation(
+        (inputs: Array<{ task: ObsidianTask }>, syncTag?: string) => {
+          if (!syncTag || syncTag.trim() === '') return inputs;
+          const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+          return inputs.filter(({ task }) => {
+            if (!task.tags || task.tags.length === 0) return false;
+            return task.tags.some((tag: string) => tag.toLowerCase().replace(/^#/, '') === tagLower);
+          });
+        },
+      );
+      mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
+      mockExtractBodyFromFile.mockReturnValue('');
 
       // Obsidian still has the same task
       mockGetAllTasks.mockReturnValue([taskA]);

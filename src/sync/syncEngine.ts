@@ -1,10 +1,10 @@
 import { App, Notice, TFile } from 'obsidian';
-import { ObsidianTasksWrapper, ObsidianTask } from '../tasks/obsidianTasksWrapper';
+import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from '../tasks/obsidianTasksWrapper';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
 import { CalDAVAdapter } from './caldavAdapter';
-import { ObsidianAdapter, TaskWithBody } from './obsidianAdapter';
+import { ObsidianAdapter } from './obsidianAdapter';
 import { diff } from './diff';
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from './types';
 import { generateTaskId } from '../utils/taskIdGenerator';
@@ -70,13 +70,15 @@ export class SyncEngine {
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
 
-      // 3. Get Obsidian tasks → pair with body → normalize (IDs generated in memory)
+      // 3. Get Obsidian tasks → pair with body → filter by tag → assign IDs → normalize
       const allObsidianTasks = this.wrapper.getAllTasks();
       const taskInputs = await this.buildTaskInputs(allObsidianTasks);
-      const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(
-        taskInputs,
-        this.settings.syncTag,
-      );
+      const filtered = this.wrapper.filterByTag(taskInputs, this.settings.syncTag);
+      const withIds = filtered.map(input => ({
+        ...input,
+        taskId: this.wrapper.extractId(input.task) ?? generateTaskId(),
+      }));
+      const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(withIds);
       // 4. Load baseline — if empty, seed from already-mapped tasks so the
       //    first sync with this engine doesn't duplicate everything.
       let baseline = this.storage.getBaseline();
@@ -369,7 +371,7 @@ export class SyncEngine {
             continue;
           }
 
-          const body = this.obsidianAdapter.extractBodyFromFile(content, lineIndex);
+          const body = this.wrapper.extractBodyFromFile(content, lineIndex);
           result.push({ task, body });
         }
       } catch (error) {
@@ -395,7 +397,7 @@ export class SyncEngine {
       const original = tasksById.get(task.uid);
       if (!original) continue;
       // Only write back if the original task had no ID
-      if (this.obsidianAdapter.extractId(original)) continue;
+      if (this.wrapper.extractId(original)) continue;
 
       try {
         const markdown = this.obsidianAdapter.toMarkdown(
