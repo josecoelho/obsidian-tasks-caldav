@@ -770,6 +770,102 @@ More content`;
         });
     });
 
+    describe('getAllTasksWithBody', () => {
+        let mockPlugin: MockTasksPlugin;
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            mockPlugin = { getTasks: jest.fn().mockReturnValue([]) };
+            (mockApp.plugins.plugins as Record<string, unknown>)['obsidian-tasks-plugin'] = mockPlugin;
+            wrapper.initialize();
+        });
+
+        it('should return tasks paired with their body text', async () => {
+            const task = createMockTask({
+                originalMarkdown: '- [ ] My task',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] My task\n    - Note line 1\n    - Note line 2\n');
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].task).toBe(task);
+            expect(result[0].body).toBe('Note line 1\nNote line 2');
+        });
+
+        it('should return empty body when task has no indented lines', async () => {
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Simple task',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Simple task\n- [ ] Another task\n');
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].body).toBe('');
+        });
+
+        it('should return empty body when file is not found', async () => {
+            const task = createMockTask({
+                taskLocation: { _tasksFile: { _path: 'Missing.md' }, _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].body).toBe('');
+        });
+
+        it('should group tasks by file to avoid re-reading', async () => {
+            const task1 = createMockTask({
+                originalMarkdown: '- [ ] Task 1',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            const task2 = createMockTask({
+                originalMarkdown: '- [ ] Task 2',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 3 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task1, task2]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Task 1\n- [ ] Task 2\n');
+
+            await wrapper.getAllTasksWithBody();
+
+            // File should only be read once despite two tasks
+            expect(mockApp.vault.read).toHaveBeenCalledTimes(1);
+        });
+
+        it('should return empty body when file read throws', async () => {
+            const task = createMockTask({
+                taskLocation: { _tasksFile: { _path: 'Error.md' }, _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+
+            const file = new MockTFile('Error.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockRejectedValue(new Error('Read failed'));
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].body).toBe('');
+        });
+    });
+
 });
 
 

@@ -55,6 +55,10 @@ function buildVTODO(uid: string, summary: string, extra: string[] = []): string 
   ].join('\r\n');
 }
 
+function withBody(...tasks: ObsidianTask[]) {
+  return tasks.map(task => ({ task, body: '' }));
+}
+
 function makeCalObj(uid: string, summary: string, extra: string[] = []): CalendarObject {
   return {
     data: buildVTODO(uid, summary, extra),
@@ -69,7 +73,7 @@ function makeCalObj(uid: string, summary: string, extra: string[] = []): Calenda
 // but each test can reconfigure via mockReturnValue / mockImplementation.
 
 const mockWrapperInitialize = jest.fn().mockReturnValue(true);
-const mockGetAllTasks = jest.fn().mockReturnValue([]);
+const mockGetAllTasksWithBody = jest.fn().mockResolvedValue([]);
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
@@ -85,19 +89,17 @@ const mockFilterByTag = jest.fn().mockImplementation(
   },
 );
 const mockExtractId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
-const mockExtractBodyFromFile = jest.fn().mockReturnValue('');
 
 jest.mock('../tasks/obsidianTasksWrapper', () => ({
   ObsidianTasksWrapper: jest.fn().mockImplementation(() => ({
     initialize: mockWrapperInitialize,
-    getAllTasks: mockGetAllTasks,
+    getAllTasksWithBody: mockGetAllTasksWithBody,
     findTaskById: mockFindTaskById,
     createTask: mockCreateTask,
     updateTaskInVault: mockUpdateTaskInVault,
     getTaskId: mockGetTaskId,
     filterByTag: mockFilterByTag,
     extractId: mockExtractId,
-    extractBodyFromFile: mockExtractBodyFromFile,
   })),
 }));
 
@@ -152,7 +154,7 @@ describe('SyncEngine', () => {
     // clearAllMocks clears call counts but not implementations,
     // so we must explicitly reset any fn that a test reconfigures.
     mockWrapperInitialize.mockReturnValue(true);
-    mockGetAllTasks.mockReturnValue([]);
+    mockGetAllTasksWithBody.mockResolvedValue([]);
     mockFindTaskById.mockReturnValue(null);
     mockCreateTask.mockResolvedValue(undefined);
     mockUpdateTaskInVault.mockResolvedValue(undefined);
@@ -168,7 +170,6 @@ describe('SyncEngine', () => {
       },
     );
     mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
-    mockExtractBodyFromFile.mockReturnValue('');
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
     mockCreateVTODO.mockResolvedValue(undefined);
@@ -231,7 +232,7 @@ describe('SyncEngine', () => {
         id: '20250101-abc',
         tags: ['#sync'],
       });
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -257,7 +258,7 @@ describe('SyncEngine', () => {
         id: '20250101-abc',
         tags: ['#sync'],
       });
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -278,7 +279,7 @@ describe('SyncEngine', () => {
         id: '20250101-abc',
         tags: ['#sync'],
       });
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -297,7 +298,7 @@ describe('SyncEngine', () => {
       // CalDAV has a task, Obsidian doesn't → create in Obsidian
       const vtodo = makeCalObj('caldav-task-001', 'Buy milk');
       mockFetchVTODOs.mockResolvedValue([vtodo]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -321,7 +322,7 @@ describe('SyncEngine', () => {
       // Task is in baseline (was synced before) and in CalDAV, but not in Obsidian
       const vtodo = makeCalObj('caldav-del', 'Task to delete on CalDAV');
       mockFetchVTODOs.mockResolvedValue([vtodo]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetMapping.mockReturnValue({
         tasks: { '20250101-del': { caldavUID: 'caldav-del', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-del': '20250101-del' },
@@ -366,7 +367,7 @@ describe('SyncEngine', () => {
         tags: ['#sync'],
         originalMarkdown: '- [ ] Task two [id::20250101-002] #sync',
       });
-      mockGetAllTasks.mockReturnValue([task1, task2]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task1, task2));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -384,7 +385,7 @@ describe('SyncEngine', () => {
         makeCalObj('cal-001', 'CalDAV task 1'),
         makeCalObj('cal-002', 'CalDAV task 2'),
       ]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -404,7 +405,7 @@ describe('SyncEngine', () => {
         tags: ['#sync'],
       });
       const vtodo = makeCalObj('caldav-abc', 'Already synced task');
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([]); // Empty baseline
       mockGetMapping.mockReturnValue({
@@ -429,7 +430,7 @@ describe('SyncEngine', () => {
         id: '20250101-new',
         tags: ['#sync'],
       });
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 
@@ -468,7 +469,7 @@ describe('SyncEngine', () => {
 
       const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
 
-      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([baseline]);
       mockGetMapping.mockReturnValue({
@@ -511,7 +512,7 @@ describe('SyncEngine', () => {
 
       const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
 
-      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([baseline]);
       mockGetMapping.mockReturnValue({
@@ -540,7 +541,7 @@ describe('SyncEngine', () => {
         originalMarkdown: '- [ ] Task without ID #sync',
       });
 
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -561,7 +562,7 @@ describe('SyncEngine', () => {
         originalMarkdown: '- [ ] Task without ID #sync',
       });
 
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -579,7 +580,7 @@ describe('SyncEngine', () => {
         originalMarkdown: '- [ ] Task with ID 🆔 20250101-abc #sync',
       });
 
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -604,7 +605,7 @@ describe('SyncEngine', () => {
         originalMarkdown: '- [ ] Unsynced task #work',
       });
 
-      mockGetAllTasks.mockReturnValue([syncedTask, unsyncedTask]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(syncedTask, unsyncedTask));
 
       const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
       await engine.initialize();
@@ -626,7 +627,7 @@ describe('SyncEngine', () => {
       const vtodoWithoutTag = makeCalObj('caldav-no-tag', 'Task without tag', ['CATEGORIES:other']);
 
       mockFetchVTODOs.mockResolvedValue([vtodoWithTag, vtodoWithoutTag]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 
@@ -646,7 +647,7 @@ describe('SyncEngine', () => {
       const vtodo = makeCalObj('caldav-mapped', 'Mapped task');
 
       mockFetchVTODOs.mockResolvedValue([vtodo]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       // This task is already mapped
       mockGetMapping.mockReturnValue({
@@ -669,7 +670,7 @@ describe('SyncEngine', () => {
       const vtodo = makeCalObj('caldav-bare', 'Task no categories');
 
       mockFetchVTODOs.mockResolvedValue([vtodo]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 
@@ -686,7 +687,7 @@ describe('SyncEngine', () => {
       const vtodo = makeCalObj('caldav-upper', 'Task with SYNC', ['CATEGORIES:SYNC']);
 
       mockFetchVTODOs.mockResolvedValue([vtodo]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 
@@ -703,7 +704,7 @@ describe('SyncEngine', () => {
       const vtodo2 = makeCalObj('caldav-2', 'Task two');
 
       mockFetchVTODOs.mockResolvedValue([vtodo1, vtodo2]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 
@@ -724,7 +725,7 @@ describe('SyncEngine', () => {
         id: '20250101-abc',
       });
 
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -780,7 +781,7 @@ describe('SyncEngine', () => {
       // CalDAV has changed description
       const vtodo = makeCalObj('caldav-abc', 'Updated from CalDAV');
 
-      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([baseline]);
       mockGetMapping.mockReturnValue({
@@ -833,7 +834,7 @@ describe('SyncEngine', () => {
         'PERCENT-COMPLETE:100',
       ]);
 
-      mockGetAllTasks.mockReturnValue([obsTask]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([baseline]);
       mockGetMapping.mockReturnValue({
@@ -868,7 +869,7 @@ describe('SyncEngine', () => {
         tags: ['#sync'],
         originalMarkdown: '- [ ] New obsidian task [id::20250101-new] #sync',
       });
-      mockGetAllTasks.mockReturnValue([task]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
       mockFetchVTODOs.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
@@ -902,7 +903,7 @@ describe('SyncEngine', () => {
       // CalDAV has task B (new)
       const vtodoB = makeCalObj('caldav-bbb', 'Task B from CalDAV');
 
-      mockGetAllTasks.mockReturnValue([taskA]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(taskA));
       mockFetchVTODOs.mockResolvedValue([vtodoB]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
@@ -932,7 +933,7 @@ describe('SyncEngine', () => {
         tags: ['#sync'],
         originalMarkdown: '- [ ] Task A [id::20250101-aaa] #sync',
       });
-      mockGetAllTasks.mockReturnValue([taskA]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(taskA));
       mockFetchVTODOs.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
@@ -972,10 +973,8 @@ describe('SyncEngine', () => {
         },
       );
       mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
-      mockExtractBodyFromFile.mockReturnValue('');
-
       // Obsidian still has the same task
-      mockGetAllTasks.mockReturnValue([taskA]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(taskA));
       // CalDAV now has a matching task (created in first sync, with CATEGORIES from Obsidian tags)
       const vtodoA = makeCalObj('obsidian-20250101-aaa', 'Task A', ['CATEGORIES:sync']);
       mockFetchVTODOs.mockResolvedValue([vtodoA]);
@@ -1008,7 +1007,7 @@ describe('SyncEngine', () => {
       const vtodo2 = makeCalObj('caldav-002', 'Task two');
 
       mockFetchVTODOs.mockResolvedValue([vtodo1, vtodo2]);
-      mockGetAllTasks.mockReturnValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
       mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
 

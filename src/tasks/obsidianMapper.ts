@@ -80,41 +80,6 @@ export class ObsidianMapper {
   }
 
   /**
-   * Content hash for change detection.
-   */
-  getContentHash(task: ObsidianTask): string {
-    return task.originalMarkdown.trim();
-  }
-
-  /**
-   * Reverse-map a CommonTask to obsidian-tasks constructor fields.
-   * Useful when building or updating an ObsidianTask from CalDAV data.
-   */
-  toTaskFields(common: CommonTask): {
-    description: string;
-    id: string;
-    isDone: boolean;
-    priority: string;
-    tags: string[];
-    dueDate: string | null;
-    startDate: string | null;
-    scheduledDate: string | null;
-    doneDate: string | null;
-  } {
-    return {
-      description: common.title,
-      id: common.uid,
-      isDone: common.status === 'DONE',
-      priority: this.reversePriority(common.priority),
-      tags: common.tags.map(t => `#${t}`),
-      dueDate: common.dueDate,
-      startDate: common.startDate,
-      scheduledDate: common.scheduledDate,
-      doneDate: common.completedDate,
-    };
-  }
-
-  /**
    * Clean description by removing metadata that belongs in other fields.
    */
   private cleanDescription(description: string): string {
@@ -149,18 +114,6 @@ export class ObsidianMapper {
       '6': 'lowest',
     };
     return map[priority] || 'none';
-  }
-
-  private reversePriority(priority: TaskPriority): string {
-    const map: Record<TaskPriority, string> = {
-      'highest': '1',
-      'high': '2',
-      'medium': '3',
-      'low': '5',
-      'lowest': '6',
-      'none': '0',
-    };
-    return map[priority] || '0';
   }
 
   /**

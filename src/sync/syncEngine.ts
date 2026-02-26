@@ -1,5 +1,5 @@
-import { App, Notice, TFile } from 'obsidian';
-import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from '../tasks/obsidianTasksWrapper';
+import { App, Notice } from 'obsidian';
+import { ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
 import { CalDAVClientDirect } from '../caldav/calDAVClientDirect';
 import { SyncStorage } from '../storage/syncStorage';
 import { CalDAVSettings } from '../types';
@@ -69,11 +69,10 @@ export class SyncEngine {
       const allCaldavTasks = this.caldavAdapter.normalize(vtodos, uidMapping);
       const caldavTasks = this.filterCalDAVBySyncTag(allCaldavTasks, uidMapping);
 
-      // 3. Get Obsidian tasks → pair with body → filter by tag → normalize (adapter assigns IDs)
-      const allObsidianTasks = this.wrapper.getAllTasks();
-      const taskInputs = await this.buildTaskInputs(allObsidianTasks);
+      // 3. Get Obsidian tasks with body → filter by tag → normalize (adapter assigns IDs)
+      const taskInputs = await this.wrapper.getAllTasksWithBody();
       const filtered = this.wrapper.filterByTag(taskInputs, this.settings.syncTag);
-      const { tasks: obsidianTasks, tasksById } = this.obsidianAdapter.normalize(
+      const obsidianTasks = this.obsidianAdapter.normalize(
         filtered,
         (task) => this.wrapper.extractId(task),
       );
@@ -128,7 +127,6 @@ export class SyncEngine {
       const createdMappings = await this.obsidianAdapter.applyChanges(
         changeset.toObsidian,
         this.wrapper,
-        tasksById,
         {
           syncTag: this.settings.syncTag,
           newTasksDestination: this.settings.newTasksDestination,
@@ -154,13 +152,12 @@ export class SyncEngine {
       // 8. Write back IDs for tasks that got in-memory IDs
       await this.obsidianAdapter.writeBackIds(
         obsidianTasks,
-        tasksById,
         this.wrapper,
         { syncTag: this.settings.syncTag },
       );
 
       // 9. Update mappings for new tasks
-      this.updateMappingsAfterSync(changeset, tasksById);
+      this.updateMappingsAfterSync(changeset);
 
       // 10. Save new baseline (union of current state after applying changes)
       const newBaseline = this.computeNewBaseline(obsidianTasks, caldavTasks, changeset);
@@ -274,7 +271,6 @@ export class SyncEngine {
    */
   private updateMappingsAfterSync(
     changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
-    tasksById: Map<string, ObsidianTask>,
   ): void {
     // For tasks created on CalDAV side, mappings were already persisted above (createdMappings).
 
@@ -282,7 +278,7 @@ export class SyncEngine {
     for (const change of changeset.toCalDAV) {
       if (change.type === 'create') {
         const caldavUID = `obsidian-${change.task.uid}`;
-        const existingTask = tasksById.get(change.task.uid)
+        const existingTask = this.obsidianAdapter.findOriginalTask(change.task.uid)
           ?? this.wrapper.findTaskById(change.task.uid);
         const sourceFile = existingTask
           ? existingTask.taskLocation._tasksFile._path
@@ -294,60 +290,6 @@ export class SyncEngine {
         this.storage.removeTaskMapping(change.task.uid);
       }
     }
-
-    // Handle Obsidian-side deletes (already done above via adapter)
-  }
-
-  /**
-   * Pair each task with its notes extracted from vault files.
-   * Groups tasks by file to avoid re-reading the same file multiple times.
-   */
-  private async buildTaskInputs(tasks: ObsidianTask[]): Promise<TaskWithBody[]> {
-    const result: TaskWithBody[] = [];
-
-    // Group tasks by file to avoid re-reading the same file
-    const tasksByFile = new Map<string, ObsidianTask[]>();
-    for (const task of tasks) {
-      const filePath = task.taskLocation._tasksFile._path;
-      if (!tasksByFile.has(filePath)) {
-        tasksByFile.set(filePath, []);
-      }
-      tasksByFile.get(filePath)!.push(task);
-    }
-
-    for (const [filePath, fileTasks] of tasksByFile) {
-      try {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!file || !(file instanceof TFile)) {
-          for (const task of fileTasks) {
-            result.push({ task, body: '' });
-          }
-          continue;
-        }
-        const content = await this.app.vault.read(file);
-        const lines = content.split('\n');
-
-        for (const task of fileTasks) {
-          const lineIndex = lines.findIndex(
-            line => line.trim() === task.originalMarkdown.trim()
-          );
-          if (lineIndex === -1) {
-            result.push({ task, body: '' });
-            continue;
-          }
-
-          const body = this.wrapper.extractBodyFromFile(content, lineIndex);
-          result.push({ task, body });
-        }
-      } catch (error) {
-        console.error(`[SyncEngine] Failed to read file for body: ${filePath}`, error);
-        for (const task of fileTasks) {
-          result.push({ task, body: '' });
-        }
-      }
-    }
-
-    return result;
   }
 
   /**

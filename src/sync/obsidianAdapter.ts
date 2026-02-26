@@ -3,16 +3,11 @@ import { ObsidianTask, TaskWithBody, ObsidianTasksWrapper } from '../tasks/obsid
 import { ObsidianMapper } from '../tasks/obsidianMapper';
 import { generateTaskId } from '../utils/taskIdGenerator';
 
-// Re-export for backwards compatibility
 export type { TaskWithBody } from '../tasks/obsidianTasksWrapper';
-
-export interface NormalizeResult {
-  tasks: CommonTask[];
-  tasksById: Map<string, ObsidianTask>;
-}
 
 export class ObsidianAdapter {
   private mapper: ObsidianMapper;
+  private tasksById = new Map<string, ObsidianTask>();
 
   constructor(mapper?: ObsidianMapper) {
     this.mapper = mapper ?? new ObsidianMapper();
@@ -20,23 +15,24 @@ export class ObsidianAdapter {
 
   /**
    * Normalize pre-filtered TaskWithBody[] into CommonTask[].
-   * Assigns IDs internally: uses existing ID from task.id, or generates
-   * an in-memory ID via generateTaskId().
+   * Assigns IDs internally: uses existing ID from extractId, or generates
+   * an in-memory ID via generateTaskId(). Stores the ID→ObsidianTask
+   * mapping internally for use by applyChanges/writeBackIds.
    */
   normalize(
     inputs: TaskWithBody[],
     extractId: (task: ObsidianTask) => string | null,
-  ): NormalizeResult {
+  ): CommonTask[] {
     const tasks: CommonTask[] = [];
-    const tasksById = new Map<string, ObsidianTask>();
+    this.tasksById = new Map();
 
     for (const { task, body } of inputs) {
       const taskId = extractId(task) ?? generateTaskId();
-      tasksById.set(taskId, task);
+      this.tasksById.set(taskId, task);
       tasks.push(this.mapper.toCommonTask(task, taskId, body));
     }
 
-    return { tasks, tasksById };
+    return tasks;
   }
 
   /**
@@ -45,7 +41,6 @@ export class ObsidianAdapter {
   async applyChanges(
     changes: SyncChange[],
     wrapper: ObsidianTasksWrapper,
-    tasksById: Map<string, ObsidianTask>,
     settings: { syncTag?: string; newTasksDestination: string; newTasksSection?: string },
   ): Promise<Array<{ taskId: string; caldavUID: string; sourceFile: string }>> {
     const createdMappings: Array<{ taskId: string; caldavUID: string; sourceFile: string }> = [];
@@ -73,7 +68,7 @@ export class ObsidianAdapter {
           }
 
           case 'update': {
-            const existingTask = tasksById.get(change.task.uid)
+            const existingTask = this.tasksById.get(change.task.uid)
               ?? wrapper.findTaskById(change.task.uid);
             if (!existingTask) continue;
 
@@ -101,12 +96,11 @@ export class ObsidianAdapter {
    */
   async writeBackIds(
     obsidianTasks: CommonTask[],
-    tasksById: Map<string, ObsidianTask>,
     wrapper: ObsidianTasksWrapper,
     settings: { syncTag?: string },
   ): Promise<void> {
     for (const task of obsidianTasks) {
-      const original = tasksById.get(task.uid);
+      const original = this.tasksById.get(task.uid);
       if (!original) continue;
       // Only write back if the original task had no ID
       if (wrapper.extractId(original)) continue;
@@ -118,5 +112,13 @@ export class ObsidianAdapter {
         console.error(`[ObsidianAdapter] Failed to write back ID for task ${task.uid}:`, error);
       }
     }
+  }
+
+  /**
+   * Look up the original ObsidianTask by its assigned ID.
+   * Used by SyncEngine for mapping resolution after sync.
+   */
+  findOriginalTask(uid: string): ObsidianTask | undefined {
+    return this.tasksById.get(uid);
   }
 }

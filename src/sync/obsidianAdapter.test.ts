@@ -27,57 +27,74 @@ function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
 }
 
 describe('ObsidianAdapter', () => {
-  const adapter = new ObsidianAdapter();
+  const extractId = (task: ObsidianTask): string | null => task.id || null;
 
   describe('normalize', () => {
-    const extractId = (task: ObsidianTask): string | null => task.id || null;
-
     it('should map inputs to CommonTask[] using existing IDs', () => {
+      const adapter = new ObsidianAdapter();
       const inputs = [
         withBody(makeTask({ description: 'Task 1', id: 'id-1' })),
         withBody(makeTask({ description: 'Task 2', id: 'id-2' })),
       ];
 
-      const { tasks } = adapter.normalize(inputs, extractId);
+      const tasks = adapter.normalize(inputs, extractId);
       expect(tasks).toHaveLength(2);
       expect(tasks[0].uid).toBe('id-1');
       expect(tasks[1].uid).toBe('id-2');
     });
 
     it('should generate IDs for tasks without existing IDs', () => {
+      const adapter = new ObsidianAdapter();
       const inputs = [
         withBody(makeTask({ id: '' })),
       ];
 
-      const { tasks, tasksById } = adapter.normalize(inputs, extractId);
-      // Should have generated an ID
+      const tasks = adapter.normalize(inputs, extractId);
       expect(tasks[0].uid).toBeTruthy();
       expect(tasks[0].uid.length).toBeGreaterThan(0);
-      expect(tasksById.get(tasks[0].uid)).toBe(inputs[0].task);
     });
 
     it('should include body from task inputs', () => {
+      const adapter = new ObsidianAdapter();
       const inputs = [
         { task: makeTask({ id: 'task-1' }), body: 'Some body' },
       ];
-      const { tasks } = adapter.normalize(inputs, extractId);
+      const tasks = adapter.normalize(inputs, extractId);
       expect(tasks[0].body).toBe('Some body');
     });
 
     it('should default to empty body', () => {
+      const adapter = new ObsidianAdapter();
       const inputs = [
         withBody(makeTask({ id: 'task-1' })),
       ];
-      const { tasks } = adapter.normalize(inputs, extractId);
+      const tasks = adapter.normalize(inputs, extractId);
       expect(tasks[0].body).toBe('');
     });
+  });
 
-    it('should build tasksById map', () => {
+  describe('findOriginalTask', () => {
+    it('should return the original ObsidianTask after normalize', () => {
+      const adapter = new ObsidianAdapter();
       const task = makeTask({ description: 'Test', id: 'my-id' });
-      const inputs = [{ task, body: '' }];
+      adapter.normalize([{ task, body: '' }], extractId);
 
-      const { tasksById } = adapter.normalize(inputs, extractId);
-      expect(tasksById.get('my-id')).toBe(task);
+      expect(adapter.findOriginalTask('my-id')).toBe(task);
+    });
+
+    it('should return undefined for unknown IDs', () => {
+      const adapter = new ObsidianAdapter();
+      adapter.normalize([], extractId);
+
+      expect(adapter.findOriginalTask('unknown')).toBeUndefined();
+    });
+
+    it('should find tasks with generated IDs', () => {
+      const adapter = new ObsidianAdapter();
+      const task = makeTask({ id: '' });
+      const tasks = adapter.normalize([withBody(task)], extractId);
+
+      expect(adapter.findOriginalTask(tasks[0].uid)).toBe(task);
     });
   });
 });

@@ -313,6 +313,65 @@ export class ObsidianTasksWrapper {
     }
 
     /**
+     * Get all tasks paired with their body text extracted from vault files.
+     * Groups tasks by file to avoid re-reading the same file multiple times.
+     */
+    async getAllTasksWithBody(): Promise<TaskWithBody[]> {
+        return this.loadBodies(this.getAllTasks());
+    }
+
+    /**
+     * Pair tasks with their body text by reading vault files.
+     * Groups tasks by file to avoid re-reading the same file multiple times.
+     */
+    private async loadBodies(tasks: ObsidianTask[]): Promise<TaskWithBody[]> {
+        const result: TaskWithBody[] = [];
+
+        const tasksByFile = new Map<string, ObsidianTask[]>();
+        for (const task of tasks) {
+            const filePath = task.taskLocation._tasksFile._path;
+            if (!tasksByFile.has(filePath)) {
+                tasksByFile.set(filePath, []);
+            }
+            tasksByFile.get(filePath)!.push(task);
+        }
+
+        for (const [filePath, fileTasks] of tasksByFile) {
+            try {
+                const file = this.app.vault.getAbstractFileByPath(filePath);
+                if (!file || !(file instanceof TFile)) {
+                    for (const task of fileTasks) {
+                        result.push({ task, body: '' });
+                    }
+                    continue;
+                }
+                const content = await this.app.vault.read(file);
+                const lines = content.split('\n');
+
+                for (const task of fileTasks) {
+                    const lineIndex = lines.findIndex(
+                        line => line.trim() === task.originalMarkdown.trim()
+                    );
+                    if (lineIndex === -1) {
+                        result.push({ task, body: '' });
+                        continue;
+                    }
+
+                    const body = this.extractBodyFromFile(content, lineIndex);
+                    result.push({ task, body });
+                }
+            } catch (error) {
+                console.error(`[ObsidianTasksWrapper] Failed to read file for body: ${filePath}`, error);
+                for (const task of fileTasks) {
+                    result.push({ task, body: '' });
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Filter task inputs by sync tag.
      * Keeps only tasks whose tags include the given sync tag (case-insensitive).
      * Returns all inputs when syncTag is empty or undefined.

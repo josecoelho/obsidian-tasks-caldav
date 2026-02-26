@@ -10,10 +10,10 @@ export interface CalendarObject {
 import { CommonTask } from '../sync/types';
 
 /** Fields returned by vtodoToTask — everything except uid, which is extracted separately */
-export type VTODOTaskFields = Omit<CommonTask, 'uid'>;
+type VTODOTaskFields = Omit<CommonTask, 'uid'>;
 
 /**
- * Maps between Obsidian tasks and CalDAV VTODO objects
+ * Maps between CommonTask fields and CalDAV VTODO iCalendar format.
  */
 export class VTODOMapper {
   /**
