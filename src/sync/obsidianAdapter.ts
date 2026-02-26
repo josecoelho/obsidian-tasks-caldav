@@ -1,12 +1,10 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from './types';
-import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
+import { ObsidianTask, TaskWithBody } from '../tasks/obsidianTasksWrapper';
 import { generateTaskId } from '../utils/taskIdGenerator';
 
-export interface TaskWithBody {
-  task: ObsidianTask;
-  body: string;
-}
+// Re-export for backwards compatibility
+export type { TaskWithBody } from '../tasks/obsidianTasksWrapper';
 
 export interface NormalizeResult {
   tasks: CommonTask[];

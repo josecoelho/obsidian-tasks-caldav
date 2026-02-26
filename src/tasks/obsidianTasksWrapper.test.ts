@@ -1,5 +1,6 @@
-import { ObsidianTasksWrapper, ObsidianTask } from './obsidianTasksWrapper';
+import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from './obsidianTasksWrapper';
 import { App, TFile } from 'obsidian';
+import { CommonTask } from '../sync/types';
 
 // Mock TFile class
 class MockTFile extends TFile {
@@ -685,6 +686,201 @@ More content`;
                 line.trim() === '- [ ] Task without ID #sync'
             );
             expect(tasksWithoutId).toHaveLength(0);
+        });
+    });
+
+    describe('filterByTag', () => {
+        function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
+            return { task, body };
+        }
+
+        it('should filter tasks by sync tag', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ description: 'Task 1', tags: ['#sync'] })),
+                withBody(createMockTask({ description: 'Task 2', tags: ['#work'] })),
+                withBody(createMockTask({ description: 'Task 3', tags: ['#sync', '#work'] })),
+            ];
+
+            const result = wrapper.filterByTag(inputs, 'sync');
+            expect(result).toHaveLength(2);
+            expect(result[0].task.description).toBe('Task 1');
+            expect(result[1].task.description).toBe('Task 3');
+        });
+
+        it('should return all tasks when syncTag is empty', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: ['#work'] })),
+                withBody(createMockTask({ tags: [] })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, '')).toHaveLength(2);
+            expect(wrapper.filterByTag(inputs, undefined)).toHaveLength(2);
+        });
+
+        it('should handle case-insensitive tag matching', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: ['#SYNC'] })),
+                withBody(createMockTask({ tags: ['#Sync'] })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(2);
+        });
+
+        it('should handle syncTag with # prefix', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: ['#sync'] })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(1);
+        });
+
+        it('should exclude tasks with no tags', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: [] })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(0);
+        });
+    });
+
+    describe('extractBodyFromFile', () => {
+        it('should extract indented bullet lines below a task (4-space indent)', () => {
+            const content = '- [ ] Task\n    - Note one\n    - Note two\nNext line';
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('Note one\nNote two');
+        });
+
+        it('should extract with 2-space indent', () => {
+            const content = '- [ ] Task\n  - Note one\n  - Note two';
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('Note one\nNote two');
+        });
+
+        it('should extract with tab indent', () => {
+            const content = '- [ ] Task\n\t- Note one\n\t- Note two';
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('Note one\nNote two');
+        });
+
+        it('should stop at non-indented line', () => {
+            const content = '- [ ] Task\n    - Note one\nNot a note\n    - Not included';
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('Note one');
+        });
+
+        it('should return empty string when no body', () => {
+            const content = '- [ ] Task\n- [ ] Next task';
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('');
+        });
+
+        it('should handle task in middle of file', () => {
+            const content = '# Header\n- [ ] First task\n- [ ] Target task\n    - Note for target\n- [ ] Other task';
+            expect(wrapper.extractBodyFromFile(content, 2)).toBe('Note for target');
+        });
+    });
+
+    describe('extractId', () => {
+        it('should return task.id when present', () => {
+            const task = createMockTask({ id: 'from-field' });
+            expect(wrapper.extractId(task)).toBe('from-field');
+        });
+
+        it('should return null when task.id is empty', () => {
+            const task = createMockTask({ id: '' });
+            expect(wrapper.extractId(task)).toBeNull();
+        });
+    });
+
+    describe('buildMarkdown', () => {
+        function makeCommon(overrides: Partial<CommonTask> = {}): CommonTask {
+            return {
+                uid: 'test-id',
+                title: 'Test task',
+                status: 'TODO',
+                dueDate: null,
+                startDate: null,
+                scheduledDate: null,
+                completedDate: null,
+                priority: 'none',
+                tags: [],
+                recurrenceRule: '',
+                body: '',
+                ...overrides,
+            };
+        }
+
+        it('should create markdown with TODO status', () => {
+            expect(wrapper.buildMarkdown(makeCommon(), 'test-id', 'sync'))
+                .toBe('- [ ] Test task 🆔 test-id #sync');
+        });
+
+        it('should create markdown with DONE status', () => {
+            expect(wrapper.buildMarkdown(makeCommon({ status: 'DONE', title: 'Done task' }), 'test-id', 'sync'))
+                .toBe('- [x] Done task 🆔 test-id #sync');
+        });
+
+        it('should include all dates in correct order', () => {
+            const md = wrapper.buildMarkdown(makeCommon({
+                status: 'DONE',
+                title: 'Task',
+                dueDate: '2025-01-15',
+                startDate: '2025-01-08',
+                scheduledDate: '2025-01-10',
+                completedDate: '2025-01-12',
+            }), 'id', 'sync');
+
+            expect(md).toContain('🛫 2025-01-08');
+            expect(md).toContain('⏳ 2025-01-10');
+            expect(md).toContain('📅 2025-01-15');
+            expect(md).toContain('✅ 2025-01-12');
+            // Verify order
+            expect(md.indexOf('🛫')).toBeLessThan(md.indexOf('⏳'));
+            expect(md.indexOf('⏳')).toBeLessThan(md.indexOf('📅'));
+        });
+
+        it('should work without sync tag', () => {
+            const md = wrapper.buildMarkdown(makeCommon({ title: 'No tag' }), 'id', '');
+            expect(md).toBe('- [ ] No tag 🆔 id');
+        });
+
+        it('should add # prefix to tag if missing', () => {
+            const without = wrapper.buildMarkdown(makeCommon(), 'id', 'sync');
+            const with_ = wrapper.buildMarkdown(makeCommon(), 'id', '#sync');
+            expect(without).toContain('#sync');
+            expect(with_).toContain('#sync');
+        });
+
+        it('should include recurrence rule as human-readable text', () => {
+            const md = wrapper.buildMarkdown(makeCommon({
+                title: 'Recurring task',
+                dueDate: '2026-02-15',
+                recurrenceRule: 'FREQ=DAILY',
+            }), 'id', 'sync');
+            expect(md).toContain('🔁 every day');
+            expect(md).not.toContain('FREQ=DAILY');
+        });
+
+        it('should include weekly recurrence with day', () => {
+            const md = wrapper.buildMarkdown(makeCommon({
+                recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+            }), 'id', 'sync');
+            expect(md).toContain('🔁 every week on Monday');
+        });
+
+        it('should skip recurrence for unparseable RRULE', () => {
+            const md = wrapper.buildMarkdown(makeCommon({
+                recurrenceRule: 'INVALID_RRULE',
+            }), 'id', 'sync');
+            expect(md).not.toContain('🔁');
+        });
+
+        it('should append body as indented bullets', () => {
+            const md = wrapper.buildMarkdown(makeCommon({
+                title: 'Task with body',
+                body: 'First note\nSecond note',
+            }), 'id', 'sync');
+            expect(md).toBe('- [ ] Task with body 🆔 id #sync\n    - First note\n    - Second note');
+        });
+
+        it('should not append body lines when body is empty', () => {
+            const md = wrapper.buildMarkdown(makeCommon(), 'id', 'sync');
+            expect(md).not.toContain('\n');
         });
     });
 });

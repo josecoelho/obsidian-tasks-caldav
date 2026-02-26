@@ -1,4 +1,6 @@
 import { App, TFile } from 'obsidian';
+import { RRule } from 'rrule';
+import { CommonTask } from '../sync/types';
 import { extractTaskId } from '../utils/taskIdGenerator';
 
 /**
@@ -32,6 +34,11 @@ export interface ObsidianTask {
     cancelledDate: string | { format(fmt: string): string } | null;
     recurrence: { toText(): string } | null;
     id: string;
+}
+
+export interface TaskWithBody {
+    task: ObsidianTask;
+    body: string;
 }
 
 /**
@@ -313,5 +320,113 @@ export class ObsidianTasksWrapper {
         });
 
         return stats;
+    }
+
+    /**
+     * Filter task inputs by sync tag.
+     * Keeps only tasks whose tags include the given sync tag (case-insensitive).
+     * Returns all inputs when syncTag is empty or undefined.
+     */
+    filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
+        if (!syncTag || syncTag.trim() === '') return inputs;
+
+        const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        return inputs.filter(({ task }) => {
+            if (!task.tags || task.tags.length === 0) return false;
+            return task.tags.some((tag: string) =>
+                tag.toLowerCase().replace(/^#/, '') === tagLower
+            );
+        });
+    }
+
+    /**
+     * Extract indented bullet body from file content below a task line.
+     * Body lines match /^(?:\s{2,}|\t)- (.*)$/ immediately after the task.
+     * Returns joined lines with \n, or '' if no body found.
+     */
+    extractBodyFromFile(fileContent: string, taskLineIndex: number): string {
+        const lines = fileContent.split('\n');
+        const noteLines: string[] = [];
+
+        for (let i = taskLineIndex + 1; i < lines.length; i++) {
+            const match = lines[i].match(/^(?:\s{2,}|\t)- (.*)$/);
+            if (!match) break;
+            noteLines.push(match[1]);
+        }
+
+        return noteLines.join('\n');
+    }
+
+    /**
+     * Extract task ID from an obsidian-tasks Task.
+     * Only checks the task.id field populated by obsidian-tasks
+     * for both 🆔 and [id::] formats.
+     */
+    extractId(task: ObsidianTask): string | null {
+        if (task.id && task.id.length > 0) return task.id;
+        return null;
+    }
+
+    /**
+     * Generate obsidian-tasks markdown from a CommonTask (emoji format).
+     * This is the fallback serializer used when native obsidian-tasks
+     * serialization is unavailable.
+     */
+    buildMarkdown(task: CommonTask, taskId: string, syncTag?: string): string {
+        let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
+
+        line += task.title;
+
+        // Dates in obsidian-tasks order: start, scheduled, due, completed
+        if (task.startDate) {
+            line += ` 🛫 ${task.startDate}`;
+        }
+        if (task.scheduledDate) {
+            line += ` ⏳ ${task.scheduledDate}`;
+        }
+        if (task.dueDate) {
+            line += ` 📅 ${task.dueDate}`;
+        }
+        if (task.completedDate) {
+            line += ` ✅ ${task.completedDate}`;
+        }
+
+        // Recurrence rule in obsidian-tasks format
+        if (task.recurrenceRule) {
+            const text = this.rruleToText(task.recurrenceRule);
+            if (text) {
+                line += ` 🔁 ${text}`;
+            }
+        }
+
+        // Task ID in obsidian-tasks emoji format
+        line += ` 🆔 ${taskId}`;
+
+        // Sync tag after ID
+        if (syncTag && syncTag.trim() !== '') {
+            const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
+            line += ` ${tag}`;
+        }
+
+        // Body as indented bullet lines
+        if (task.body) {
+            const bodyLines = task.body.split('\n').map(l => `    - ${l}`);
+            line += '\n' + bodyLines.join('\n');
+        }
+
+        return line;
+    }
+
+    /**
+     * Convert an RRULE string (e.g. "FREQ=DAILY") to obsidian-tasks
+     * human-readable format (e.g. "every day").
+     */
+    private rruleToText(rruleStr: string): string {
+        try {
+            const rule = RRule.fromString(`RRULE:${rruleStr}`);
+            return rule.toText();
+        } catch {
+            return '';
+        }
     }
 }
