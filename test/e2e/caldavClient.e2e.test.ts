@@ -107,7 +107,7 @@ describe('VTODO CRUD round-trip', () => {
 
     const fetched = todos[0];
     const task = mapper.vtodoToTask(fetched);
-    expect(task.description).toBe('Buy groceries');
+    expect(task.title).toBe('Buy groceries');
     expect(task.status).toBe('TODO');
 
     // Update — mark completed
@@ -148,7 +148,7 @@ describe('VTODO with folded lines', () => {
     const todos = await client.fetchVTODOs();
     expect(todos.length).toBe(1);
     const task = mapper.vtodoToTask(todos[0]);
-    expect(task.description).toBe(longSummary);
+    expect(task.title).toBe(longSummary);
   });
 });
 
@@ -196,7 +196,7 @@ describe('VTODO with VTIMEZONE and TZID dates', () => {
     expect(todos.length).toBe(1);
 
     const task = mapper.vtodoToTask(todos[0]);
-    expect(task.description).toBe('Meeting prep');
+    expect(task.title).toBe('Meeting prep');
     expect(task.dueDate).toBe('2025-06-15');
     expect(task.startDate).toBe('2025-06-15');
   });
@@ -219,7 +219,7 @@ describe('VTODO with recurrence', () => {
     expect(todos.length).toBe(1);
 
     const task = mapper.vtodoToTask(todos[0]);
-    expect(task.description).toBe('Daily standup');
+    expect(task.title).toBe('Daily standup');
     expect(task.recurrenceRule).toBe('FREQ=DAILY;COUNT=30');
     expect(task.dueDate).toBe('2025-07-01');
   });

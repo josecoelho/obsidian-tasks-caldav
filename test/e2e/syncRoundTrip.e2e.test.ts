@@ -1,6 +1,6 @@
 import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
-import { ObsidianAdapter } from '../../src/sync/obsidianAdapter';
+import { ObsidianMapper } from '../../src/tasks/obsidianMapper';
 import { diff } from '../../src/sync/diff';
 import { CommonTask } from '../../src/sync/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
@@ -8,7 +8,7 @@ import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
 
 const httpClient = new FetchHttpClient();
 const caldavAdapter = new CalDAVAdapter();
-const obsidianAdapter = new ObsidianAdapter();
+const obsidianMapper = new ObsidianMapper();
 
 let calendarName: string;
 let clean: () => Promise<void>;
@@ -258,8 +258,9 @@ describe('Sync round-trip E2E', () => {
     const tasks = caldavAdapter.normalize(vtodos, new Map());
     const task = tasks[0];
 
-    // Generate Obsidian markdown
-    const markdown = obsidianAdapter.toMarkdown(task, 'test-id-123', 'sync');
+    // Generate Obsidian markdown (mapper uses task.uid for 🆔)
+    const taskWithId = { ...task, uid: 'test-id-123' };
+    const markdown = obsidianMapper.toMarkdown(taskWithId, 'sync');
 
     expect(markdown).toContain('- [ ] Test markdown gen');
     expect(markdown).toContain('🆔 test-id-123');

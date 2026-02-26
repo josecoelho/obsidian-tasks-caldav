@@ -7,33 +7,22 @@ export interface CalendarObject {
   url: string;
 }
 
-/**
- * Represents an Obsidian task extracted from obsidian-tasks API
- */
-export interface ObsidianTask {
-  description: string;
-  status: string;
-  dueDate: string | null;
-  scheduledDate: string | null;
-  startDate: string | null;
-  completedDate: string | null;
-  priority: string;
-  recurrenceRule: string;
-  tags: string[];
-  body: string;
-}
+import { CommonTask } from '../sync/types';
+
+/** Fields returned by vtodoToTask — everything except uid, which is extracted separately */
+export type VTODOTaskFields = Omit<CommonTask, 'uid'>;
 
 /**
  * Maps between Obsidian tasks and CalDAV VTODO objects
  */
 export class VTODOMapper {
   /**
-   * Convert Obsidian task to VTODO iCalendar string
-   * @param task The Obsidian task
+   * Convert a CommonTask to VTODO iCalendar string.
+   * @param task The common task
    * @param uid The CalDAV UID (use for updates, generate new for creates)
    * @returns VTODO iCalendar string
    */
-  taskToVTODO(task: ObsidianTask, uid: string): string {
+  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
     const lines: string[] = [];
 
     lines.push('BEGIN:VCALENDAR');
@@ -43,7 +32,7 @@ export class VTODOMapper {
     lines.push(`UID:${uid}`);
     lines.push(`DTSTAMP:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
-    lines.push(`SUMMARY:${this.escapeText(task.description)}`);
+    lines.push(`SUMMARY:${this.escapeText(task.title)}`);
 
     // Description (body text)
     if (task.body) {
@@ -90,24 +79,23 @@ export class VTODOMapper {
   }
 
   /**
-   * Convert VTODO iCalendar object to Obsidian task
+   * Convert VTODO iCalendar object to CommonTask fields (minus uid).
    * @param vtodo The CalDAV calendar object containing VTODO
-   * @returns Obsidian task object
    */
-  vtodoToTask(vtodo: CalendarObject): ObsidianTask {
+  vtodoToTask(vtodo: CalendarObject): VTODOTaskFields {
     const unfolded = this.unfold(vtodo.data);
     // Extract only the VTODO section to avoid matching properties from VTIMEZONE or other components
     const vtodoMatch = unfolded.match(/BEGIN:VTODO[\s\S]*?END:VTODO/);
     const data = vtodoMatch ? vtodoMatch[0] : unfolded;
 
     return {
-      description: this.extractProperty(data, 'SUMMARY') || 'Untitled Task',
-      status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION'),
+      title: this.extractProperty(data, 'SUMMARY') || 'Untitled Task',
+      status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION') as CommonTask['status'],
       dueDate: this.extractDateProperty(data, 'DUE'),
       scheduledDate: null,
       startDate: this.extractDateProperty(data, 'DTSTART'),
       completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
-      priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0'),
+      priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0') as CommonTask['priority'],
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
       tags: this.extractCategories(data),
       body: this.extractRawProperty(data, 'DESCRIPTION') || '',

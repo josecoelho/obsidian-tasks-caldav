@@ -1,5 +1,5 @@
-import { CommonTask, TaskStatus, TaskPriority, SyncChange } from './types';
-import { VTODOMapper, CalendarObject, ObsidianTask } from '../caldav/vtodoMapper';
+import { CommonTask, SyncChange } from './types';
+import { VTODOMapper, CalendarObject } from '../caldav/vtodoMapper';
 import { CalDAVClient } from '../caldav/calDAVClientDirect';
 
 export class CalDAVAdapter {
@@ -36,17 +36,10 @@ export class CalDAVAdapter {
     const parsed = this.mapper.vtodoToTask(vtodo);
 
     return {
+      ...parsed,
       uid,
-      title: parsed.description,
-      status: parsed.status as TaskStatus,
-      dueDate: parsed.dueDate,
-      startDate: parsed.startDate,
-      scheduledDate: parsed.scheduledDate,
+      // Truncate completedDate to date-only (vtodo returns full datetime)
       completedDate: parsed.completedDate ? parsed.completedDate.split('T')[0] : null,
-      priority: parsed.priority as TaskPriority,
-      tags: parsed.tags,
-      recurrenceRule: parsed.recurrenceRule,
-      body: parsed.body,
     };
   }
 
@@ -54,20 +47,7 @@ export class CalDAVAdapter {
    * Convert a CommonTask back to a VTODO iCal string.
    */
   fromCommonTask(task: CommonTask, caldavUID: string): string {
-    const obsidianTask: ObsidianTask = {
-      description: task.title,
-      status: task.status,
-      dueDate: task.dueDate,
-      startDate: task.startDate,
-      scheduledDate: task.scheduledDate,
-      completedDate: task.completedDate,
-      priority: task.priority,
-      tags: task.tags,
-      recurrenceRule: task.recurrenceRule,
-      body: task.body,
-    };
-
-    return this.mapper.taskToVTODO(obsidianTask, caldavUID);
+    return this.mapper.taskToVTODO(task, caldavUID);
   }
 
   /**

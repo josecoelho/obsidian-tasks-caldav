@@ -86,20 +86,6 @@ const mockFilterByTag = jest.fn().mockImplementation(
 );
 const mockExtractId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
 const mockExtractBodyFromFile = jest.fn().mockReturnValue('');
-const mockToMarkdown = jest.fn().mockImplementation(
-  (task: CommonTask, taskId: string, syncTag?: string) => {
-    let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
-    line += task.title;
-    if (task.dueDate) line += ` 📅 ${task.dueDate}`;
-    if (task.completedDate) line += ` ✅ ${task.completedDate}`;
-    line += ` 🆔 ${taskId}`;
-    if (syncTag && syncTag.trim() !== '') {
-      const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-      line += ` ${tag}`;
-    }
-    return line;
-  },
-);
 
 jest.mock('../tasks/obsidianTasksWrapper', () => ({
   ObsidianTasksWrapper: jest.fn().mockImplementation(() => ({
@@ -112,7 +98,6 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
     filterByTag: mockFilterByTag,
     extractId: mockExtractId,
     extractBodyFromFile: mockExtractBodyFromFile,
-    toMarkdown: mockToMarkdown,
   })),
 }));
 
@@ -184,20 +169,6 @@ describe('SyncEngine', () => {
     );
     mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
     mockExtractBodyFromFile.mockReturnValue('');
-    mockToMarkdown.mockImplementation(
-      (task: CommonTask, taskId: string, syncTag?: string) => {
-        let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
-        line += task.title;
-        if (task.dueDate) line += ` 📅 ${task.dueDate}`;
-        if (task.completedDate) line += ` ✅ ${task.completedDate}`;
-        line += ` 🆔 ${taskId}`;
-        if (syncTag && syncTag.trim() !== '') {
-          const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-          line += ` ${tag}`;
-        }
-        return line;
-      },
-    );
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
     mockCreateVTODO.mockResolvedValue(undefined);
@@ -1002,20 +973,6 @@ describe('SyncEngine', () => {
       );
       mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
       mockExtractBodyFromFile.mockReturnValue('');
-      mockToMarkdown.mockImplementation(
-        (task: CommonTask, taskId: string, syncTag?: string) => {
-          let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
-          line += task.title;
-          if (task.dueDate) line += ` 📅 ${task.dueDate}`;
-          if (task.completedDate) line += ` ✅ ${task.completedDate}`;
-          line += ` 🆔 ${taskId}`;
-          if (syncTag && syncTag.trim() !== '') {
-            const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-            line += ` ${tag}`;
-          }
-          return line;
-        },
-      );
 
       // Obsidian still has the same task
       mockGetAllTasks.mockReturnValue([taskA]);
