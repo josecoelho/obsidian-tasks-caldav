@@ -135,14 +135,14 @@ describe('ObsidianTasksWrapper', () => {
     });
 
     describe('taskHasId', () => {
-        it('should return true if task has obsidian-tasks id field', () => {
+        it('should return true if task has id field', () => {
             const task = createMockTask({ id: 'abc123' });
             expect(wrapper.taskHasId(task)).toBe(true);
         });
 
-        it('should return true if task has [id::xxx] in markdown', () => {
+        it('should return true when obsidian-tasks parses [id::xxx] into task.id', () => {
             const task = createMockTask({
-                id: '',
+                id: '20251106-abc',
                 originalMarkdown: '- [ ] Task [id::20251106-abc]'
             });
             expect(wrapper.taskHasId(task)).toBe(true);
@@ -155,31 +155,15 @@ describe('ObsidianTasksWrapper', () => {
             });
             expect(wrapper.taskHasId(task)).toBe(false);
         });
-
-        it('should prefer obsidian-tasks id field over markdown', () => {
-            const task = createMockTask({
-                id: 'obsidian-id',
-                originalMarkdown: '- [ ] Task [id::markdown-id]'
-            });
-            expect(wrapper.taskHasId(task)).toBe(true);
-        });
     });
 
     describe('getTaskId', () => {
-        it('should return obsidian-tasks id if present', () => {
+        it('should return task.id if present', () => {
             const task = createMockTask({ id: 'abc123' });
             expect(wrapper.getTaskId(task)).toBe('abc123');
         });
 
-        it('should extract id from markdown if obsidian-tasks id is empty', () => {
-            const task = createMockTask({
-                id: '',
-                originalMarkdown: '- [ ] Task [id::20251106-abc]'
-            });
-            expect(wrapper.getTaskId(task)).toBe('20251106-abc');
-        });
-
-        it('should return null if no ID found', () => {
+        it('should return null if task.id is empty', () => {
             const task = createMockTask({
                 id: '',
                 originalMarkdown: '- [ ] Task without ID'
@@ -187,12 +171,12 @@ describe('ObsidianTasksWrapper', () => {
             expect(wrapper.getTaskId(task)).toBeNull();
         });
 
-        it('should prefer obsidian-tasks id over markdown id', () => {
+        it('should return task.id when obsidian-tasks parses [id::xxx]', () => {
             const task = createMockTask({
-                id: 'obsidian-id',
-                originalMarkdown: '- [ ] Task [id::markdown-id]'
+                id: '20251106-abc',
+                originalMarkdown: '- [ ] Task [id::20251106-abc]'
             });
-            expect(wrapper.getTaskId(task)).toBe('obsidian-id');
+            expect(wrapper.getTaskId(task)).toBe('20251106-abc');
         });
     });
 
@@ -217,11 +201,11 @@ describe('ObsidianTasksWrapper', () => {
             expect(found?.description).toBe('Second task');
         });
 
-        it('should find task by markdown id', () => {
+        it('should find task by task.id field (obsidian-tasks parses [id::xxx])', () => {
             const task1 = createMockTask({
-                id: '',
+                id: 'abc-123',
                 originalMarkdown: '- [ ] Task [id::abc-123]',
-                description: 'Task with markdown ID'
+                description: 'Task with ID'
             });
             const task2 = createMockTask({ id: 'other-id', description: 'Other task' });
 
@@ -230,7 +214,7 @@ describe('ObsidianTasksWrapper', () => {
 
             const found = wrapper.findTaskById('abc-123');
             expect(found).toBe(task1);
-            expect(found?.description).toBe('Task with markdown ID');
+            expect(found?.description).toBe('Task with ID');
         });
 
         it('should return null if task not found', () => {
@@ -256,7 +240,7 @@ describe('ObsidianTasksWrapper', () => {
         it('should calculate correct statistics', () => {
             const tasks: ObsidianTask[] = [
                 createMockTask({ isDone: false, originalMarkdown: '- [ ] Task 1' }),
-                createMockTask({ isDone: false, originalMarkdown: '- [ ] Task 2 [id::abc]' }),
+                createMockTask({ isDone: false, id: 'abc', originalMarkdown: '- [ ] Task 2 [id::abc]' }),
                 createMockTask({ isDone: true, originalMarkdown: '- [x] Task 3' }),
                 createMockTask({ isDone: true, id: 'xyz', originalMarkdown: '- [x] Task 4' })
             ];
@@ -283,7 +267,7 @@ describe('ObsidianTasksWrapper', () => {
         it('should handle all tasks with IDs', () => {
             const tasks: ObsidianTask[] = [
                 createMockTask({ id: 'abc' }),
-                createMockTask({ originalMarkdown: '- [ ] Task [id::xyz]' })
+                createMockTask({ id: 'xyz', originalMarkdown: '- [ ] Task [id::xyz]' })
             ];
 
             const stats = wrapper.getTaskStats(tasks);
@@ -783,6 +767,137 @@ More content`;
         it('should return null when task.id is empty', () => {
             const task = createMockTask({ id: '' });
             expect(wrapper.extractId(task)).toBeNull();
+        });
+    });
+
+    describe('toMarkdown', () => {
+        it('should create markdown with TODO status', () => {
+            const task = {
+                uid: 'test-id', title: 'Test task', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            expect(wrapper.toMarkdown(task, 'test-id', 'sync'))
+                .toBe('- [ ] Test task 🆔 test-id #sync');
+        });
+
+        it('should create markdown with DONE status', () => {
+            const task = {
+                uid: 'test-id', title: 'Done task', status: 'DONE' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            expect(wrapper.toMarkdown(task, 'test-id', 'sync'))
+                .toBe('- [x] Done task 🆔 test-id #sync');
+        });
+
+        it('should include all dates in correct order', () => {
+            const task = {
+                uid: 'id', title: 'Task', status: 'DONE' as const,
+                dueDate: '2025-01-15', startDate: '2025-01-08',
+                scheduledDate: '2025-01-10', completedDate: '2025-01-12',
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).toContain('🛫 2025-01-08');
+            expect(md).toContain('⏳ 2025-01-10');
+            expect(md).toContain('📅 2025-01-15');
+            expect(md).toContain('✅ 2025-01-12');
+            const startIdx = md.indexOf('🛫');
+            const schedIdx = md.indexOf('⏳');
+            const dueIdx = md.indexOf('📅');
+            expect(startIdx).toBeLessThan(schedIdx);
+            expect(schedIdx).toBeLessThan(dueIdx);
+        });
+
+        it('should work without sync tag', () => {
+            const task = {
+                uid: 'id', title: 'No tag', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', '');
+            expect(md).toBe('- [ ] No tag 🆔 id');
+            expect(md).not.toContain('#');
+        });
+
+        it('should add # prefix to tag if missing', () => {
+            const task = {
+                uid: 'id', title: 'Task', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            const without = wrapper.toMarkdown(task, 'id', 'sync');
+            const with_ = wrapper.toMarkdown(task, 'id', '#sync');
+            expect(without).toContain('#sync');
+            expect(with_).toContain('#sync');
+        });
+
+        it('should include recurrence rule as human-readable text', () => {
+            const task = {
+                uid: 'id', title: 'Recurring task', status: 'TODO' as const,
+                dueDate: '2026-02-15', startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: 'FREQ=DAILY', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).toContain('🔁 every day');
+            expect(md).not.toContain('FREQ=DAILY');
+        });
+
+        it('should include weekly recurrence with day', () => {
+            const task = {
+                uid: 'id', title: 'Weekly task', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).toContain('🔁 every week on Monday');
+        });
+
+        it('should place recurrence before ID and tag', () => {
+            const task = {
+                uid: 'id', title: 'Task', status: 'TODO' as const,
+                dueDate: '2026-02-15', startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: 'FREQ=DAILY', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            const recIdx = md.indexOf('🔁');
+            const idIdx = md.indexOf('🆔');
+            const tagIdx = md.indexOf('#sync');
+            expect(recIdx).toBeLessThan(idIdx);
+            expect(idIdx).toBeLessThan(tagIdx);
+        });
+
+        it('should skip recurrence for unparseable RRULE', () => {
+            const task = {
+                uid: 'id', title: 'Task', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: 'INVALID_RRULE', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).not.toContain('🔁');
+        });
+
+        it('should append body as indented bullets', () => {
+            const task = {
+                uid: 'id', title: 'Task with body', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '',
+                body: 'First note\nSecond note',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).toBe('- [ ] Task with body 🆔 id #sync\n    - First note\n    - Second note');
+        });
+
+        it('should not append body lines when body is empty', () => {
+            const task = {
+                uid: 'id', title: 'Task', status: 'TODO' as const,
+                dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+                priority: 'none' as const, tags: [], recurrenceRule: '', body: '',
+            };
+            const md = wrapper.toMarkdown(task, 'id', 'sync');
+            expect(md).toBe('- [ ] Task 🆔 id #sync');
+            expect(md).not.toContain('\n');
         });
     });
 

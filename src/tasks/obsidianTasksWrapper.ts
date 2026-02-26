@@ -1,5 +1,4 @@
 import { App, TFile } from 'obsidian';
-import { extractTaskId } from '../utils/taskIdGenerator';
 
 /**
  * Represents a task from obsidian-tasks plugin
@@ -151,30 +150,19 @@ export class ObsidianTasksWrapper {
     }
 
     /**
-     * Check if a task has an ID
+     * Check if a task has an ID.
+     * obsidian-tasks parses both 🆔 and [id::xxx] into task.id.
      */
     taskHasId(task: ObsidianTask): boolean {
-        // Check obsidian-tasks id field
-        if (task.id && task.id.length > 0) {
-            return true;
-        }
-
-        // Check for [id::xxx] in markdown
-        const id = extractTaskId(task.originalMarkdown);
-        return id !== null;
+        return !!task.id && task.id.length > 0;
     }
 
     /**
-     * Get task ID from task
+     * Get task ID from task.
+     * obsidian-tasks parses both 🆔 and [id::xxx] into task.id.
      */
     getTaskId(task: ObsidianTask): string | null {
-        // Check obsidian-tasks id field first
-        if (task.id && task.id.length > 0) {
-            return task.id;
-        }
-
-        // Extract from markdown
-        return extractTaskId(task.originalMarkdown);
+        return task.id && task.id.length > 0 ? task.id : null;
     }
 
     /**

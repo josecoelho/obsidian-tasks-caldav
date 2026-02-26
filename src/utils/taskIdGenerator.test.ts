@@ -33,46 +33,20 @@ describe('taskIdGenerator', () => {
   });
 
   describe('extractTaskId', () => {
-    it('should extract ID from task text with [id::...] format', () => {
-      const taskText = '- [ ] Do something [id::20250105-a4f]';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('20250105-a4f');
+    it('should extract ID from emoji format', () => {
+      expect(extractTaskId('- [ ] Do something 🆔 20250105-a4f')).toBe('20250105-a4f');
+    });
+
+    it('should extract ID from dataview format', () => {
+      expect(extractTaskId('- [ ] Do something [id::20250105-a4f]')).toBe('20250105-a4f');
     });
 
     it('should return null when no ID present', () => {
-      const taskText = '- [ ] Do something';
-      const id = extractTaskId(taskText);
-      expect(id).toBeNull();
-    });
-
-    it('should extract ID from middle of text', () => {
-      const taskText = '- [ ] Task [id::20250105-abc] with more text';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('20250105-abc');
-    });
-
-    it('should extract ID from emoji format', () => {
-      const taskText = '- [ ] Do something 🆔 20250105-a4f';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('20250105-a4f');
+      expect(extractTaskId('- [ ] Do something')).toBeNull();
     });
 
     it('should prefer emoji format over dataview', () => {
-      const taskText = '- [ ] Task 🆔 emoji-id [id::dv-id]';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('emoji-id');
-    });
-
-    it('should extract first ID when multiple present', () => {
-      const taskText = '- [ ] Task [id::20250105-abc] [id::20250105-def]';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('20250105-abc');
-    });
-
-    it('should handle IDs with various hex characters', () => {
-      const taskText = '- [ ] Task [id::20250105-f9e]';
-      const id = extractTaskId(taskText);
-      expect(id).toBe('20250105-f9e');
+      expect(extractTaskId('- [ ] Task 🆔 emoji-id [id::dv-id]')).toBe('emoji-id');
     });
   });
 

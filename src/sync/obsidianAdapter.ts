@@ -213,6 +213,16 @@ export class ObsidianAdapter {
   }
 
   /**
+   * Format obsidian-tasks date (moment-like with .format()) to YYYY-MM-DD string.
+   */
+  private formatDate(date: string | { format(fmt: string): string } | null | undefined): string | null {
+    if (!date) return null;
+    if (typeof date === 'string') return date;
+    if (typeof date.format === 'function') return date.format('YYYY-MM-DD');
+    return null;
+  }
+
+  /**
    * Convert an RRULE string (e.g. "FREQ=DAILY") to obsidian-tasks
    * human-readable format (e.g. "every day").
    */
@@ -223,16 +233,6 @@ export class ObsidianAdapter {
     } catch {
       return '';
     }
-  }
-
-  /**
-   * Format obsidian-tasks date (moment-like with .format()) to YYYY-MM-DD string.
-   */
-  private formatDate(date: string | { format(fmt: string): string } | null | undefined): string | null {
-    if (!date) return null;
-    if (typeof date === 'string') return date;
-    if (typeof date.format === 'function') return date.format('YYYY-MM-DD');
-    return null;
   }
 
 }

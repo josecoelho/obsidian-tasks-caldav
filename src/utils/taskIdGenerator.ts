@@ -28,8 +28,9 @@ export function generateTaskId(): string {
 }
 
 /**
- * Extract task ID from task text.
+ * Extract task ID from raw markdown text.
  * Supports emoji format (🆔 xxx) and Dataview format ([id::xxx]).
+ * Used for scanning file lines outside the obsidian-tasks cache.
  * @param taskText The full task text
  * @returns The task ID if found, null otherwise
  */

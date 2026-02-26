@@ -259,7 +259,7 @@ export class SyncEngine {
         switch (change.type) {
           case 'create': {
             const taskId = generateTaskId();
-            const markdown = this.obsidianAdapter.toMarkdown(
+            const markdown = this.wrapper.toMarkdown(
               change.task,
               taskId,
               this.settings.syncTag,
@@ -281,7 +281,7 @@ export class SyncEngine {
               ?? this.wrapper.findTaskById(change.task.uid);
             if (!existingTask) continue;
 
-            const markdown = this.obsidianAdapter.toMarkdown(
+            const markdown = this.wrapper.toMarkdown(
               change.task,
               change.task.uid,
               this.settings.syncTag,
@@ -400,7 +400,7 @@ export class SyncEngine {
       if (this.wrapper.extractId(original)) continue;
 
       try {
-        const markdown = this.obsidianAdapter.toMarkdown(
+        const markdown = this.wrapper.toMarkdown(
           task,
           task.uid,
           this.settings.syncTag,
