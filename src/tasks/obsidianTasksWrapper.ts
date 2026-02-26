@@ -1,6 +1,4 @@
 import { App, TFile } from 'obsidian';
-import { RRule } from 'rrule';
-import { CommonTask } from '../sync/types';
 import { extractTaskId } from '../utils/taskIdGenerator';
 
 /**
@@ -367,66 +365,4 @@ export class ObsidianTasksWrapper {
         return null;
     }
 
-    /**
-     * Generate obsidian-tasks markdown from a CommonTask (emoji format).
-     * This is the fallback serializer used when native obsidian-tasks
-     * serialization is unavailable.
-     */
-    buildMarkdown(task: CommonTask, taskId: string, syncTag?: string): string {
-        let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
-
-        line += task.title;
-
-        // Dates in obsidian-tasks order: start, scheduled, due, completed
-        if (task.startDate) {
-            line += ` 🛫 ${task.startDate}`;
-        }
-        if (task.scheduledDate) {
-            line += ` ⏳ ${task.scheduledDate}`;
-        }
-        if (task.dueDate) {
-            line += ` 📅 ${task.dueDate}`;
-        }
-        if (task.completedDate) {
-            line += ` ✅ ${task.completedDate}`;
-        }
-
-        // Recurrence rule in obsidian-tasks format
-        if (task.recurrenceRule) {
-            const text = this.rruleToText(task.recurrenceRule);
-            if (text) {
-                line += ` 🔁 ${text}`;
-            }
-        }
-
-        // Task ID in obsidian-tasks emoji format
-        line += ` 🆔 ${taskId}`;
-
-        // Sync tag after ID
-        if (syncTag && syncTag.trim() !== '') {
-            const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-            line += ` ${tag}`;
-        }
-
-        // Body as indented bullet lines
-        if (task.body) {
-            const bodyLines = task.body.split('\n').map(l => `    - ${l}`);
-            line += '\n' + bodyLines.join('\n');
-        }
-
-        return line;
-    }
-
-    /**
-     * Convert an RRULE string (e.g. "FREQ=DAILY") to obsidian-tasks
-     * human-readable format (e.g. "every day").
-     */
-    private rruleToText(rruleStr: string): string {
-        try {
-            const rule = RRule.fromString(`RRULE:${rruleStr}`);
-            return rule.toText();
-        } catch {
-            return '';
-        }
-    }
 }

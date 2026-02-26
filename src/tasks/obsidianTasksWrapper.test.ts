@@ -1,6 +1,5 @@
 import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from './obsidianTasksWrapper';
 import { App, TFile } from 'obsidian';
-import { CommonTask } from '../sync/types';
 
 // Mock TFile class
 class MockTFile extends TFile {
@@ -787,100 +786,5 @@ More content`;
         });
     });
 
-    describe('buildMarkdown', () => {
-        function makeCommon(overrides: Partial<CommonTask> = {}): CommonTask {
-            return {
-                uid: 'test-id',
-                title: 'Test task',
-                status: 'TODO',
-                dueDate: null,
-                startDate: null,
-                scheduledDate: null,
-                completedDate: null,
-                priority: 'none',
-                tags: [],
-                recurrenceRule: '',
-                body: '',
-                ...overrides,
-            };
-        }
-
-        it('should create markdown with TODO status', () => {
-            expect(wrapper.buildMarkdown(makeCommon(), 'test-id', 'sync'))
-                .toBe('- [ ] Test task 🆔 test-id #sync');
-        });
-
-        it('should create markdown with DONE status', () => {
-            expect(wrapper.buildMarkdown(makeCommon({ status: 'DONE', title: 'Done task' }), 'test-id', 'sync'))
-                .toBe('- [x] Done task 🆔 test-id #sync');
-        });
-
-        it('should include all dates in correct order', () => {
-            const md = wrapper.buildMarkdown(makeCommon({
-                status: 'DONE',
-                title: 'Task',
-                dueDate: '2025-01-15',
-                startDate: '2025-01-08',
-                scheduledDate: '2025-01-10',
-                completedDate: '2025-01-12',
-            }), 'id', 'sync');
-
-            expect(md).toContain('🛫 2025-01-08');
-            expect(md).toContain('⏳ 2025-01-10');
-            expect(md).toContain('📅 2025-01-15');
-            expect(md).toContain('✅ 2025-01-12');
-            // Verify order
-            expect(md.indexOf('🛫')).toBeLessThan(md.indexOf('⏳'));
-            expect(md.indexOf('⏳')).toBeLessThan(md.indexOf('📅'));
-        });
-
-        it('should work without sync tag', () => {
-            const md = wrapper.buildMarkdown(makeCommon({ title: 'No tag' }), 'id', '');
-            expect(md).toBe('- [ ] No tag 🆔 id');
-        });
-
-        it('should add # prefix to tag if missing', () => {
-            const without = wrapper.buildMarkdown(makeCommon(), 'id', 'sync');
-            const with_ = wrapper.buildMarkdown(makeCommon(), 'id', '#sync');
-            expect(without).toContain('#sync');
-            expect(with_).toContain('#sync');
-        });
-
-        it('should include recurrence rule as human-readable text', () => {
-            const md = wrapper.buildMarkdown(makeCommon({
-                title: 'Recurring task',
-                dueDate: '2026-02-15',
-                recurrenceRule: 'FREQ=DAILY',
-            }), 'id', 'sync');
-            expect(md).toContain('🔁 every day');
-            expect(md).not.toContain('FREQ=DAILY');
-        });
-
-        it('should include weekly recurrence with day', () => {
-            const md = wrapper.buildMarkdown(makeCommon({
-                recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
-            }), 'id', 'sync');
-            expect(md).toContain('🔁 every week on Monday');
-        });
-
-        it('should skip recurrence for unparseable RRULE', () => {
-            const md = wrapper.buildMarkdown(makeCommon({
-                recurrenceRule: 'INVALID_RRULE',
-            }), 'id', 'sync');
-            expect(md).not.toContain('🔁');
-        });
-
-        it('should append body as indented bullets', () => {
-            const md = wrapper.buildMarkdown(makeCommon({
-                title: 'Task with body',
-                body: 'First note\nSecond note',
-            }), 'id', 'sync');
-            expect(md).toBe('- [ ] Task with body 🆔 id #sync\n    - First note\n    - Second note');
-        });
-
-        it('should not append body lines when body is empty', () => {
-            const md = wrapper.buildMarkdown(makeCommon(), 'id', 'sync');
-            expect(md).not.toContain('\n');
-        });
-    });
 });
+
