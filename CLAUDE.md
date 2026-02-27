@@ -31,6 +31,14 @@ This is an Obsidian community plugin that provides bidirectional sync between ob
   - Wrong: "Sync With CalDAV Now", "View Sync Status"
 - See Obsidian style guide: https://help.obsidian.md/style-guide
 
+### Clean code
+- **Self-documenting** — if code needs a comment, rename the variable or extract a method instead
+- **Push logic to the edges** — filtering, ID resolution, data shaping belong in adapters and I/O layers, not the orchestrator
+- **One intent per line** — each line in an orchestrator method should express a single, clear action
+- **No inline noise** — Notice calls, counting loops, string formatting go into private helpers
+- **Methods as documentation** — `getOrSeedBaseline()` reads better than a 6-line if/else with a comment
+- **No special-case accumulation** — if you find yourself adding "also include X when Y", question whether the abstraction is right
+
 ### Linting
 - ESLint config: `eslint.config.mts` using `eslint-plugin-obsidianmd`
 - All required Obsidian lint rules must pass before submission
@@ -89,7 +97,7 @@ graph TB
 - `src/sync/` — SyncEngine, diff, adapters (CalDAV + Obsidian), types (`CommonTask`, `SyncChange`)
 - `src/caldav/` — CalDAVClientDirect (HTTP I/O), VTODOMapper (iCal parsing)
 - `src/tasks/` — ObsidianTasksWrapper (vault I/O), ObsidianMapper (markdown parsing)
-- `src/storage/` — sync state persistence (baseline, UID mappings)
+- `src/storage/` — sync state persistence (baseline, IdMapping for taskId↔caldavUid)
 - `src/ui/` — modals, settings tab
 - `src/utils/` — task ID generation, helpers
 
