@@ -31,10 +31,10 @@ export class ObsidianAdapter {
 		this.mapper = mapper ?? new ObsidianMapper();
 	}
 
-	/**
-	 * Full pipeline: fetch → filter by tag → normalize.
-	 * SyncEngine calls this and gets back CommonTask[].
-	 */
+	isReady(): boolean {
+		return this.wrapper.initialize();
+	}
+
 	async fetchTasks(syncTag?: string): Promise<CommonTask[]> {
 		const allInputs = await this.wrapper.getAllTasksWithBody();
 		const filtered = this.wrapper.filterByTag(allInputs, syncTag);
