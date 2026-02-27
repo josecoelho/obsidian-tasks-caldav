@@ -1,5 +1,5 @@
 import { App, normalizePath } from 'obsidian';
-import { MappingData, SyncState, TaskMapping } from '../types';
+import { IdMapping, MappingData, SyncState, TaskMapping } from '../types';
 import { CommonTask } from '../sync/types';
 
 /**
@@ -16,16 +16,19 @@ export class SyncStorage {
   private mappingPath: string;
   private statePath: string;
   private baselinePath: string;
+  private idMappingPath: string;
 
   // In-memory caches
   private mappingCache: MappingData | null = null;
   private stateCache: SyncState | null = null;
   private baselineCache: CommonTask[] | null = null;
+  private idMappingCache: IdMapping | null = null;
 
   // Dirty flags to track unsaved changes
   private mappingDirty: boolean = false;
   private stateDirty: boolean = false;
   private baselineDirty: boolean = false;
+  private idMappingDirty: boolean = false;
 
   constructor(app: App) {
     this.app = app;
@@ -33,6 +36,7 @@ export class SyncStorage {
     this.mappingPath = normalizePath('.caldav-sync/mapping.json');
     this.statePath = normalizePath('.caldav-sync/state.json');
     this.baselinePath = normalizePath('.caldav-sync/baseline.json');
+    this.idMappingPath = normalizePath('.caldav-sync/id-mapping.json');
   }
 
   /**
@@ -76,9 +80,11 @@ export class SyncStorage {
     this.mappingCache = await this.loadMappingFromDisk();
     this.stateCache = await this.loadStateFromDisk();
     this.baselineCache = await this.loadBaselineFromDisk();
+    this.idMappingCache = await this.loadIdMappingFromDisk();
     this.mappingDirty = false;
     this.stateDirty = false;
     this.baselineDirty = false;
+    this.idMappingDirty = false;
   }
 
   /**
@@ -138,6 +144,45 @@ export class SyncStorage {
   }
 
   /**
+   * Get IdMapping from cache
+   */
+  getIdMapping(): IdMapping {
+    return this.idMappingCache ?? { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
+  }
+
+  /**
+   * Update IdMapping
+   */
+  setIdMapping(idMapping: IdMapping): void {
+    this.idMappingCache = idMapping;
+    this.idMappingDirty = true;
+  }
+
+  /**
+   * One-time migration: convert bloated MappingData → lean IdMapping.
+   * Safe to call multiple times — skips if IdMapping already has entries.
+   */
+  migrateFromMappingData(): void {
+    const idMapping = this.getIdMapping();
+    if (Object.keys(idMapping.taskIdToCaldavUid).length > 0) return;
+
+    const mapping = this.getMapping();
+    if (Object.keys(mapping.tasks).length === 0) return;
+
+    const migrated: IdMapping = {
+      taskIdToCaldavUid: {},
+      caldavUidToTaskId: {},
+    };
+
+    for (const [taskId, taskMapping] of Object.entries(mapping.tasks)) {
+      migrated.taskIdToCaldavUid[taskId] = taskMapping.caldavUID;
+      migrated.caldavUidToTaskId[taskMapping.caldavUID] = taskId;
+    }
+
+    this.setIdMapping(migrated);
+  }
+
+  /**
    * Save all dirty data to disk
    * Call this at the end of sync operations to persist changes
    */
@@ -157,6 +202,11 @@ export class SyncStorage {
     if (this.baselineDirty && this.baselineCache) {
       promises.push(this.saveBaselineToDisk(this.baselineCache));
       this.baselineDirty = false;
+    }
+
+    if (this.idMappingDirty && this.idMappingCache) {
+      promises.push(this.saveIdMappingToDisk(this.idMappingCache));
+      this.idMappingDirty = false;
     }
 
     await Promise.all(promises);
@@ -346,6 +396,37 @@ export class SyncStorage {
   }
 
   /**
+   * Load IdMapping from disk
+   */
+  private async loadIdMappingFromDisk(): Promise<IdMapping> {
+    try {
+      const adapter = this.app.vault.adapter;
+      if (!(await adapter.exists(this.idMappingPath))) {
+        return { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
+      }
+      const content = await adapter.read(this.idMappingPath);
+      return JSON.parse(content) as IdMapping;
+    } catch (error) {
+      console.error('Failed to load IdMapping:', error);
+      return { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
+    }
+  }
+
+  /**
+   * Save IdMapping to disk
+   */
+  private async saveIdMappingToDisk(idMapping: IdMapping): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const content = JSON.stringify(idMapping, null, 2);
+      await adapter.write(this.idMappingPath, content);
+    } catch (error) {
+      console.error('Failed to save IdMapping:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clear all sync data (use with caution)
    */
   async clearAll(): Promise<void> {
@@ -362,9 +443,11 @@ export class SyncStorage {
     this.mappingCache = emptyMapping;
     this.stateCache = freshState;
     this.baselineCache = [];
+    this.idMappingCache = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
     this.mappingDirty = true;
     this.stateDirty = true;
     this.baselineDirty = true;
+    this.idMappingDirty = true;
 
     await this.save();
   }

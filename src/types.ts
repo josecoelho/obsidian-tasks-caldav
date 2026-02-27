@@ -29,6 +29,12 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   deleteBehavior: 'ask'
 };
 
+/** Lean bidirectional identity mapping between Obsidian task IDs and CalDAV UIDs. */
+export interface IdMapping {
+  taskIdToCaldavUid: Record<string, string>;
+  caldavUidToTaskId: Record<string, string>;
+}
+
 // Task mapping
 export interface TaskMapping {
   caldavUID: string;
