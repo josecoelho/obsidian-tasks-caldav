@@ -1,6 +1,6 @@
 import { App } from 'obsidian';
 import { SyncEngine } from './syncEngine';
-import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
+import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS, IdMapping } from '../types';
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CommonTask } from './types';
@@ -824,7 +824,7 @@ describe('SyncEngine', () => {
       expect(result.created.toCalDAV).toBe(1);
       expect(mockSetIdMapping).toHaveBeenCalledTimes(1);
       // The IdMapping should include the new task with obsidian- prefix
-      const savedMapping = mockSetIdMapping.mock.calls[0][0];
+      const savedMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
       expect(savedMapping.taskIdToCaldavUid['20250101-new']).toMatch(/^obsidian-/);
     });
   });
