@@ -1,124 +1,177 @@
-import { CommonTask, SyncChange } from './types';
-import { ObsidianTask, TaskWithBody, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
-import { ObsidianMapper } from '../tasks/obsidianMapper';
-import { generateTaskId } from '../utils/taskIdGenerator';
+import { CommonTask, SyncChange } from "./types";
+import {
+	ObsidianTask,
+	TaskWithBody,
+	ObsidianTasksWrapper,
+} from "../tasks/obsidianTasksWrapper";
+import { ObsidianMapper } from "../tasks/obsidianMapper";
+import { generateTaskId } from "../utils/taskIdGenerator";
 
-export type { TaskWithBody } from '../tasks/obsidianTasksWrapper';
+export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
+
+export interface ObsidianSyncSettings {
+	syncTag?: string;
+	newTasksDestination: string;
+	newTasksSection?: string;
+}
 
 export class ObsidianAdapter {
-  private mapper: ObsidianMapper;
-  private tasksById = new Map<string, ObsidianTask>();
+	private mapper: ObsidianMapper;
+	private wrapper: ObsidianTasksWrapper;
+	private settings: ObsidianSyncSettings;
+	private tasksById = new Map<string, ObsidianTask>();
 
-  constructor(mapper?: ObsidianMapper) {
-    this.mapper = mapper ?? new ObsidianMapper();
-  }
+	constructor(
+		wrapper: ObsidianTasksWrapper,
+		settings: ObsidianSyncSettings,
+		mapper?: ObsidianMapper,
+	) {
+		this.wrapper = wrapper;
+		this.settings = settings;
+		this.mapper = mapper ?? new ObsidianMapper();
+	}
 
-  /**
-   * Normalize pre-filtered TaskWithBody[] into CommonTask[].
-   * Assigns IDs internally: uses existing ID from extractId, or generates
-   * an in-memory ID via generateTaskId(). Stores the ID→ObsidianTask
-   * mapping internally for use by applyChanges/writeBackIds.
-   */
-  normalize(
-    inputs: TaskWithBody[],
-    extractId: (task: ObsidianTask) => string | null,
-  ): CommonTask[] {
-    const tasks: CommonTask[] = [];
-    this.tasksById = new Map();
+	/**
+	 * Full pipeline: fetch → filter by tag → normalize.
+	 * SyncEngine calls this and gets back CommonTask[].
+	 */
+	async fetchTasks(syncTag?: string): Promise<CommonTask[]> {
+		const allInputs = await this.wrapper.getAllTasksWithBody();
+		const filtered = this.wrapper.filterByTag(allInputs, syncTag);
+		return this.normalize(
+			filtered,
+			(task) => this.wrapper.extractId(task),
+		);
+	}
 
-    for (const { task, body } of inputs) {
-      const taskId = extractId(task) ?? generateTaskId();
-      this.tasksById.set(taskId, task);
-      tasks.push(this.mapper.toCommonTask(task, taskId, body));
-    }
+	/**
+	 * Normalize pre-filtered TaskWithBody[] into CommonTask[].
+	 * Assigns IDs internally: uses existing ID from extractId, or generates
+	 * an in-memory ID via generateTaskId(). Stores the ID→ObsidianTask
+	 * mapping internally for use by applyChanges/writeBackIds.
+	 */
+	normalize(
+		inputs: TaskWithBody[],
+		extractId: (task: ObsidianTask) => string | null,
+	): CommonTask[] {
+		const tasks: CommonTask[] = [];
+		this.tasksById = new Map();
 
-    return tasks;
-  }
+		for (const { task, body } of inputs) {
+			const taskId = extractId(task) ?? generateTaskId();
+			this.tasksById.set(taskId, task);
+			tasks.push(this.mapper.toCommonTask(task, taskId, body));
+		}
 
-  /**
-   * Apply sync changes to the Obsidian vault (creates, updates, deletes).
-   */
-  async applyChanges(
-    changes: SyncChange[],
-    wrapper: ObsidianTasksWrapper,
-    settings: { syncTag?: string; newTasksDestination: string; newTasksSection?: string },
-  ): Promise<Array<{ taskId: string; caldavUID: string; sourceFile: string }>> {
-    const createdMappings: Array<{ taskId: string; caldavUID: string; sourceFile: string }> = [];
+		return tasks;
+	}
 
-    for (const change of changes) {
-      try {
-        switch (change.type) {
-          case 'create': {
-            const taskId = generateTaskId();
-            const taskWithId: CommonTask = { ...change.task, uid: taskId };
-            const markdown = this.mapper.toMarkdown(taskWithId, settings.syncTag);
+	/**
+	 * Apply sync changes to the Obsidian vault (creates, updates, deletes).
+	 */
+	async applyChanges(
+		changes: SyncChange[],
+	): Promise<
+		Array<{ taskId: string; caldavUID: string; sourceFile: string }>
+	> {
+		const createdMappings: Array<{
+			taskId: string;
+			caldavUID: string;
+			sourceFile: string;
+		}> = [];
 
-            await wrapper.createTask(
-              markdown,
-              settings.newTasksDestination,
-              settings.newTasksSection,
-            );
+		for (const change of changes) {
+			try {
+				switch (change.type) {
+					case "create": {
+						const taskId = generateTaskId();
+						const taskWithId: CommonTask = {
+							...change.task,
+							uid: taskId,
+						};
+						const markdown = this.mapper.toMarkdown(
+							taskWithId,
+							this.settings.syncTag,
+						);
 
-            createdMappings.push({
-              taskId,
-              caldavUID: change.task.uid,
-              sourceFile: settings.newTasksDestination,
-            });
-            break;
-          }
+						await this.wrapper.createTask(
+							markdown,
+							this.settings.newTasksDestination,
+							this.settings.newTasksSection,
+						);
 
-          case 'update': {
-            const existingTask = this.tasksById.get(change.task.uid)
-              ?? wrapper.findTaskById(change.task.uid);
-            if (!existingTask) continue;
+						createdMappings.push({
+							taskId,
+							caldavUID: change.task.uid,
+							sourceFile: this.settings.newTasksDestination,
+						});
+						break;
+					}
 
-            const markdown = this.mapper.toMarkdown(change.task, settings.syncTag);
-            await wrapper.updateTaskInVault(existingTask, markdown);
-            break;
-          }
+					case "update": {
+						const existingTask =
+							this.tasksById.get(change.task.uid) ??
+							this.wrapper.findTaskById(change.task.uid);
+						if (!existingTask) continue;
 
-          case 'delete': {
-            // Return mapping removal info — SyncEngine handles storage
-            break;
-          }
-        }
-      } catch (error) {
-        console.error(`Failed to apply ${change.type} for task ${change.task.uid}:`, error);
-      }
-    }
+						const markdown = this.mapper.toMarkdown(
+							change.task,
+							this.settings.syncTag,
+						);
+						await this.wrapper.updateTaskInVault(
+							existingTask,
+							markdown,
+						);
+						break;
+					}
 
-    return createdMappings;
-  }
+					case "delete": {
+						// Return mapping removal info — SyncEngine handles storage
+						break;
+					}
+				}
+			} catch (error) {
+				console.error(
+					`Failed to apply ${change.type} for task ${change.task.uid}:`,
+					error,
+				);
+			}
+		}
 
-  /**
-   * Write IDs back to vault for tasks that had in-memory IDs generated during normalize.
-   * Only called after sync succeeds, so IDs are only persisted when sync completes.
-   */
-  async writeBackIds(
-    obsidianTasks: CommonTask[],
-    wrapper: ObsidianTasksWrapper,
-    settings: { syncTag?: string },
-  ): Promise<void> {
-    for (const task of obsidianTasks) {
-      const original = this.tasksById.get(task.uid);
-      if (!original) continue;
-      // Only write back if the original task had no ID
-      if (wrapper.extractId(original)) continue;
+		return createdMappings;
+	}
 
-      try {
-        const markdown = this.mapper.toMarkdown(task, settings.syncTag);
-        await wrapper.updateTaskInVault(original, markdown);
-      } catch (error) {
-        console.error(`[ObsidianAdapter] Failed to write back ID for task ${task.uid}:`, error);
-      }
-    }
-  }
+	/**
+	 * Write IDs back to vault for tasks that had in-memory IDs generated during normalize.
+	 * Only called after sync succeeds, so IDs are only persisted when sync completes.
+	 */
+	async writeBackIds(obsidianTasks: CommonTask[]): Promise<void> {
+		for (const task of obsidianTasks) {
+			const original = this.tasksById.get(task.uid);
+			if (!original) continue;
+			// Only write back if the original task had no ID
+			if (this.wrapper.extractId(original)) continue;
 
-  /**
-   * Look up the original ObsidianTask by its assigned ID.
-   * Used by SyncEngine for mapping resolution after sync.
-   */
-  findOriginalTask(uid: string): ObsidianTask | undefined {
-    return this.tasksById.get(uid);
-  }
+			try {
+				const markdown = this.mapper.toMarkdown(
+					task,
+					this.settings.syncTag,
+				);
+				await this.wrapper.updateTaskInVault(original, markdown);
+			} catch (error) {
+				console.error(
+					`[ObsidianAdapter] Failed to write back ID for task ${task.uid}:`,
+					error,
+				);
+			}
+		}
+	}
+
+	/**
+	 * Look up the original ObsidianTask by its assigned ID.
+	 * Used by SyncEngine for mapping resolution after sync.
+	 */
+	findOriginalTask(uid: string): ObsidianTask | undefined {
+		return this.tasksById.get(uid);
+	}
 }

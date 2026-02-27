@@ -29,7 +29,6 @@ export class SyncEngine {
 	private app: App;
 	private settings: CalDAVSettings;
 	private wrapper: ObsidianTasksWrapper;
-	private caldavClient: CalDAVClientDirect;
 	private storage: SyncStorage;
 	private caldavAdapter: CalDAVAdapter;
 	private obsidianAdapter: ObsidianAdapter;
@@ -38,10 +37,15 @@ export class SyncEngine {
 		this.app = app;
 		this.settings = settings;
 		this.wrapper = new ObsidianTasksWrapper(app);
-		this.caldavClient = new CalDAVClientDirect(settings);
 		this.storage = new SyncStorage(app);
-		this.caldavAdapter = new CalDAVAdapter();
-		this.obsidianAdapter = new ObsidianAdapter();
+		this.caldavAdapter = new CalDAVAdapter(
+			new CalDAVClientDirect(settings),
+		);
+		this.obsidianAdapter = new ObsidianAdapter(this.wrapper, {
+			syncTag: settings.syncTag,
+			newTasksDestination: settings.newTasksDestination,
+			newTasksSection: settings.newTasksSection,
+		});
 	}
 
 	async initialize(): Promise<boolean> {
@@ -59,35 +63,20 @@ export class SyncEngine {
 		try {
 			const mode = dryRun ? "[DRY RUN] " : "";
 			new Notice(`${mode}Starting sync...`);
-			// 1. Connect to CalDAV
-			new Notice(`${mode}Connecting to CalDAV server...`);
-			await this.caldavClient.connect();
 
-			// 2. Fetch CalDAV tasks → normalize to CommonTask[] → filter by sync tag
-			// TODO: filter by tag should be done in CalDAV client
-			const vtodos = await this.caldavClient.fetchVTODOs();
+			const syncTag = this.settings.syncTag;
 			const idMapping = this.storage.getIdMapping();
-			const allCaldavTasks = this.caldavAdapter.normalize(
-				vtodos,
-				idMapping,
-			);
-			const caldavTasks = this.filterCalDAVBySyncTag(
-				allCaldavTasks,
-				idMapping,
-			);
 
-			// 3. Get Obsidian tasks with body → filter by tag → normalize (adapter assigns IDs)
-			const taskInputs = await this.wrapper.getAllTasksWithBody();
-			const filtered = this.wrapper.filterByTag(
-				taskInputs,
-				this.settings.syncTag,
+			// Fetch tasks from both sides (adapters own connect + fetch + normalize + filter)
+			const caldavTasks = await this.caldavAdapter.fetchTasks(
+				syncTag,
+				idMapping,
 			);
-			const obsidianTasks = this.obsidianAdapter.normalize(
-				filtered,
-				(task) => this.wrapper.extractId(task),
-			);
-			// 4. Load baseline — if empty, seed from already-mapped tasks so the
-			//    first sync with this engine doesn't duplicate everything.
+			const obsidianTasks =
+				await this.obsidianAdapter.fetchTasks(syncTag);
+
+			// Load baseline — if empty, seed from already-mapped tasks so the
+			// first sync with this engine doesn't duplicate everything.
 			let baseline = this.storage.getBaseline();
 			if (
 				baseline.length === 0 &&
@@ -99,7 +88,7 @@ export class SyncEngine {
 				);
 			}
 
-			// 5. Diff
+			// Diff
 			const strategy: ConflictStrategy = this.settings
 				.autoResolveObsidianWins
 				? "obsidian-wins"
@@ -158,16 +147,15 @@ export class SyncEngine {
 				return result;
 			}
 
-			// 6. Apply changes to Obsidian
+			// Apply changes (adapters own their I/O — no wrapper/client params)
 			const createdMappings = await this.obsidianAdapter.applyChanges(
 				changeset.toObsidian,
-				this.wrapper,
-				{
-					syncTag: this.settings.syncTag,
-					newTasksDestination: this.settings.newTasksDestination,
-					newTasksSection: this.settings.newTasksSection,
-				},
 			);
+			await this.caldavAdapter.applyChanges(
+				changeset.toCalDAV,
+				idMapping,
+			);
+			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
 			// Persist mappings for tasks created in Obsidian from CalDAV
 			for (const { taskId, caldavUID, sourceFile } of createdMappings) {
@@ -181,24 +169,10 @@ export class SyncEngine {
 				}
 			}
 
-			// 7. Apply changes to CalDAV
-			await this.caldavAdapter.applyChanges(
-				changeset.toCalDAV,
-				this.caldavClient,
-				idMapping,
-			);
-
-			// 8. Write back IDs for tasks that got in-memory IDs
-			await this.obsidianAdapter.writeBackIds(
-				obsidianTasks,
-				this.wrapper,
-				{ syncTag: this.settings.syncTag },
-			);
-
-			// 9. Update mappings for new tasks
+			// Update mappings for new tasks
 			this.updateMappingsAfterSync(changeset);
 
-			// 10. Save new baseline (union of current state after applying changes)
+			// Save new baseline (union of current state after applying changes)
 			const newBaseline = this.computeNewBaseline(
 				obsidianTasks,
 				caldavTasks,
@@ -206,7 +180,7 @@ export class SyncEngine {
 			);
 			this.storage.setBaseline(newBaseline);
 
-			// 11. Save state
+			// Save state
 			this.storage.updateLastSyncTime();
 			await this.storage.save();
 
@@ -248,30 +222,6 @@ export class SyncEngine {
 		const conflicts = state.conflicts.length;
 
 		return `Last sync: ${lastSync}\nMapped tasks: ${mappedTasks}\nBaseline tasks: ${baselineTasks}\nConflicts: ${conflicts}`;
-	}
-
-	/**
-	 * Filter CalDAV tasks by sync tag.
-	 * Include a CalDAV task if it is already mapped (previously synced)
-	 * or if its CATEGORIES contain the sync tag.
-	 * When no sync tag is configured, include all tasks.
-	 */
-	private filterCalDAVBySyncTag(
-		tasks: CommonTask[],
-		idMapping: IdMapping,
-	): CommonTask[] {
-		const syncTag = this.settings.syncTag;
-		if (!syncTag || syncTag.trim() === "") return tasks;
-
-		const tagLower = syncTag.toLowerCase().replace(/^#/, "");
-
-		return tasks.filter((task) => {
-			// Always include tasks that are already mapped (previously synced)
-			if (idMapping.taskIdToCaldavUid[task.uid]) return true;
-
-			// Include new CalDAV tasks that have the sync tag in their categories
-			return task.tags.some((tag) => tag.toLowerCase() === tagLower);
-		});
 	}
 
 	/**

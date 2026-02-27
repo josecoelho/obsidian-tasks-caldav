@@ -7,6 +7,8 @@ import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_
  * Interface for CalDAV client operations used by adapters.
  */
 export interface CalDAVClient {
+  connect(): Promise<void>;
+  fetchVTODOs(): Promise<CalendarObject[]>;
   createVTODO(vtodoData: string, uid: string): Promise<void>;
   updateVTODO(vtodo: { data: string; url: string; etag?: string }, newData: string): Promise<void>;
   deleteVTODOByUID(uid: string): Promise<void>;

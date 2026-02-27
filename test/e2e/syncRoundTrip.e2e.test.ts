@@ -10,7 +10,6 @@ import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
 const emptyIdMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
 
 const httpClient = new FetchHttpClient();
-const caldavAdapter = new CalDAVAdapter();
 const obsidianMapper = new ObsidianMapper();
 
 let calendarName: string;
@@ -71,6 +70,7 @@ afterAll(async () => {
 describe('Sync round-trip E2E', () => {
   it('should detect new CalDAV tasks and produce create changes for Obsidian', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     // Create tasks on CalDAV
@@ -105,6 +105,7 @@ describe('Sync round-trip E2E', () => {
 
   it('should detect new Obsidian tasks and push them to CalDAV', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     // Obsidian tasks (simulated)
@@ -135,7 +136,7 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.toObsidian).toHaveLength(0);
 
     // Apply the changes to CalDAV
-    await caldavAdapter.applyChanges(changeset.toCalDAV, client, emptyIdMapping);
+    await caldavAdapter.applyChanges(changeset.toCalDAV, emptyIdMapping);
 
     // Verify it was created on the server
     const vtodos = await client.fetchVTODOs();
@@ -149,6 +150,7 @@ describe('Sync round-trip E2E', () => {
 
   it('should detect updates on CalDAV and propagate to Obsidian', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     const uid = `e2e-upd-${Date.now()}`;
@@ -184,6 +186,7 @@ describe('Sync round-trip E2E', () => {
 
   it('should detect deletes on CalDAV and propagate to Obsidian', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     const uid = `e2e-del-${Date.now()}`;
@@ -212,6 +215,7 @@ describe('Sync round-trip E2E', () => {
 
   it('should handle conflict resolution with caldav-wins', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     const uid = `e2e-conflict-${Date.now()}`;
@@ -245,6 +249,7 @@ describe('Sync round-trip E2E', () => {
 
   it('should handle markdown generation from CalDAV round-trip', async () => {
     const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
     await client.connect();
 
     const uid = `e2e-md-${Date.now()}`;

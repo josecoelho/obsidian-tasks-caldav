@@ -1,5 +1,5 @@
-import { ObsidianAdapter, TaskWithBody } from './obsidianAdapter';
-import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
+import { ObsidianAdapter, ObsidianSyncSettings, TaskWithBody } from './obsidianAdapter';
+import { ObsidianTask, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
@@ -26,12 +26,28 @@ function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
   return { task, body };
 }
 
+const dummyWrapper = {
+  getAllTasksWithBody: jest.fn().mockResolvedValue([]),
+  filterByTag: jest.fn().mockImplementation((inputs: TaskWithBody[]) => inputs),
+  extractId: jest.fn().mockImplementation((task: ObsidianTask) => task.id || null),
+  findTaskById: jest.fn().mockReturnValue(null),
+  createTask: jest.fn().mockResolvedValue(undefined),
+  updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+  initialize: jest.fn().mockReturnValue(true),
+  getTaskId: jest.fn(),
+} as unknown as ObsidianTasksWrapper;
+
+const defaultSettings: ObsidianSyncSettings = {
+  syncTag: 'sync',
+  newTasksDestination: 'Inbox.md',
+};
+
 describe('ObsidianAdapter', () => {
   const extractId = (task: ObsidianTask): string | null => task.id || null;
 
   describe('normalize', () => {
     it('should map inputs to CommonTask[] using existing IDs', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
         withBody(makeTask({ description: 'Task 1', id: 'id-1' })),
         withBody(makeTask({ description: 'Task 2', id: 'id-2' })),
@@ -44,7 +60,7 @@ describe('ObsidianAdapter', () => {
     });
 
     it('should generate IDs for tasks without existing IDs', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
         withBody(makeTask({ id: '' })),
       ];
@@ -55,7 +71,7 @@ describe('ObsidianAdapter', () => {
     });
 
     it('should include body from task inputs', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
         { task: makeTask({ id: 'task-1' }), body: 'Some body' },
       ];
@@ -64,7 +80,7 @@ describe('ObsidianAdapter', () => {
     });
 
     it('should default to empty body', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
         withBody(makeTask({ id: 'task-1' })),
       ];
@@ -75,7 +91,7 @@ describe('ObsidianAdapter', () => {
 
   describe('findOriginalTask', () => {
     it('should return the original ObsidianTask after normalize', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const task = makeTask({ description: 'Test', id: 'my-id' });
       adapter.normalize([{ task, body: '' }], extractId);
 
@@ -83,14 +99,14 @@ describe('ObsidianAdapter', () => {
     });
 
     it('should return undefined for unknown IDs', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       adapter.normalize([], extractId);
 
       expect(adapter.findOriginalTask('unknown')).toBeUndefined();
     });
 
     it('should find tasks with generated IDs', () => {
-      const adapter = new ObsidianAdapter();
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const task = makeTask({ id: '' });
       const tasks = adapter.normalize([withBody(task)], extractId);
 

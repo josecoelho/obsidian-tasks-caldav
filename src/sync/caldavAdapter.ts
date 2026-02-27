@@ -5,9 +5,22 @@ import { IdMapping } from '../types';
 
 export class CalDAVAdapter {
   private mapper: VTODOMapper;
+  private client: CalDAVClient;
 
-  constructor(mapper?: VTODOMapper) {
+  constructor(client: CalDAVClient, mapper?: VTODOMapper) {
+    this.client = client;
     this.mapper = mapper ?? new VTODOMapper();
+  }
+
+  /**
+   * Full pipeline: connect → fetch → normalize → filter.
+   * SyncEngine calls this and gets back CommonTask[].
+   */
+  async fetchTasks(syncTag: string | undefined, idMapping: IdMapping): Promise<CommonTask[]> {
+    await this.client.connect();
+    const vtodos = await this.client.fetchVTODOs();
+    const allTasks = this.normalize(vtodos, idMapping);
+    return this.filterByTag(allTasks, syncTag);
   }
 
   /**
@@ -52,32 +65,43 @@ export class CalDAVAdapter {
   /**
    * Apply a set of sync changes to the CalDAV server.
    */
-  async applyChanges(changes: SyncChange[], client: CalDAVClient, idMapping: IdMapping): Promise<void> {
+  async applyChanges(changes: SyncChange[], idMapping: IdMapping): Promise<void> {
     for (const change of changes) {
       const caldavUID = this.resolveCaldavUid(change.task.uid, idMapping);
 
       switch (change.type) {
         case 'create': {
           const vtodoData = this.fromCommonTask(change.task, caldavUID);
-          await client.createVTODO(vtodoData, caldavUID);
+          await this.client.createVTODO(vtodoData, caldavUID);
           break;
         }
         case 'update': {
-          const existing = await client.fetchVTODOByUID(caldavUID);
+          const existing = await this.client.fetchVTODOByUID(caldavUID);
           if (!existing) {
             console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
             continue;
           }
           const newData = this.fromCommonTask(change.task, caldavUID);
-          await client.updateVTODO(existing, newData);
+          await this.client.updateVTODO(existing, newData);
           break;
         }
         case 'delete': {
-          await client.deleteVTODOByUID(caldavUID);
+          await this.client.deleteVTODOByUID(caldavUID);
           break;
         }
       }
     }
+  }
+
+  /**
+   * Filter tasks by sync tag. Only include tasks whose tags contain the sync tag.
+   */
+  private filterByTag(tasks: CommonTask[], syncTag?: string): CommonTask[] {
+    if (!syncTag || syncTag.trim() === '') return tasks;
+    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+    return tasks.filter((task) =>
+      task.tags.some((tag) => tag.toLowerCase() === tagLower)
+    );
   }
 
   /**

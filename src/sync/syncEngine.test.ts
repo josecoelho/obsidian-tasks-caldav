@@ -663,7 +663,7 @@ describe('SyncEngine', () => {
       expect(result.details.caldavTasks![0].title).toBe('Task with tag');
     });
 
-    it('should include mapped CalDAV tasks even without the sync tag', async () => {
+    it('should exclude mapped CalDAV tasks without the sync tag (tag-only filtering)', async () => {
       // CalDAV has a previously-synced task (mapped) without the sync tag in categories
       const vtodo = makeCalObj('caldav-mapped', 'Mapped task');
 
@@ -681,9 +681,8 @@ describe('SyncEngine', () => {
       const result = await engine.sync(true);
 
       expect(result.success).toBe(true);
-      // Mapped task should be included even without the tag
-      expect(result.details.caldavTasks!.length).toBe(1);
-      expect(result.details.caldavTasks![0].uid).toBe('task-mapped');
+      // Tag-only filtering: mapped task without the tag should be excluded
+      expect(result.details.caldavTasks!.length).toBe(0);
     });
 
     it('should exclude CalDAV tasks with no categories when sync tag is set', async () => {

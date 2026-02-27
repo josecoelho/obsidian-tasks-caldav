@@ -32,8 +32,17 @@ function makeCalObj(uid: string, summary: string, extra: string[] = []): Calenda
   };
 }
 
+const dummyClient: CalDAVClient = {
+  connect: jest.fn(),
+  fetchVTODOs: jest.fn(),
+  createVTODO: jest.fn(),
+  updateVTODO: jest.fn(),
+  deleteVTODOByUID: jest.fn(),
+  fetchVTODOByUID: jest.fn(),
+};
+
 describe('CalDAVAdapter', () => {
-  const adapter = new CalDAVAdapter();
+  const adapter = new CalDAVAdapter(dummyClient);
 
   describe('toCommonTask', () => {
     it('should convert a basic VTODO to CommonTask', () => {
@@ -235,11 +244,14 @@ describe('CalDAVAdapter', () => {
     it('should call create for create changes', async () => {
       const mockCreateVTODO = jest.fn();
       const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
         createVTODO: mockCreateVTODO,
         updateVTODO: jest.fn(),
         deleteVTODOByUID: jest.fn(),
         fetchVTODOByUID: jest.fn(),
       };
+      const testAdapter = new CalDAVAdapter(mockClient);
 
       const task = {
         uid: 'new-task',
@@ -255,9 +267,8 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
-      await adapter.applyChanges(
+      await testAdapter.applyChanges(
         [{ type: 'create', task }],
-        mockClient,
         emptyIdMapping,
       );
 
@@ -268,11 +279,14 @@ describe('CalDAVAdapter', () => {
     it('should call delete for delete changes', async () => {
       const mockDeleteVTODOByUID = jest.fn();
       const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
         createVTODO: jest.fn(),
         updateVTODO: jest.fn(),
         deleteVTODOByUID: mockDeleteVTODOByUID,
         fetchVTODOByUID: jest.fn(),
       };
+      const testAdapter = new CalDAVAdapter(mockClient);
 
       const task = {
         uid: 'del-task',
@@ -292,9 +306,8 @@ describe('CalDAVAdapter', () => {
         taskIdToCaldavUid: { 'del-task': 'caldav-del' },
         caldavUidToTaskId: { 'caldav-del': 'del-task' },
       };
-      await adapter.applyChanges(
+      await testAdapter.applyChanges(
         [{ type: 'delete', task }],
-        mockClient,
         idMapping,
       );
 
@@ -309,11 +322,14 @@ describe('CalDAVAdapter', () => {
       });
       const mockUpdateVTODO = jest.fn();
       const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
         createVTODO: jest.fn(),
         updateVTODO: mockUpdateVTODO,
         deleteVTODOByUID: jest.fn(),
         fetchVTODOByUID: mockFetchVTODOByUID,
       };
+      const testAdapter = new CalDAVAdapter(mockClient);
 
       const task = {
         uid: 'upd-task',
@@ -333,9 +349,8 @@ describe('CalDAVAdapter', () => {
         taskIdToCaldavUid: { 'upd-task': 'caldav-upd' },
         caldavUidToTaskId: { 'caldav-upd': 'upd-task' },
       };
-      await adapter.applyChanges(
+      await testAdapter.applyChanges(
         [{ type: 'update', task }],
-        mockClient,
         idMapping,
       );
 

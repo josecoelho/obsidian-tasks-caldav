@@ -65,11 +65,11 @@ afterAll(async () => {
 });
 
 describe('CalDAVAdapter E2E', () => {
-  const adapter = new CalDAVAdapter();
 
   describe('normalize round-trip', () => {
     it('should normalize VTODOs from a real server into CommonTasks', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const uid = `e2e-adapt-${Date.now()}`;
@@ -95,6 +95,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('should use mapped obsidian ID when available', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const uid = `e2e-mapped-${Date.now()}`;
@@ -114,6 +115,7 @@ describe('CalDAVAdapter E2E', () => {
   describe('fromCommonTask round-trip', () => {
     it('should create a VTODO from CommonTask and read it back', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const task: CommonTask = {
@@ -149,6 +151,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('should round-trip a completed task', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const task: CommonTask = {
@@ -180,6 +183,7 @@ describe('CalDAVAdapter E2E', () => {
   describe('DESCRIPTION round-trip', () => {
     it('should round-trip DESCRIPTION through the server', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const task: CommonTask = {
@@ -209,6 +213,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('should handle DESCRIPTION with special characters', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const task: CommonTask = {
@@ -238,6 +243,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('should return empty body when VTODO has no DESCRIPTION', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       const caldavUID = `e2e-no-desc-${Date.now()}`;
@@ -253,6 +259,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('should update DESCRIPTION on existing VTODO', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       // Create initial VTODO without description
@@ -281,7 +288,6 @@ describe('CalDAVAdapter E2E', () => {
       };
       await adapter.applyChanges(
         [{ type: 'update', task }],
-        client,
         idMapping,
       );
 
@@ -296,6 +302,7 @@ describe('CalDAVAdapter E2E', () => {
   describe('applyChanges', () => {
     it('should create, update, and delete VTODOs', async () => {
       const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
       await client.connect();
 
       // Create a task to later update and delete
@@ -362,7 +369,6 @@ describe('CalDAVAdapter E2E', () => {
           { type: 'update', task: updatedTask },
           { type: 'delete', task: deletedTask },
         ],
-        client,
         idMapping,
       );
 
