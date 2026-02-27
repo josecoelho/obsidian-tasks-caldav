@@ -35,21 +35,6 @@ export interface IdMapping {
   caldavUidToTaskId: Record<string, string>;
 }
 
-// Task mapping
-export interface TaskMapping {
-  caldavUID: string;
-  sourceFile: string;
-  lastSyncedObsidian: string;
-  lastSyncedCalDAV: string;
-  lastModifiedObsidian: string;
-  lastModifiedCalDAV: string;
-}
-
-export interface MappingData {
-  tasks: Record<string, TaskMapping>; // taskId -> mapping
-  caldavToTask: Record<string, string>; // caldavUID -> taskId
-}
-
 // Conflict info
 export interface ConflictInfo {
   taskId: string;

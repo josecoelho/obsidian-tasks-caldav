@@ -1,6 +1,6 @@
 import { App } from 'obsidian';
 import { SyncStorage } from './syncStorage';
-import { IdMapping, MappingData, SyncState } from '../types';
+import { IdMapping, SyncState } from '../types';
 import { CommonTask } from '../sync/types';
 
 function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
@@ -38,18 +38,15 @@ function createMockApp(adapter: ReturnType<typeof createMockAdapter>) {
 /**
  * Configure the mock adapter so initialize() succeeds:
  * - directory and files don't exist (will be created)
- * - read returns valid JSON for mapping and state, baseline doesn't exist
+ * - read returns valid JSON for state
  */
 function setupFreshAdapter(adapter: ReturnType<typeof createMockAdapter>) {
-  adapter.exists.mockImplementation((path: string) => {
+  adapter.exists.mockImplementation(() => {
     return false;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
   adapter.read.mockImplementation((path: string) => {
-    if (path.includes('mapping.json')) {
-      return JSON.stringify({ tasks: {}, caldavToTask: {} });
-    }
     if (path.includes('state.json')) {
       return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
     }
@@ -63,27 +60,28 @@ function setupFreshAdapter(adapter: ReturnType<typeof createMockAdapter>) {
 function setupExistingAdapter(
   adapter: ReturnType<typeof createMockAdapter>,
   opts: {
-    mapping?: MappingData;
     state?: SyncState;
     baseline?: CommonTask[];
     idMapping?: IdMapping;
+    oldMappingJson?: { tasks: Record<string, { caldavUID: string }> };
   } = {}
 ) {
-  const mapping = opts.mapping ?? { tasks: {}, caldavToTask: {} };
   const state = opts.state ?? { lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] };
   const baseline = opts.baseline;
   const idMapping = opts.idMapping;
+  const oldMappingJson = opts.oldMappingJson;
 
   adapter.exists.mockImplementation((path: string) => {
     if (path.includes('baseline.json')) return baseline !== undefined;
     if (path.includes('id-mapping.json')) return idMapping !== undefined;
+    if (path.includes('mapping.json')) return oldMappingJson !== undefined;
     return true;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
   adapter.read.mockImplementation((path: string) => {
     if (path.includes('id-mapping.json') && idMapping) return JSON.stringify(idMapping);
-    if (path.includes('mapping.json')) return JSON.stringify(mapping);
+    if (path.includes('mapping.json') && oldMappingJson) return JSON.stringify(oldMappingJson);
     if (path.includes('state.json')) return JSON.stringify(state);
     if (path.includes('baseline.json') && baseline) return JSON.stringify(baseline);
     throw new Error('File not found');
@@ -100,18 +98,14 @@ describe('SyncStorage', () => {
     storage = new SyncStorage(app);
   });
 
-  describe('getMapping/getState throw before initialize', () => {
-    it('getMapping throws before initialize', () => {
-      expect(() => storage.getMapping()).toThrow('SyncStorage not initialized');
-    });
-
+  describe('getState throws before initialize', () => {
     it('getState throws before initialize', () => {
       expect(() => storage.getState()).toThrow('SyncStorage not initialized');
     });
   });
 
   describe('initialize', () => {
-    it('creates directory and files when they do not exist', async () => {
+    it('creates directory and state file when they do not exist', async () => {
       setupFreshAdapter(adapter);
 
       await storage.initialize();
@@ -119,7 +113,6 @@ describe('SyncStorage', () => {
       expect(adapter.exists).toHaveBeenCalled();
       expect(adapter.mkdir).toHaveBeenCalledWith(expect.stringContaining('.caldav-sync'));
       const writeCalls = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
-      expect(writeCalls.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(writeCalls.some((p: string) => p.includes('state.json'))).toBe(true);
     });
 
@@ -129,136 +122,19 @@ describe('SyncStorage', () => {
       await storage.initialize();
 
       expect(adapter.mkdir).not.toHaveBeenCalled();
-      // No writes during initialize when files exist
       expect(adapter.write).not.toHaveBeenCalled();
     });
 
-    it('loads data into cache so getMapping/getState work', async () => {
-      const existingMapping: MappingData = {
-        tasks: { 'task-1': { caldavUID: 'uid-1', sourceFile: 'test.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
-        caldavToTask: { 'uid-1': 'task-1' },
-      };
+    it('loads data into cache so getState works', async () => {
       const existingState: SyncState = {
         lastSyncTime: '2025-06-01T12:00:00.000Z',
         conflicts: [],
       };
-      setupExistingAdapter(adapter, { mapping: existingMapping, state: existingState });
+      setupExistingAdapter(adapter, { state: existingState });
 
       await storage.initialize();
 
-      expect(storage.getMapping()).toEqual(existingMapping);
       expect(storage.getState()).toEqual(existingState);
-    });
-  });
-
-  describe('addTaskMapping', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-      adapter.write.mockClear();
-    });
-
-    it('adds entry to both tasks and caldavToTask maps', () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'notes/test.md');
-
-      const mapping = storage.getMapping();
-      expect(mapping.tasks['task-1']).toBeDefined();
-      expect(mapping.tasks['task-1'].caldavUID).toBe('uid-1');
-      expect(mapping.tasks['task-1'].sourceFile).toBe('notes/test.md');
-      expect(mapping.caldavToTask['uid-1']).toBe('task-1');
-    });
-
-    it('sets dirty flag so save writes mapping', async () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-
-      await storage.save();
-
-      // Only mapping.json should be written (not state.json or baseline.json)
-      expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
-    });
-  });
-
-  describe('removeTaskMapping', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-      adapter.write.mockClear();
-    });
-
-    it('removes from both tasks and caldavToTask maps', () => {
-      storage.removeTaskMapping('task-1');
-
-      const mapping = storage.getMapping();
-      expect(mapping.tasks['task-1']).toBeUndefined();
-      expect(mapping.caldavToTask['uid-1']).toBeUndefined();
-    });
-
-    it('sets dirty flag so save writes mapping', async () => {
-      storage.removeTaskMapping('task-1');
-
-      await storage.save();
-
-      expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
-    });
-
-    it('does nothing for non-existent task', () => {
-      storage.removeTaskMapping('non-existent');
-
-      const mapping = storage.getMapping();
-      // Original task still present
-      expect(mapping.tasks['task-1']).toBeDefined();
-    });
-  });
-
-  describe('bidirectional consistency', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-    });
-
-    it('after add, both lookup directions return correct values', () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-
-      expect(storage.getTaskIdFromCalDAV('uid-1')).toBe('task-1');
-      expect(storage.getCalDAVFromTaskId('task-1')).toBe('uid-1');
-    });
-
-    it('after remove, both lookup directions return undefined', () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-      storage.removeTaskMapping('task-1');
-
-      expect(storage.getTaskIdFromCalDAV('uid-1')).toBeUndefined();
-      expect(storage.getCalDAVFromTaskId('task-1')).toBeUndefined();
-    });
-  });
-
-  describe('isTaskTracked / isCalDAVTracked', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-    });
-
-    it('returns false for untracked IDs', () => {
-      expect(storage.isTaskTracked('task-1')).toBe(false);
-      expect(storage.isCalDAVTracked('uid-1')).toBe(false);
-    });
-
-    it('returns true after adding a mapping', () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-
-      expect(storage.isTaskTracked('task-1')).toBe(true);
-      expect(storage.isCalDAVTracked('uid-1')).toBe(true);
-    });
-
-    it('returns false after removing a mapping', () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-      storage.removeTaskMapping('task-1');
-
-      expect(storage.isTaskTracked('task-1')).toBe(false);
-      expect(storage.isCalDAVTracked('uid-1')).toBe(false);
     });
   });
 
@@ -273,15 +149,6 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).not.toHaveBeenCalled();
-    });
-
-    it('writes only mapping.json when only mapping changed', async () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-
-      await storage.save();
-
-      expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
     });
 
     it('writes only state.json when only state changed', async () => {
@@ -302,24 +169,31 @@ describe('SyncStorage', () => {
       expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('baseline.json');
     });
 
+    it('writes only id-mapping.json when only IdMapping changed', async () => {
+      storage.setIdMapping({ taskIdToCaldavUid: { 'a': 'b' }, caldavUidToTaskId: { 'b': 'a' } });
+
+      await storage.save();
+
+      expect(adapter.write).toHaveBeenCalledTimes(1);
+      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('id-mapping.json');
+    });
+
     it('writes all files when all are dirty', async () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
       storage.updateLastSyncTime();
       storage.setBaseline([makeCommonTask()]);
       storage.setIdMapping({ taskIdToCaldavUid: { 'a': 'b' }, caldavUidToTaskId: { 'b': 'a' } });
 
       await storage.save();
 
-      expect(adapter.write).toHaveBeenCalledTimes(4);
+      expect(adapter.write).toHaveBeenCalledTimes(3);
       const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
-      expect(paths.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('id-mapping.json'))).toBe(true);
     });
 
     it('clears dirty flags after save so second save writes nothing', async () => {
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
+      storage.setIdMapping({ taskIdToCaldavUid: { 'a': 'b' }, caldavUidToTaskId: { 'b': 'a' } });
 
       await storage.save();
       adapter.write.mockClear();
@@ -339,7 +213,6 @@ describe('SyncStorage', () => {
     it('updates the lastSyncTime in state', () => {
       const before = storage.getState().lastSyncTime;
 
-      // Advance time slightly to guarantee difference
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
 
@@ -359,79 +232,6 @@ describe('SyncStorage', () => {
 
       expect(adapter.write).toHaveBeenCalledTimes(1);
       expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('state.json');
-    });
-  });
-
-  describe('updateCalDAVTimestamp', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-      await storage.save(); // flush dirty flags
-      adapter.write.mockClear();
-    });
-
-    it('updates lastModifiedCalDAV and lastSyncedCalDAV', () => {
-      storage.updateCalDAVTimestamp('task-1', '2025-07-01T10:00:00.000Z');
-
-      const taskMapping = storage.getTaskMapping('task-1');
-      expect(taskMapping?.lastModifiedCalDAV).toBe('2025-07-01T10:00:00.000Z');
-      expect(taskMapping?.lastSyncedCalDAV).toBeDefined();
-    });
-
-    it('marks mapping as dirty', async () => {
-      storage.updateCalDAVTimestamp('task-1', '2025-07-01T10:00:00.000Z');
-
-      await storage.save();
-
-      expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
-    });
-
-    it('does nothing for non-existent task', async () => {
-      storage.updateCalDAVTimestamp('non-existent', '2025-07-01T10:00:00.000Z');
-
-      await storage.save();
-
-      // mapping was already dirty from addTaskMapping in beforeEach,
-      // but we cleared write mock. The updateCalDAVTimestamp for a
-      // non-existent task should not set dirty again.
-      expect(adapter.write).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('updateObsidianTimestamp', () => {
-    beforeEach(async () => {
-      setupFreshAdapter(adapter);
-      await storage.initialize();
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
-      await storage.save(); // flush dirty flags
-      adapter.write.mockClear();
-    });
-
-    it('updates lastModifiedObsidian and lastSyncedObsidian', () => {
-      storage.updateObsidianTimestamp('task-1', '2025-07-02T14:00:00.000Z');
-
-      const taskMapping = storage.getTaskMapping('task-1');
-      expect(taskMapping?.lastModifiedObsidian).toBe('2025-07-02T14:00:00.000Z');
-      expect(taskMapping?.lastSyncedObsidian).toBeDefined();
-    });
-
-    it('marks mapping as dirty', async () => {
-      storage.updateObsidianTimestamp('task-1', '2025-07-02T14:00:00.000Z');
-
-      await storage.save();
-
-      expect(adapter.write).toHaveBeenCalledTimes(1);
-      expect((adapter.write.mock.calls[0] as [string, string])[0]).toContain('mapping.json');
-    });
-
-    it('does nothing for non-existent task', async () => {
-      storage.updateObsidianTimestamp('non-existent', '2025-07-02T14:00:00.000Z');
-
-      await storage.save();
-
-      expect(adapter.write).not.toHaveBeenCalled();
     });
   });
 
@@ -482,7 +282,6 @@ describe('SyncStorage', () => {
 
   describe('baseline migration', () => {
     it('should default missing body field to empty string when loading baseline', async () => {
-      // Simulate a baseline saved by older code without the `body` field
       const oldBaseline = [
         {
           uid: 'old-task',
@@ -558,19 +357,17 @@ describe('SyncStorage', () => {
     });
   });
 
-  describe('migrateFromMappingData', () => {
-    it('should convert MappingData to IdMapping', async () => {
-      const mapping: MappingData = {
+  describe('migrateFromMappingJson', () => {
+    it('should convert old mapping.json to IdMapping on initialize', async () => {
+      const oldMapping = {
         tasks: {
-          'task-1': { caldavUID: 'cal-1', sourceFile: 'test.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' },
-          'task-2': { caldavUID: 'cal-2', sourceFile: 'test.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' },
+          'task-1': { caldavUID: 'cal-1' },
+          'task-2': { caldavUID: 'cal-2' },
         },
-        caldavToTask: { 'cal-1': 'task-1', 'cal-2': 'task-2' },
       };
-      setupExistingAdapter(adapter, { mapping });
-      await storage.initialize();
+      setupExistingAdapter(adapter, { oldMappingJson: oldMapping });
 
-      storage.migrateFromMappingData();
+      await storage.initialize();
 
       expect(storage.getIdMapping()).toEqual({
         taskIdToCaldavUid: { 'task-1': 'cal-1', 'task-2': 'cal-2' },
@@ -578,31 +375,28 @@ describe('SyncStorage', () => {
       });
     });
 
-    it('should skip when IdMapping already has entries', async () => {
-      const mapping: MappingData = {
+    it('should skip migration when IdMapping already has entries', async () => {
+      const oldMapping = {
         tasks: {
-          'task-1': { caldavUID: 'cal-1', sourceFile: 'test.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' },
+          'task-1': { caldavUID: 'cal-1' },
         },
-        caldavToTask: { 'cal-1': 'task-1' },
       };
       const idMapping: IdMapping = {
         taskIdToCaldavUid: { 'existing': 'existing-cal' },
         caldavUidToTaskId: { 'existing-cal': 'existing' },
       };
-      setupExistingAdapter(adapter, { mapping, idMapping });
+      setupExistingAdapter(adapter, { oldMappingJson: oldMapping, idMapping });
+
       await storage.initialize();
 
-      storage.migrateFromMappingData();
-
-      // Should keep existing, not overwrite with mapping data
+      // Should keep existing, not overwrite with old mapping data
       expect(storage.getIdMapping()).toEqual(idMapping);
     });
 
-    it('should skip when MappingData is empty', async () => {
+    it('should skip migration when mapping.json does not exist', async () => {
       setupFreshAdapter(adapter);
-      await storage.initialize();
 
-      storage.migrateFromMappingData();
+      await storage.initialize();
 
       expect(storage.getIdMapping()).toEqual({
         taskIdToCaldavUid: {},
@@ -615,17 +409,8 @@ describe('SyncStorage', () => {
     beforeEach(async () => {
       setupFreshAdapter(adapter);
       await storage.initialize();
-      storage.addTaskMapping('task-1', 'uid-1', 'test.md');
       storage.setBaseline([makeCommonTask()]);
       adapter.write.mockClear();
-    });
-
-    it('resets mapping to empty', async () => {
-      await storage.clearAll();
-
-      const mapping = storage.getMapping();
-      expect(mapping.tasks).toEqual({});
-      expect(mapping.caldavToTask).toEqual({});
     });
 
     it('resets state with fresh lastSyncTime', async () => {
@@ -657,12 +442,11 @@ describe('SyncStorage', () => {
       });
     });
 
-    it('writes all four files', async () => {
+    it('writes all three files', async () => {
       await storage.clearAll();
 
-      expect(adapter.write).toHaveBeenCalledTimes(4);
+      expect(adapter.write).toHaveBeenCalledTimes(3);
       const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
-      expect(paths.some((p: string) => p.includes('mapping.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('id-mapping.json'))).toBe(true);
@@ -670,27 +454,10 @@ describe('SyncStorage', () => {
   });
 
   describe('error recovery', () => {
-    it('returns default mapping when mapping.json is corrupted', async () => {
-      adapter.exists.mockResolvedValue(true);
-      adapter.write.mockResolvedValue(undefined);
-      adapter.read.mockImplementation((path: string) => {
-        if (path.includes('mapping.json')) return '{invalid json!!!';
-        if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
-        throw new Error('File not found');
-      });
-
-      await storage.initialize();
-
-      const mapping = storage.getMapping();
-      expect(mapping.tasks).toEqual({});
-      expect(mapping.caldavToTask).toEqual({});
-    });
-
     it('returns default state when state.json is corrupted', async () => {
       adapter.exists.mockResolvedValue(true);
       adapter.write.mockResolvedValue(undefined);
       adapter.read.mockImplementation((path: string) => {
-        if (path.includes('mapping.json')) return JSON.stringify({ tasks: {}, caldavToTask: {} });
         if (path.includes('state.json')) return 'not valid json at all';
         throw new Error('File not found');
       });
@@ -706,7 +473,6 @@ describe('SyncStorage', () => {
       adapter.exists.mockResolvedValue(true);
       adapter.write.mockResolvedValue(undefined);
       adapter.read.mockImplementation((path: string) => {
-        if (path.includes('mapping.json')) return JSON.stringify({ tasks: {}, caldavToTask: {} });
         if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
         if (path.includes('baseline.json')) return '<<<corrupted>>>';
         throw new Error('File not found');
@@ -722,7 +488,6 @@ describe('SyncStorage', () => {
       adapter.write.mockResolvedValue(undefined);
       adapter.read.mockImplementation((path: string) => {
         if (path.includes('id-mapping.json')) return '<<<corrupted>>>';
-        if (path.includes('mapping.json')) return JSON.stringify({ tasks: {}, caldavToTask: {} });
         if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] });
         throw new Error('File not found');
       });

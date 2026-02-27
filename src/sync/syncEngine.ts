@@ -75,16 +75,17 @@ export class SyncEngine {
 			const obsidianTasks =
 				await this.obsidianAdapter.fetchTasks(syncTag);
 
-			// Load baseline — if empty, seed from already-mapped tasks so the
+			// Load baseline — if empty, seed from IdMapping so the
 			// first sync with this engine doesn't duplicate everything.
 			let baseline = this.storage.getBaseline();
 			if (
 				baseline.length === 0 &&
-				Object.keys(this.storage.getMapping().tasks).length > 0
+				Object.keys(idMapping.taskIdToCaldavUid).length > 0
 			) {
-				baseline = this.seedBaselineFromMapping(
+				baseline = this.seedBaselineFromIdMapping(
 					obsidianTasks,
 					caldavTasks,
+					idMapping,
 				);
 			}
 
@@ -157,20 +158,9 @@ export class SyncEngine {
 			);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
-			// Persist mappings for tasks created in Obsidian from CalDAV
-			for (const { taskId, caldavUID, sourceFile } of createdMappings) {
-				this.storage.addTaskMapping(taskId, caldavUID, sourceFile);
-			}
-
-			// Handle Obsidian-side deletes (remove from mapping)
-			for (const change of changeset.toObsidian) {
-				if (change.type === "delete") {
-					this.storage.removeTaskMapping(change.task.uid);
-				}
-			}
-
-			// Update mappings for new tasks
-			this.updateMappingsAfterSync(changeset);
+			// Update IdMapping with new and deleted tasks
+			this.updateIdMapping(idMapping, createdMappings, changeset);
+			this.storage.setIdMapping(idMapping);
 
 			// Save new baseline (union of current state after applying changes)
 			const newBaseline = this.computeNewBaseline(
@@ -211,13 +201,13 @@ export class SyncEngine {
 
 	getStatus(): string {
 		const state = this.storage.getState();
-		const mapping = this.storage.getMapping();
+		const idMapping = this.storage.getIdMapping();
 		const baseline = this.storage.getBaseline();
 
 		const lastSync = state.lastSyncTime
 			? new Date(state.lastSyncTime).toLocaleString()
 			: "Never";
-		const mappedTasks = Object.keys(mapping.tasks).length;
+		const mappedTasks = Object.keys(idMapping.taskIdToCaldavUid).length;
 		const baselineTasks = baseline.length;
 		const conflicts = state.conflicts.length;
 
@@ -225,22 +215,22 @@ export class SyncEngine {
 	}
 
 	/**
-	 * Seed baseline from existing mapping data.
+	 * Seed baseline from IdMapping.
 	 * Used on first sync with the new engine to avoid duplicating
 	 * tasks that were already synced by the old engine.
 	 * For each mapped task, use whichever side has it — preferring
 	 * Obsidian (since it's the source of truth for content).
 	 */
-	private seedBaselineFromMapping(
+	private seedBaselineFromIdMapping(
 		obsidianTasks: CommonTask[],
 		caldavTasks: CommonTask[],
+		idMapping: IdMapping,
 	): CommonTask[] {
-		const mapping = this.storage.getMapping();
 		const obsidianByUid = new Map(obsidianTasks.map((t) => [t.uid, t]));
 		const caldavByUid = new Map(caldavTasks.map((t) => [t.uid, t]));
 		const baseline: CommonTask[] = [];
 
-		for (const taskId of Object.keys(mapping.tasks)) {
+		for (const taskId of Object.keys(idMapping.taskIdToCaldavUid)) {
 			const obs = obsidianByUid.get(taskId);
 			const cal = caldavByUid.get(taskId);
 			if (obs) {
@@ -254,33 +244,45 @@ export class SyncEngine {
 	}
 
 	/**
-	 * Update mappings after sync to track newly created tasks.
+	 * Update IdMapping after sync to track newly created and deleted tasks.
 	 */
-	private updateMappingsAfterSync(changeset: {
-		toObsidian: SyncChange[];
-		toCalDAV: SyncChange[];
-	}): void {
-		// For tasks created on CalDAV side, mappings were already persisted above (createdMappings).
+	private updateIdMapping(
+		idMapping: IdMapping,
+		createdMappings: Array<{ taskId: string; caldavUID: string }>,
+		changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
+	): void {
+		// Tasks created in Obsidian from CalDAV
+		for (const { taskId, caldavUID } of createdMappings) {
+			idMapping.taskIdToCaldavUid[taskId] = caldavUID;
+			idMapping.caldavUidToTaskId[caldavUID] = taskId;
+		}
 
-		// For tasks created on CalDAV from Obsidian, add mapping.
+		// Tasks created on CalDAV from Obsidian
 		for (const change of changeset.toCalDAV) {
 			if (change.type === "create") {
 				const caldavUID = `obsidian-${change.task.uid}`;
-				const existingTask =
-					this.obsidianAdapter.findOriginalTask(change.task.uid) ??
-					this.wrapper.findTaskById(change.task.uid);
-				const sourceFile = existingTask
-					? existingTask.taskLocation._tasksFile._path
-					: this.settings.newTasksDestination;
-				this.storage.addTaskMapping(
-					change.task.uid,
-					caldavUID,
-					sourceFile,
-				);
+				idMapping.taskIdToCaldavUid[change.task.uid] = caldavUID;
+				idMapping.caldavUidToTaskId[caldavUID] = change.task.uid;
 			}
-
 			if (change.type === "delete") {
-				this.storage.removeTaskMapping(change.task.uid);
+				const caldavUID =
+					idMapping.taskIdToCaldavUid[change.task.uid];
+				if (caldavUID) {
+					delete idMapping.caldavUidToTaskId[caldavUID];
+				}
+				delete idMapping.taskIdToCaldavUid[change.task.uid];
+			}
+		}
+
+		// Tasks deleted from Obsidian
+		for (const change of changeset.toObsidian) {
+			if (change.type === "delete") {
+				const caldavUID =
+					idMapping.taskIdToCaldavUid[change.task.uid];
+				if (caldavUID) {
+					delete idMapping.caldavUidToTaskId[caldavUID];
+				}
+				delete idMapping.taskIdToCaldavUid[change.task.uid];
 			}
 		}
 	}

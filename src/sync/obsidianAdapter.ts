@@ -71,13 +71,10 @@ export class ObsidianAdapter {
 	 */
 	async applyChanges(
 		changes: SyncChange[],
-	): Promise<
-		Array<{ taskId: string; caldavUID: string; sourceFile: string }>
-	> {
+	): Promise<Array<{ taskId: string; caldavUID: string }>> {
 		const createdMappings: Array<{
 			taskId: string;
 			caldavUID: string;
-			sourceFile: string;
 		}> = [];
 
 		for (const change of changes) {
@@ -103,7 +100,6 @@ export class ObsidianAdapter {
 						createdMappings.push({
 							taskId,
 							caldavUID: change.task.uid,
-							sourceFile: this.settings.newTasksDestination,
 						});
 						break;
 					}
