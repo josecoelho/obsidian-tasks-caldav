@@ -130,6 +130,8 @@ const mockUpdateLastSyncTime = jest.fn();
 const mockSave = jest.fn().mockResolvedValue(undefined);
 const mockAddTaskMapping = jest.fn();
 const mockRemoveTaskMapping = jest.fn();
+const mockGetIdMapping = jest.fn().mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+const mockSetIdMapping = jest.fn();
 
 jest.mock('../storage/syncStorage', () => ({
   SyncStorage: jest.fn().mockImplementation(() => ({
@@ -142,6 +144,8 @@ jest.mock('../storage/syncStorage', () => ({
     save: mockSave,
     addTaskMapping: mockAddTaskMapping,
     removeTaskMapping: mockRemoveTaskMapping,
+    getIdMapping: mockGetIdMapping,
+    setIdMapping: mockSetIdMapping,
   })),
 }));
 
@@ -179,6 +183,7 @@ describe('SyncEngine', () => {
     mockStorageInitialize.mockResolvedValue(undefined);
     mockGetBaseline.mockReturnValue([]);
     mockGetMapping.mockReturnValue({ tasks: {}, caldavToTask: {} });
+    mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
     mockGetState.mockReturnValue({ lastSyncTime: '', conflicts: [] });
     mockSave.mockResolvedValue(undefined);
   });
@@ -327,6 +332,10 @@ describe('SyncEngine', () => {
         tasks: { '20250101-del': { caldavUID: 'caldav-del', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-del': '20250101-del' },
       });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-del': 'caldav-del' },
+        caldavUidToTaskId: { 'caldav-del': '20250101-del' },
+      });
       // Baseline has this task (synced before)
       mockGetBaseline.mockReturnValue([{
         uid: '20250101-del',
@@ -412,6 +421,10 @@ describe('SyncEngine', () => {
         tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-abc': '20250101-abc' },
       });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
+      });
 
       const engine = new SyncEngine(new App(), makeSettings());
       await engine.initialize();
@@ -476,6 +489,10 @@ describe('SyncEngine', () => {
         tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-abc': '20250101-abc' },
       });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
+      });
 
       const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: true }));
       await engine.initialize();
@@ -518,6 +535,10 @@ describe('SyncEngine', () => {
       mockGetMapping.mockReturnValue({
         tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
       });
 
       const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: false }));
@@ -649,10 +670,10 @@ describe('SyncEngine', () => {
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
-      // This task is already mapped
-      mockGetMapping.mockReturnValue({
-        tasks: { 'task-mapped': { caldavUID: 'caldav-mapped', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
-        caldavToTask: { 'caldav-mapped': 'task-mapped' },
+      // This task is already mapped via IdMapping
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-mapped': 'caldav-mapped' },
+        caldavUidToTaskId: { 'caldav-mapped': 'task-mapped' },
       });
 
       const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
@@ -788,6 +809,10 @@ describe('SyncEngine', () => {
         tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-abc': '20250101-abc' },
       });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
+      });
       // findTaskById must return the obsidian task so the update path works
       mockFindTaskById.mockReturnValue(obsTask);
 
@@ -840,6 +865,10 @@ describe('SyncEngine', () => {
       mockGetMapping.mockReturnValue({
         tasks: { '20250101-abc': { caldavUID: 'caldav-abc', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'caldav-abc': '20250101-abc' },
+      });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
       });
       mockFindTaskById.mockReturnValue(obsTask);
 
@@ -984,6 +1013,10 @@ describe('SyncEngine', () => {
       mockGetMapping.mockReturnValue({
         tasks: { '20250101-aaa': { caldavUID: 'obsidian-20250101-aaa', sourceFile: 'Tasks.md', lastSyncedObsidian: '', lastSyncedCalDAV: '', lastModifiedObsidian: '', lastModifiedCalDAV: '' } },
         caldavToTask: { 'obsidian-20250101-aaa': '20250101-aaa' },
+      });
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-aaa': 'obsidian-20250101-aaa' },
+        caldavUidToTaskId: { 'obsidian-20250101-aaa': '20250101-aaa' },
       });
 
       const engine2 = new SyncEngine(new App(), makeSettings());

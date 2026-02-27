@@ -1,8 +1,11 @@
 import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { CommonTask } from '../../src/sync/types';
+import { IdMapping } from '../../src/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
 import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
+
+const emptyIdMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
 
 const httpClient = new FetchHttpClient();
 
@@ -79,7 +82,7 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(vtodo, uid);
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].uid).toBe(uid);
@@ -98,8 +101,11 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(buildVTODO(uid, 'Mapped task'), uid);
 
       const vtodos = await client.fetchVTODOs();
-      const mapping = new Map([[uid, 'obsidian-task-id-123']]);
-      const tasks = adapter.normalize(vtodos, mapping);
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'obsidian-task-id-123': uid },
+        caldavUidToTaskId: { [uid]: 'obsidian-task-id-123' },
+      };
+      const tasks = adapter.normalize(vtodos, idMapping);
 
       expect(tasks[0].uid).toBe('obsidian-task-id-123');
     });
@@ -130,7 +136,7 @@ describe('CalDAVAdapter E2E', () => {
 
       // Fetch back and normalize
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Round trip test');
@@ -164,7 +170,7 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks[0].status).toBe('DONE');
       expect(tasks[0].completedDate).toBe('2025-06-10');
@@ -195,7 +201,7 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].body).toBe('Remember to check the farmers market\nAlso need cleaning supplies');
@@ -224,7 +230,7 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].body).toBe('Commas, semicolons; colons: and backslashes\\');
@@ -239,7 +245,7 @@ describe('CalDAVAdapter E2E', () => {
       await client.createVTODO(vtodo, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].body).toBe('');
@@ -269,15 +275,18 @@ describe('CalDAVAdapter E2E', () => {
         body: 'New description added',
       };
 
-      const uidMapping = new Map([[caldavUID, 'update-desc-id']]);
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'update-desc-id': caldavUID },
+        caldavUidToTaskId: { [caldavUID]: 'update-desc-id' },
+      };
       await adapter.applyChanges(
         [{ type: 'update', task }],
         client,
-        uidMapping,
+        idMapping,
       );
 
       const vtodos = await client.fetchVTODOs();
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].body).toBe('New description added');
@@ -299,10 +308,10 @@ describe('CalDAVAdapter E2E', () => {
       let vtodos = await client.fetchVTODOs();
       expect(vtodos.length).toBe(2);
 
-      const uidMapping = new Map([
-        [existingUID, 'obs-existing'],
-        [toDeleteUID, 'obs-delete'],
-      ]);
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'obs-existing': existingUID, 'obs-delete': toDeleteUID },
+        caldavUidToTaskId: { [existingUID]: 'obs-existing', [toDeleteUID]: 'obs-delete' },
+      };
 
       // Apply: create new + update existing + delete one
       const newTask: CommonTask = {
@@ -354,14 +363,14 @@ describe('CalDAVAdapter E2E', () => {
           { type: 'delete', task: deletedTask },
         ],
         client,
-        uidMapping,
+        idMapping,
       );
 
       // Verify final state
       vtodos = await client.fetchVTODOs();
       expect(vtodos.length).toBe(2); // 2 original - 1 deleted + 1 created = 2
 
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
       const descriptions = tasks.map(t => t.title).sort();
       expect(descriptions).toEqual(['Brand new task', 'Updated existing task']);
 

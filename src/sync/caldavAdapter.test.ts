@@ -1,6 +1,9 @@
 import { CalDAVAdapter } from './caldavAdapter';
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { CalDAVClient } from '../caldav/calDAVClientDirect';
+import { IdMapping } from '../types';
+
+const emptyIdMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
 
 function buildVTODO(uid: string, summary: string, extra: string[] = []): string {
   const hasStatus = extra.some(l => l.startsWith('STATUS:'));
@@ -105,14 +108,17 @@ describe('CalDAVAdapter', () => {
   });
 
   describe('normalize', () => {
-    it('should use obsidian task ID from mapping when available', () => {
+    it('should use obsidian task ID from IdMapping when available', () => {
       const vtodos = [
         makeCalObj('caldav-aaa', 'Mapped task'),
         makeCalObj('caldav-bbb', 'Unmapped task'),
       ];
 
-      const uidMapping = new Map([['caldav-aaa', 'obsidian-id-123']]);
-      const tasks = adapter.normalize(vtodos, uidMapping);
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'obsidian-id-123': 'caldav-aaa' },
+        caldavUidToTaskId: { 'caldav-aaa': 'obsidian-id-123' },
+      };
+      const tasks = adapter.normalize(vtodos, idMapping);
 
       expect(tasks).toHaveLength(2);
       expect(tasks[0].uid).toBe('obsidian-id-123');
@@ -127,12 +133,12 @@ describe('CalDAVAdapter', () => {
         url: 'http://example.com/bad.ics',
       }];
 
-      const tasks = adapter.normalize(vtodos, new Map());
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
       expect(tasks).toHaveLength(0);
     });
 
     it('should handle empty list', () => {
-      const tasks = adapter.normalize([], new Map());
+      const tasks = adapter.normalize([], emptyIdMapping);
       expect(tasks).toEqual([]);
     });
   });
@@ -252,7 +258,7 @@ describe('CalDAVAdapter', () => {
       await adapter.applyChanges(
         [{ type: 'create', task }],
         mockClient,
-        new Map(),
+        emptyIdMapping,
       );
 
       expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
@@ -282,10 +288,14 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'del-task': 'caldav-del' },
+        caldavUidToTaskId: { 'caldav-del': 'del-task' },
+      };
       await adapter.applyChanges(
         [{ type: 'delete', task }],
         mockClient,
-        new Map([['caldav-del', 'del-task']]),
+        idMapping,
       );
 
       expect(mockDeleteVTODOByUID).toHaveBeenCalledWith('caldav-del');
@@ -319,10 +329,14 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'upd-task': 'caldav-upd' },
+        caldavUidToTaskId: { 'caldav-upd': 'upd-task' },
+      };
       await adapter.applyChanges(
         [{ type: 'update', task }],
         mockClient,
-        new Map([['caldav-upd', 'upd-task']]),
+        idMapping,
       );
 
       expect(mockFetchVTODOByUID).toHaveBeenCalledWith('caldav-upd');

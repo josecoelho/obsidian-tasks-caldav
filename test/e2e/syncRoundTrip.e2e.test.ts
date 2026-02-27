@@ -3,8 +3,11 @@ import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { ObsidianMapper } from '../../src/tasks/obsidianMapper';
 import { diff } from '../../src/sync/diff';
 import { CommonTask } from '../../src/sync/types';
+import { IdMapping } from '../../src/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
 import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
+
+const emptyIdMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
 
 const httpClient = new FetchHttpClient();
 const caldavAdapter = new CalDAVAdapter();
@@ -78,7 +81,7 @@ describe('Sync round-trip E2E', () => {
 
     // Fetch and normalize CalDAV side
     const vtodos = await client.fetchVTODOs();
-    const caldavTasks = caldavAdapter.normalize(vtodos, new Map());
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Obsidian side: empty (simulating first sync)
     const obsidianTasks: CommonTask[] = [];
@@ -132,13 +135,13 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.toObsidian).toHaveLength(0);
 
     // Apply the changes to CalDAV
-    await caldavAdapter.applyChanges(changeset.toCalDAV, client, new Map());
+    await caldavAdapter.applyChanges(changeset.toCalDAV, client, emptyIdMapping);
 
     // Verify it was created on the server
     const vtodos = await client.fetchVTODOs();
     expect(vtodos.length).toBe(1);
 
-    const tasks = caldavAdapter.normalize(vtodos, new Map());
+    const tasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
     expect(tasks[0].title).toBe('Task from Obsidian');
     expect(tasks[0].priority).toBe('high');
     expect(tasks[0].dueDate).toBe('2025-08-01');
@@ -153,7 +156,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline (previous sync)
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, new Map());
+    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Simulate CalDAV update (mark completed)
     const updatedVTODO = buildVTODO(uid, 'Original task', [
@@ -165,7 +168,7 @@ describe('Sync round-trip E2E', () => {
 
     // Re-fetch CalDAV
     vtodos = await client.fetchVTODOs();
-    const caldavTasks = caldavAdapter.normalize(vtodos, new Map());
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Obsidian still has baseline version
     const obsidianTasks = [...baseline];
@@ -188,14 +191,14 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, new Map());
+    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Delete on CalDAV
     await client.deleteVTODO(vtodos[0]);
 
     // Re-fetch: empty
     vtodos = await client.fetchVTODOs();
-    const caldavTasks = caldavAdapter.normalize(vtodos, new Map());
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Obsidian still has the task
     const obsidianTasks = [...baseline];
@@ -216,14 +219,14 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, new Map());
+    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // CalDAV side: updated description
     const updatedVTODO = buildVTODO(uid, 'CalDAV version');
     await client.updateVTODO(vtodos[0], updatedVTODO);
 
     vtodos = await client.fetchVTODOs();
-    const caldavTasks = caldavAdapter.normalize(vtodos, new Map());
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
 
     // Obsidian side: different update
     const obsidianTasks: CommonTask[] = [{
@@ -255,7 +258,7 @@ describe('Sync round-trip E2E', () => {
     );
 
     const vtodos = await client.fetchVTODOs();
-    const tasks = caldavAdapter.normalize(vtodos, new Map());
+    const tasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
     const task = tasks[0];
 
     // Generate Obsidian markdown (mapper uses task.uid for 🆔)

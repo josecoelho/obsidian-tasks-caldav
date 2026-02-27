@@ -1,6 +1,7 @@
 import { CommonTask, SyncChange } from './types';
 import { VTODOMapper, CalendarObject } from '../caldav/vtodoMapper';
 import { CalDAVClient } from '../caldav/calDAVClientDirect';
+import { IdMapping } from '../types';
 
 export class CalDAVAdapter {
   private mapper: VTODOMapper;
@@ -10,19 +11,17 @@ export class CalDAVAdapter {
   }
 
   /**
-   * Normalize VTODOs into CommonTask[], using the UID mapping to resolve
+   * Normalize VTODOs into CommonTask[], using IdMapping to resolve
    * CalDAV UIDs to Obsidian task IDs where a mapping exists.
    */
-  normalize(vtodos: CalendarObject[], uidMapping: Map<string, string>): CommonTask[] {
+  normalize(vtodos: CalendarObject[], idMapping: IdMapping): CommonTask[] {
     const tasks: CommonTask[] = [];
 
     for (const vtodo of vtodos) {
-      const caldavUID = this.mapper.extractUID(vtodo.data);
-      if (!caldavUID) continue;
+      const caldavUid = this.mapper.extractUID(vtodo.data);
+      if (!caldavUid) continue;
 
-      const obsidianTaskId = uidMapping.get(caldavUID);
-      const uid = obsidianTaskId ?? caldavUID;
-
+      const uid = idMapping.caldavUidToTaskId[caldavUid] ?? caldavUid;
       tasks.push(this.toCommonTask(vtodo, uid));
     }
 
@@ -53,9 +52,9 @@ export class CalDAVAdapter {
   /**
    * Apply a set of sync changes to the CalDAV server.
    */
-  async applyChanges(changes: SyncChange[], client: CalDAVClient, uidMapping: Map<string, string>): Promise<void> {
+  async applyChanges(changes: SyncChange[], client: CalDAVClient, idMapping: IdMapping): Promise<void> {
     for (const change of changes) {
-      const caldavUID = this.resolveCaldavUID(change.task.uid, uidMapping);
+      const caldavUID = this.resolveCaldavUid(change.task.uid, idMapping);
 
       switch (change.type) {
         case 'create': {
@@ -83,14 +82,8 @@ export class CalDAVAdapter {
 
   /**
    * Resolve an Obsidian task UID to the corresponding CalDAV UID.
-   * If already a CalDAV UID (not in mapping), use it directly.
    */
-  private resolveCaldavUID(taskUid: string, uidMapping: Map<string, string>): string {
-    // uidMapping is caldavUID -> taskId, so we need the reverse
-    for (const [caldavUID, taskId] of uidMapping.entries()) {
-      if (taskId === taskUid) return caldavUID;
-    }
-    // Not mapped — this is a new task from Obsidian, generate CalDAV UID
-    return `obsidian-${taskUid}`;
+  private resolveCaldavUid(taskUid: string, idMapping: IdMapping): string {
+    return idMapping.taskIdToCaldavUid[taskUid] ?? `obsidian-${taskUid}`;
   }
 }
