@@ -14,6 +14,7 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 - **Task notes** — indented bullet points below a task round-trip as VTODO DESCRIPTION
 - **Recurrence** — `RRULE` round-trips between CalDAV and obsidian-tasks format
 - **Delete detection** — three-way diff detects deletions on either side
+- **Reconciliation** — automatically matches identical tasks when switching calendars or after lost sync data, preventing duplicates
 
 ## Requirements
 
