@@ -357,5 +357,95 @@ describe('CalDAVAdapter', () => {
       expect(mockFetchVTODOByUID).toHaveBeenCalledWith('caldav-upd');
       expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
     });
+
+    describe('complete change type', () => {
+      it('marks VTODO as COMPLETED and strips RRULE', async () => {
+        const existingCalObj = makeCalObj('caldav-comp', 'Recurring task', [
+          'RRULE:FREQ=DAILY;COUNT=30',
+        ]);
+        const mockFetchVTODOByUID = jest.fn().mockResolvedValue(existingCalObj);
+        const mockUpdateVTODO = jest.fn();
+        const mockClient: CalDAVClient = {
+          connect: jest.fn(),
+          fetchVTODOs: jest.fn(),
+          createVTODO: jest.fn(),
+          updateVTODO: mockUpdateVTODO,
+          deleteVTODOByUID: jest.fn(),
+          fetchVTODOByUID: mockFetchVTODOByUID,
+        };
+        const testAdapter = new CalDAVAdapter(mockClient);
+
+        const task = {
+          uid: 'comp-task',
+          title: 'Recurring task',
+          status: 'DONE' as const,
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2025-01-15',
+          priority: 'none' as const,
+          tags: [],
+          recurrenceRule: 'FREQ=DAILY;COUNT=30',
+          body: '',
+        };
+
+        const idMapping: IdMapping = {
+          taskIdToCaldavUid: { 'comp-task': 'caldav-comp' },
+          caldavUidToTaskId: { 'caldav-comp': 'comp-task' },
+        };
+
+        await testAdapter.applyChanges(
+          [{ type: 'complete', task }],
+          idMapping,
+        );
+
+        expect(mockFetchVTODOByUID).toHaveBeenCalledWith('caldav-comp');
+        expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
+
+        const vtodoData = (mockUpdateVTODO.mock.calls[0] as [unknown, string])[1];
+        expect(vtodoData).toContain('STATUS:COMPLETED');
+        expect(vtodoData).not.toContain('RRULE');
+      });
+
+      it('skips when VTODO not found on server', async () => {
+        const mockFetchVTODOByUID = jest.fn().mockResolvedValue(null);
+        const mockUpdateVTODO = jest.fn();
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+        const mockClient: CalDAVClient = {
+          connect: jest.fn(),
+          fetchVTODOs: jest.fn(),
+          createVTODO: jest.fn(),
+          updateVTODO: mockUpdateVTODO,
+          deleteVTODOByUID: jest.fn(),
+          fetchVTODOByUID: mockFetchVTODOByUID,
+        };
+        const testAdapter = new CalDAVAdapter(mockClient);
+
+        const task = {
+          uid: 'missing-task',
+          title: 'Missing',
+          status: 'DONE' as const,
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2025-01-15',
+          priority: 'none' as const,
+          tags: [],
+          recurrenceRule: '',
+          body: '',
+        };
+
+        await testAdapter.applyChanges(
+          [{ type: 'complete', task }],
+          emptyIdMapping,
+        );
+
+        expect(mockUpdateVTODO).not.toHaveBeenCalled();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          expect.stringContaining('not found for complete'),
+        );
+        consoleSpy.mockRestore();
+      });
+    });
   });
 });

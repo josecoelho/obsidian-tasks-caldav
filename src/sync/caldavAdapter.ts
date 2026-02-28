@@ -85,6 +85,20 @@ export class CalDAVAdapter {
           await this.client.updateVTODO(existing, newData);
           break;
         }
+        case 'complete': {
+          const existing = await this.client.fetchVTODOByUID(caldavUID);
+          if (!existing) {
+            console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for complete, skipping`);
+            continue;
+          }
+          const completedTask: CommonTask = {
+            ...change.task,
+            recurrenceRule: '',
+          };
+          const newData = this.fromCommonTask(completedTask, caldavUID);
+          await this.client.updateVTODO(existing, newData);
+          break;
+        }
         case 'delete': {
           await this.client.deleteVTODOByUID(caldavUID);
           break;
