@@ -174,7 +174,7 @@ describe('002-flat-storage-to-per-calendar', () => {
 
     expect(adapter.write).toHaveBeenCalledTimes(3);
     const writePaths = adapter.write.mock.calls.map((c: unknown[]) => c[0] as string);
-    expect(writePaths.every((p: string) => p.includes('calendars/Work/'))).toBe(true);
+    expect(writePaths.every((p: string) => p.includes('calendars/example-com_Work/'))).toBe(true);
 
     expect(adapter.remove).toHaveBeenCalledTimes(3);
     const removePaths = adapter.remove.mock.calls.map((c: unknown[]) => c[0] as string);
@@ -183,9 +183,9 @@ describe('002-flat-storage-to-per-calendar', () => {
 
   it('does not overwrite existing target files but still deletes root copies', async () => {
     adapter.exists.mockImplementation((path: string) => {
-      if (path.includes('calendars/Work/state.json')) return true;
-      if (path.includes('calendars/Work/baseline.json')) return true;
-      if (path.includes('calendars/Work/id-mapping.json')) return true;
+      if (path.includes('calendars/example-com_Work/state.json')) return true;
+      if (path.includes('calendars/example-com_Work/baseline.json')) return true;
+      if (path.includes('calendars/example-com_Work/id-mapping.json')) return true;
       if (path.includes('calendars/Work')) return true;
       if (path.includes('calendars')) return true;
       if (path.includes('.caldav-sync/state.json')) return true;

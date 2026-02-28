@@ -7,6 +7,7 @@ import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
+import { calendarStorageId } from "../utils/calendarStorageId";
 
 export interface SyncResult {
 	calendarName: string;
@@ -37,7 +38,7 @@ export class SyncEngine {
 		this.calendar = calendar;
 		this.settings = settings;
 		const wrapper = new ObsidianTasksWrapper(app);
-		this.storage = new SyncStorage(app, calendar.calendarName);
+		this.storage = new SyncStorage(app, calendarStorageId(calendar.serverUrl, calendar.calendarName));
 		this.caldavAdapter = new CalDAVAdapter(
 			new CalDAVClientDirect(calendar),
 		);

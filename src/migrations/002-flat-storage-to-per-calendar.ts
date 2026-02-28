@@ -1,5 +1,6 @@
 import { normalizePath } from 'obsidian';
 import { Migration } from './migrationRunner';
+import { calendarStorageId } from '../utils/calendarStorageId';
 
 const SYNC_FILES = ['state.json', 'baseline.json', 'id-mapping.json'];
 
@@ -10,8 +11,9 @@ export const flatStorageToPerCalendar: Migration = {
 
     const adapter = app.vault.adapter;
     const rootDir = '.caldav-sync';
-    const calendarName = settings.calendars[0].calendarName;
-    const targetDir = normalizePath(`${rootDir}/calendars/${calendarName}`);
+    const cal = settings.calendars[0];
+    const storageId = calendarStorageId(cal.serverUrl, cal.calendarName);
+    const targetDir = normalizePath(`${rootDir}/calendars/${storageId}`);
 
     const rootExists = await Promise.all(
       SYNC_FILES.map(f => adapter.exists(normalizePath(`${rootDir}/${f}`))),
