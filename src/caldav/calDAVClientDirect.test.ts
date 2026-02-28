@@ -1,26 +1,17 @@
-import { CalDAVClientDirect } from './calDAVClientDirect';
-import { CalDAVSettings } from '../types';
+import { CalDAVClientDirect, CalDAVConnectionConfig } from './calDAVClientDirect';
 
-const mockSettings: CalDAVSettings = {
+const mockConfig: CalDAVConnectionConfig = {
     serverUrl: 'https://caldav.example.com',
     username: 'testuser',
     password: 'testpass',
     calendarName: 'Tasks',
-    syncTag: 'sync',
-    syncInterval: 5,
-    newTasksDestination: 'Inbox.md',
-    newTasksSection: '',
-    requireManualConflictResolution: false,
-    autoResolveObsidianWins: true,
-    syncCompletedTasks: false,
-    deleteBehavior: 'ask'
 };
 
 describe('CalDAVClientDirect', () => {
     let client: CalDAVClientDirect;
 
     beforeEach(() => {
-        client = new CalDAVClientDirect(mockSettings);
+        client = new CalDAVClientDirect(mockConfig);
         jest.clearAllMocks();
     });
 

@@ -2,13 +2,15 @@ import { App, Notice } from "obsidian";
 import { ObsidianTasksWrapper } from "../tasks/obsidianTasksWrapper";
 import { CalDAVClientDirect } from "../caldav/calDAVClientDirect";
 import { SyncStorage } from "../storage/syncStorage";
-import { CalDAVSettings, IdMapping } from "../types";
+import { CalDAVSettings, CalendarMapping, IdMapping } from "../types";
 import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
+import { calendarStorageId } from "../utils/calendarStorageId";
 
 export interface SyncResult {
+	calendarName: string;
 	success: boolean;
 	message: string;
 	created: { toObsidian: number; toCalDAV: number };
@@ -26,20 +28,22 @@ export interface SyncResult {
 }
 
 export class SyncEngine {
+	private calendar: CalendarMapping;
 	private settings: CalDAVSettings;
 	private storage: SyncStorage;
 	private caldavAdapter: CalDAVAdapter;
 	private obsidianAdapter: ObsidianAdapter;
 
-	constructor(app: App, settings: CalDAVSettings) {
+	constructor(app: App, calendar: CalendarMapping, settings: CalDAVSettings) {
+		this.calendar = calendar;
 		this.settings = settings;
 		const wrapper = new ObsidianTasksWrapper(app);
-		this.storage = new SyncStorage(app);
+		this.storage = new SyncStorage(app, calendarStorageId(calendar.serverUrl, calendar.calendarName));
 		this.caldavAdapter = new CalDAVAdapter(
-			new CalDAVClientDirect(settings),
+			new CalDAVClientDirect(calendar),
 		);
 		this.obsidianAdapter = new ObsidianAdapter(wrapper, {
-			syncTag: settings.syncTag,
+			syncTag: calendar.tag,
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 		});
@@ -56,9 +60,9 @@ export class SyncEngine {
 
 	async sync(dryRun: boolean = false): Promise<SyncResult> {
 		try {
-			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync...`);
+			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
 
-			const syncTag = this.settings.syncTag;
+			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();
 
 			const caldavTasks = await this.caldavAdapter.fetchTasks(syncTag, idMapping);
@@ -231,18 +235,20 @@ export class SyncEngine {
 	): SyncResult {
 		const counts = this.countChanges(changeset);
 
+		const name = this.calendar.calendarName;
 		const message = dryRun
-			? `Dry run complete! Would sync:\n` +
+			? `[${name}] Dry run complete! Would sync:\n` +
 				`From CalDAV: ${counts.created.toObsidian} created, ${counts.updated.toObsidian} updated, ${counts.deleted.toObsidian} deleted\n` +
 				`To CalDAV: ${counts.created.toCalDAV} created, ${counts.updated.toCalDAV} updated, ${counts.deleted.toCalDAV} deleted\n` +
 				`Conflicts: ${changeset.conflicts.length}\n\nNo changes were made.`
-			: `Sync complete! ` +
+			: `[${name}] Sync complete! ` +
 				`From CalDAV: ${counts.created.toObsidian}+${counts.updated.toObsidian}+${counts.deleted.toObsidian} | ` +
 				`To CalDAV: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}`;
 
 		new Notice(message, dryRun ? 10000 : 5000);
 
 		return {
+			calendarName: this.calendar.calendarName,
 			success: true,
 			message,
 			...counts,
@@ -278,10 +284,11 @@ export class SyncEngine {
 
 	private buildErrorResult(error: unknown): SyncResult {
 		const errorMsg = error instanceof Error ? error.message : "Unknown error";
-		const message = `Sync failed: ${errorMsg}`;
+		const message = `[${this.calendar.calendarName}] Sync failed: ${errorMsg}`;
 		new Notice(message, 8000);
 		console.error("Sync error:", error);
 		return {
+			calendarName: this.calendar.calendarName,
 			success: false,
 			message,
 			created: { toObsidian: 0, toCalDAV: 0 },

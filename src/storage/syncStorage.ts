@@ -27,12 +27,16 @@ export class SyncStorage {
   private baselineDirty: boolean = false;
   private idMappingDirty: boolean = false;
 
-  constructor(app: App) {
+  constructor(app: App, calendarId?: string) {
     this.app = app;
-    this.syncDir = normalizePath('.caldav-sync');
-    this.statePath = normalizePath('.caldav-sync/state.json');
-    this.baselinePath = normalizePath('.caldav-sync/baseline.json');
-    this.idMappingPath = normalizePath('.caldav-sync/id-mapping.json');
+    if (calendarId) {
+      this.syncDir = normalizePath(`.caldav-sync/calendars/${calendarId}`);
+    } else {
+      this.syncDir = normalizePath('.caldav-sync');
+    }
+    this.statePath = normalizePath(`${this.syncDir}/state.json`);
+    this.baselinePath = normalizePath(`${this.syncDir}/baseline.json`);
+    this.idMappingPath = normalizePath(`${this.syncDir}/id-mapping.json`);
   }
 
   /**
@@ -42,9 +46,16 @@ export class SyncStorage {
   async initialize(): Promise<void> {
     const adapter = this.app.vault.adapter;
 
-    // Create .caldav-sync directory if it doesn't exist
+    // Create directory tree if it doesn't exist
     if (!(await adapter.exists(this.syncDir))) {
-      await adapter.mkdir(this.syncDir);
+      const parts = this.syncDir.split('/');
+      let current = '';
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        if (!(await adapter.exists(current))) {
+          await adapter.mkdir(current);
+        }
+      }
     }
 
     // Initialize state.json if it doesn't exist
@@ -59,8 +70,6 @@ export class SyncStorage {
     // Load data into caches
     await this.loadIntoCache();
 
-    // Migrate old mapping.json → id-mapping.json if needed
-    await this.migrateFromMappingJson();
   }
 
   /**
@@ -238,44 +247,6 @@ export class SyncStorage {
     } catch (error) {
       console.error('Failed to save IdMapping:', error);
       throw error;
-    }
-  }
-
-  /**
-   * One-time migration: reads old mapping.json and populates id-mapping.json.
-   * Skips if IdMapping already has entries or mapping.json doesn't exist.
-   */
-  private async migrateFromMappingJson(): Promise<void> {
-    const idMapping = this.getIdMapping();
-    if (Object.keys(idMapping.taskIdToCaldavUid).length > 0) return;
-
-    const adapter = this.app.vault.adapter;
-    const mappingPath = normalizePath('.caldav-sync/mapping.json');
-    if (!(await adapter.exists(mappingPath))) return;
-
-    try {
-      const content = await adapter.read(mappingPath);
-      const oldMapping = JSON.parse(content) as {
-        tasks: Record<string, { caldavUID: string }>;
-      };
-
-      if (!oldMapping.tasks || Object.keys(oldMapping.tasks).length === 0) return;
-
-      const migrated: IdMapping = {
-        taskIdToCaldavUid: {},
-        caldavUidToTaskId: {},
-      };
-
-      for (const [taskId, taskMapping] of Object.entries(oldMapping.tasks)) {
-        migrated.taskIdToCaldavUid[taskId] = taskMapping.caldavUID;
-        migrated.caldavUidToTaskId[taskMapping.caldavUID] = taskId;
-      }
-
-      this.setIdMapping(migrated);
-      await this.saveIdMappingToDisk(migrated);
-      this.idMappingDirty = false;
-    } catch (error) {
-      console.error('Failed to migrate from mapping.json:', error);
     }
   }
 

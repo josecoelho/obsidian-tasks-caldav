@@ -1,27 +1,24 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
-import { SyncEngine } from './src/sync/syncEngine';
+import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 import { AutoSyncScheduler } from './src/sync/autoSync';
+import { runMigrations } from './src/migrations/migrationRunner';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
-	syncEngine: SyncEngine | null = null;
+	private syncEngines: SyncEngine[] = [];
 	private autoSync: AutoSyncScheduler | null = null;
 
 	async onload() {
 		await this.loadSettings();
 
-		// Initialize sync engine
-		this.syncEngine = new SyncEngine(this.app, this.settings);
-		const ready = await this.syncEngine.initialize();
-		if (!ready) {
-			new Notice('CalDAV sync: obsidian-tasks plugin not available');
-		}
+		await runMigrations(this.app, this.settings);
 
-		// Command: Validate task IDs in document
+		await this.initializeEngines();
+
 		this.addCommand({
 			id: 'validate-task-ids',
 			name: 'Validate task ids in current document',
@@ -57,58 +54,56 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
-		// Command: Sync Now - Manual sync with CalDAV
 		this.addCommand({
 			id: 'sync-now',
 			name: 'Sync with CalDAV now',
 			callback: async () => {
-				if (!this.syncEngine) {
-					new Notice('Sync engine not initialized');
+				if (this.syncEngines.length === 0) {
+					new Notice('No calendars configured');
 					return;
 				}
-				const result = await this.syncEngine.sync();
-				new SyncResultModal(this.app, result, false).open();
+				const results = await this.syncAllEngines(false);
+				new SyncResultModal(this.app, results, false).open();
 			}
 		});
 
-		// Command: Dry Run - Preview sync without making changes
 		this.addCommand({
 			id: 'sync-dry-run',
 			name: 'Preview sync (dry run - no changes)',
 			callback: async () => {
-				if (!this.syncEngine) {
-					new Notice('Sync engine not initialized');
+				if (this.syncEngines.length === 0) {
+					new Notice('No calendars configured');
 					return;
 				}
-				const result = await this.syncEngine.sync(true);
-				new SyncResultModal(this.app, result, true, async () => {
-					return await this.syncEngine!.sync(false);
-				}).open();
+				const results = await this.syncAllEngines(true);
+				new SyncResultModal(this.app, results, true, () => this.syncAllEngines(false)).open();
 			}
 		});
 
-		// Command: View Sync Status
 		this.addCommand({
 			id: 'view-sync-status',
 			name: 'View sync status',
 			callback: () => {
-				if (!this.syncEngine) {
-					new Notice('Sync engine not initialized');
+				if (this.syncEngines.length === 0) {
+					new Notice('No calendars configured');
 					return;
 				}
-				const status = this.syncEngine.getStatus();
-				new Notice(status, 8000);
+				const statuses = this.syncEngines.map(e => e.getStatus());
+				new Notice(statuses.join('\n---\n'), 8000);
 			}
 		});
 
-		// Command: Dump CalDAV requests for debugging
 		this.addCommand({
 			id: 'dump-caldav-requests',
 			name: 'Dump CalDAV requests for debugging',
 			callback: async () => {
+				if (this.settings.calendars.length === 0) {
+					new Notice('No calendars configured');
+					return;
+				}
 				new Notice('Dumping CalDAV requests...');
 				try {
-					const result = await dumpCalDAVRequests(this.app, this.settings);
+					const result = await dumpCalDAVRequests(this.app, this.settings.calendars[0]);
 					new Notice(`${result}\nCheck .caldav-sync/test-caldav-requests/ in your vault.`, 10000);
 				} catch (error) {
 					const msg = error instanceof Error ? error.message : String(error);
@@ -118,33 +113,68 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		});
 
-		// Add settings tab
 		this.addSettingTab(new CalDAVSettingTab(this.app, this));
 
-		// Auto-sync scheduler
 		this.autoSync = new AutoSyncScheduler(
-			() => this.syncEngine!.sync().then(() => {}),
+			() => this.syncAll(),
 			(id) => this.registerInterval(id),
 		);
 		this.autoSync.start(this.settings.syncInterval);
-
 	}
 
 	onunload() {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, await this.loadData() as Partial<CalDAVSettings>);
+		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
+		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
+
+		const legacy = loaded;
+		if (legacy.serverUrl && !legacy.calendars) {
+			this.settings.calendars = [{
+				tag: (legacy.syncTag as string) ?? 'sync',
+				calendarName: (legacy.calendarName as string) ?? '',
+				serverUrl: (legacy.serverUrl as string) ?? '',
+				username: (legacy.username as string) ?? '',
+				password: (legacy.password as string) ?? '',
+			}];
+			await this.saveData(this.settings);
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		// Re-initialize sync engine with new settings
-		this.syncEngine = new SyncEngine(this.app, this.settings);
-		await this.syncEngine.initialize();
+		await this.initializeEngines();
 		this.autoSync?.start(this.settings.syncInterval);
 	}
 
+	private async initializeEngines(): Promise<void> {
+		this.syncEngines = [];
+		for (const calendar of this.settings.calendars) {
+			const engine = new SyncEngine(this.app, calendar, this.settings);
+			const ready = await engine.initialize();
+			if (ready) {
+				this.syncEngines.push(engine);
+			}
+		}
+		if (this.syncEngines.length === 0 && this.settings.calendars.length > 0) {
+			new Notice('CalDAV sync: obsidian-tasks plugin not available');
+		}
+	}
+
+	private async syncAll(): Promise<void> {
+		for (const engine of this.syncEngines) {
+			await engine.sync();
+		}
+	}
+
+	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
+		const results: SyncResult[] = [];
+		for (const engine of this.syncEngines) {
+			results.push(await engine.sync(dryRun));
+		}
+		return results;
+	}
 }
 
 class CalDAVSettingTab extends PluginSettingTab {
@@ -157,70 +187,34 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
-
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Connection')
+			.setName('Calendars')
 			.setHeading();
 
-		new Setting(containerEl)
-			.setName('Server URL')
-			.setDesc('CalDAV server URL (e.g., https://caldav.example.com)')
-			.addText(text => text
-				.setPlaceholder('https://caldav.example.com')
-				.setValue(this.plugin.settings.serverUrl)
-				.onChange(async (value) => {
-					this.plugin.settings.serverUrl = value;
-					await this.plugin.saveSettings();
-				}));
+		for (let i = 0; i < this.plugin.settings.calendars.length; i++) {
+			this.renderCalendarMapping(containerEl, i);
+		}
 
 		new Setting(containerEl)
-			.setName('Username')
-			.setDesc('CalDAV username')
-			.addText(text => text
-				.setPlaceholder('Enter username')
-				.setValue(this.plugin.settings.username)
-				.onChange(async (value) => {
-					this.plugin.settings.username = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Password')
-			.setDesc('CalDAV password')
-			.addText(text => {
-				text.inputEl.type = 'password';
-				text
-					.setPlaceholder('Enter password')
-					.setValue(this.plugin.settings.password)
-					.onChange(async (value) => {
-						this.plugin.settings.password = value;
-						await this.plugin.saveSettings();
+			.addButton(button => button
+				.setButtonText('Add calendar')
+				.onClick(async () => {
+					this.plugin.settings.calendars.push({
+						tag: '',
+						calendarName: '',
+						serverUrl: '',
+						username: '',
+						password: '',
 					});
-			});
-
-		new Setting(containerEl)
-			.setName('Calendar name')
-			.setDesc('Name of the calendar to sync with')
-			.addText(text => text
-				.setPlaceholder('Tasks')
-				.setValue(this.plugin.settings.calendarName)
-				.onChange(async (value) => {
-					this.plugin.settings.calendarName = value;
 					await this.plugin.saveSettings();
+					this.display();
 				}));
 
 		new Setting(containerEl)
-			.setName('Sync tag')
-			.setDesc('Tag to filter tasks for sync (e.g., "sync" for #sync). Leave empty to sync all tasks.')
-			.addText(text => text
-				.setPlaceholder('Enter tag name')
-				.setValue(this.plugin.settings.syncTag)
-				.onChange(async (value) => {
-					this.plugin.settings.syncTag = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName('Behavior')
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName('Sync interval')
@@ -270,5 +264,77 @@ class CalDAVSettingTab extends PluginSettingTab {
 					this.plugin.settings.autoResolveObsidianWins = value;
 					await this.plugin.saveSettings();
 				}));
+	}
+
+	private renderCalendarMapping(containerEl: HTMLElement, index: number): void {
+		const calendar = this.plugin.settings.calendars[index];
+
+		new Setting(containerEl)
+			.setName(`Calendar ${index + 1}`)
+			.setHeading()
+			.addButton(button => button
+				.setButtonText('Remove')
+				.setWarning()
+				.onClick(async () => {
+					this.plugin.settings.calendars.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		new Setting(containerEl)
+			.setName('Tag')
+			.setDesc('Tag that routes tasks to this calendar (without #)')
+			.addText(text => text
+				.setPlaceholder('Work')
+				.setValue(calendar.tag)
+				.onChange(async (value) => {
+					calendar.tag = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Calendar name')
+			.setDesc('Name of the calendar on the server')
+			.addText(text => text
+				.setPlaceholder('Work')
+				.setValue(calendar.calendarName)
+				.onChange(async (value) => {
+					calendar.calendarName = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Server URL')
+			.setDesc('CalDAV server URL')
+			.addText(text => text
+				.setPlaceholder('https://caldav.example.com')
+				.setValue(calendar.serverUrl)
+				.onChange(async (value) => {
+					calendar.serverUrl = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Username')
+			.addText(text => text
+				.setPlaceholder('Enter username')
+				.setValue(calendar.username)
+				.onChange(async (value) => {
+					calendar.username = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Password')
+			.addText(text => {
+				text.inputEl.type = 'password';
+				text
+					.setPlaceholder('Enter password')
+					.setValue(calendar.password)
+					.onChange(async (value) => {
+						calendar.password = value;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }

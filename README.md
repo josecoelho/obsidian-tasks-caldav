@@ -6,11 +6,11 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 
 ## Features
 
+- **Multi-calendar support** — sync different tags to different calendars and servers (tasks must have the tag on both sides — Obsidian `#tag` and CalDAV `CATEGORIES`)
 - **Bidirectional sync** — push tasks to CalDAV servers and pull changes back
 - **Auto-sync** — configurable interval (default: 5 minutes)
 - **Dry-run mode** — preview what will sync before committing changes
 - **Conflict detection** — manual resolution or auto-resolve with Obsidian wins
-- **Tag-based filtering** — sync only tasks with a specific tag (e.g. `#sync`)
 - **Task notes** — indented bullet points below a task round-trip as VTODO DESCRIPTION
 - **Recurrence** — `RRULE` round-trips between CalDAV and obsidian-tasks format
 - **Delete detection** — three-way diff detects deletions on either side
@@ -38,15 +38,19 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 
 ## Configuration
 
-Open Settings → Tasks CalDAV Sync and fill in:
+Open Settings → Tasks CalDAV Sync. Add one or more calendars, each with:
+
+| Setting | Description |
+|---------|-------------|
+| **Tag** | Only tasks with this tag are synced — on both sides (Obsidian tags and CalDAV CATEGORIES must match) |
+| **Calendar name** | Name of the calendar on the server |
+| **Server URL** | CalDAV server endpoint |
+| **Username / Password** | CalDAV credentials |
+
+Global settings:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| **Server URL** | Your CalDAV server endpoint | — |
-| **Username** | CalDAV account username | — |
-| **Password** | CalDAV account password | — |
-| **Calendar name** | Which calendar to sync with | — |
-| **Sync tag** | Only sync tasks with this tag (empty = all tasks) | `sync` |
 | **Sync interval** | Auto-sync period in minutes | `5` |
 | **New tasks destination** | File where incoming CalDAV tasks are created | `Inbox.md` |
 | **New tasks section** | Optional heading within the destination file | — |
@@ -113,7 +117,6 @@ These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
 ## Known limitations
 
-- **Recurring task completion from CalDAV** — When a recurring task is completed on a CalDAV client, the sync updates the Obsidian task status directly instead of using obsidian-tasks' completion mechanism. This means no next occurrence is generated. To preserve the recurrence chain, complete recurring tasks from Obsidian. ([#40](https://github.com/josecoelho/obsidian-tasks-caldav/issues/40))
 - **Priority round-trip is lossy** — obsidian-tasks uses emoji-based priorities (⏫🔼🔽) while CalDAV uses numeric PRIORITY (1-9). Obsidian→CalDAV maps correctly, but CalDAV→Obsidian does not write priority emojis back into the task markdown.
 - **Internal obsidian-tasks API** — This plugin accesses obsidian-tasks' internal `getTasks()` method, which is not part of the official public API. Future obsidian-tasks updates could break this integration.
 

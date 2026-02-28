@@ -63,25 +63,21 @@ function setupExistingAdapter(
     state?: SyncState;
     baseline?: CommonTask[];
     idMapping?: IdMapping;
-    oldMappingJson?: { tasks: Record<string, { caldavUID: string }> };
   } = {}
 ) {
   const state = opts.state ?? { lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] };
   const baseline = opts.baseline;
   const idMapping = opts.idMapping;
-  const oldMappingJson = opts.oldMappingJson;
 
   adapter.exists.mockImplementation((path: string) => {
     if (path.includes('baseline.json')) return baseline !== undefined;
     if (path.includes('id-mapping.json')) return idMapping !== undefined;
-    if (path.includes('mapping.json')) return oldMappingJson !== undefined;
     return true;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
   adapter.read.mockImplementation((path: string) => {
     if (path.includes('id-mapping.json') && idMapping) return JSON.stringify(idMapping);
-    if (path.includes('mapping.json') && oldMappingJson) return JSON.stringify(oldMappingJson);
     if (path.includes('state.json')) return JSON.stringify(state);
     if (path.includes('baseline.json') && baseline) return JSON.stringify(baseline);
     throw new Error('File not found');
@@ -357,54 +353,6 @@ describe('SyncStorage', () => {
     });
   });
 
-  describe('migrateFromMappingJson', () => {
-    it('should convert old mapping.json to IdMapping on initialize', async () => {
-      const oldMapping = {
-        tasks: {
-          'task-1': { caldavUID: 'cal-1' },
-          'task-2': { caldavUID: 'cal-2' },
-        },
-      };
-      setupExistingAdapter(adapter, { oldMappingJson: oldMapping });
-
-      await storage.initialize();
-
-      expect(storage.getIdMapping()).toEqual({
-        taskIdToCaldavUid: { 'task-1': 'cal-1', 'task-2': 'cal-2' },
-        caldavUidToTaskId: { 'cal-1': 'task-1', 'cal-2': 'task-2' },
-      });
-    });
-
-    it('should skip migration when IdMapping already has entries', async () => {
-      const oldMapping = {
-        tasks: {
-          'task-1': { caldavUID: 'cal-1' },
-        },
-      };
-      const idMapping: IdMapping = {
-        taskIdToCaldavUid: { 'existing': 'existing-cal' },
-        caldavUidToTaskId: { 'existing-cal': 'existing' },
-      };
-      setupExistingAdapter(adapter, { oldMappingJson: oldMapping, idMapping });
-
-      await storage.initialize();
-
-      // Should keep existing, not overwrite with old mapping data
-      expect(storage.getIdMapping()).toEqual(idMapping);
-    });
-
-    it('should skip migration when mapping.json does not exist', async () => {
-      setupFreshAdapter(adapter);
-
-      await storage.initialize();
-
-      expect(storage.getIdMapping()).toEqual({
-        taskIdToCaldavUid: {},
-        caldavUidToTaskId: {},
-      });
-    });
-  });
-
   describe('clearAll', () => {
     beforeEach(async () => {
       setupFreshAdapter(adapter);
@@ -450,6 +398,61 @@ describe('SyncStorage', () => {
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('id-mapping.json'))).toBe(true);
+    });
+  });
+
+  describe('per-calendar storage', () => {
+    it('stores files under calendars/{calendarId}/ when calendarId is provided', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      setupFreshAdapter(calAdapter);
+
+      await calStorage.initialize();
+
+      expect(calAdapter.mkdir).toHaveBeenCalledWith(
+        expect.stringContaining('calendars/work')
+      );
+    });
+
+    it('reads baseline from calendar-specific path', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      const baseline = [makeCommonTask({ uid: 'cal-task' })];
+
+      calAdapter.exists.mockImplementation((path: string) => {
+        if (path.includes('calendars/work/baseline.json')) return true;
+        if (path.includes('calendars/work')) return true;
+        if (path.includes('calendars')) return true;
+        return path.includes('.caldav-sync');
+      });
+      calAdapter.mkdir.mockResolvedValue(undefined);
+      calAdapter.write.mockResolvedValue(undefined);
+      calAdapter.read.mockImplementation((path: string) => {
+        if (path.includes('calendars/work/baseline.json')) return JSON.stringify(baseline);
+        if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '', conflicts: [] });
+        throw new Error('File not found');
+      });
+
+      await calStorage.initialize();
+      expect(calStorage.getBaseline()).toEqual(baseline);
+    });
+
+    it('saves id-mapping to calendar-specific path', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      setupFreshAdapter(calAdapter);
+
+      await calStorage.initialize();
+      calAdapter.write.mockClear();
+
+      calStorage.setIdMapping({ taskIdToCaldavUid: { 'a': 'b' }, caldavUidToTaskId: { 'b': 'a' } });
+      await calStorage.save();
+
+      expect(calAdapter.write).toHaveBeenCalledTimes(1);
+      expect((calAdapter.write.mock.calls[0] as [string, string])[0]).toContain('calendars/work/id-mapping.json');
     });
   });
 

@@ -196,3 +196,22 @@
   color: var(--text-muted);
   padding: 20px 0;
 }
+
+/* Per-calendar sections */
+
+.sync-calendar-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.sync-calendar-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sync-calendar-heading {
+  margin: 0 0 8px;
+  font-size: var(--font-ui-medium);
+}
