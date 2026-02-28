@@ -201,7 +201,7 @@ export class SyncEngine {
 		}
 
 		for (const change of [...changeset.toObsidian, ...changeset.toCalDAV]) {
-			if (change.type === "create" || change.type === "update") {
+			if (change.type === "create" || change.type === "update" || change.type === "complete") {
 				baselineMap.set(change.task.uid, change.task);
 			} else if (change.type === "delete") {
 				baselineMap.delete(change.task.uid);
@@ -257,7 +257,10 @@ export class SyncEngine {
 
 		return {
 			created: { toObsidian: count(changeset.toObsidian, "create"), toCalDAV: count(changeset.toCalDAV, "create") },
-			updated: { toObsidian: count(changeset.toObsidian, "update"), toCalDAV: count(changeset.toCalDAV, "update") },
+			updated: {
+				toObsidian: count(changeset.toObsidian, "update") + count(changeset.toObsidian, "complete"),
+				toCalDAV: count(changeset.toCalDAV, "update") + count(changeset.toCalDAV, "complete"),
+			},
 			deleted: { toObsidian: count(changeset.toObsidian, "delete"), toCalDAV: count(changeset.toCalDAV, "delete") },
 		};
 	}

@@ -16,7 +16,7 @@ export interface CommonTask {
 }
 
 export interface SyncChange {
-  type: 'create' | 'update' | 'delete';
+  type: 'create' | 'update' | 'delete' | 'complete';
   task: CommonTask;
   previousVersion?: CommonTask;
 }
