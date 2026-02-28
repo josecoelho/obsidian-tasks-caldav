@@ -63,25 +63,21 @@ function setupExistingAdapter(
     state?: SyncState;
     baseline?: CommonTask[];
     idMapping?: IdMapping;
-    oldMappingJson?: { tasks: Record<string, { caldavUID: string }> };
   } = {}
 ) {
   const state = opts.state ?? { lastSyncTime: '2025-01-01T00:00:00.000Z', conflicts: [] };
   const baseline = opts.baseline;
   const idMapping = opts.idMapping;
-  const oldMappingJson = opts.oldMappingJson;
 
   adapter.exists.mockImplementation((path: string) => {
     if (path.includes('baseline.json')) return baseline !== undefined;
     if (path.includes('id-mapping.json')) return idMapping !== undefined;
-    if (path.includes('mapping.json')) return oldMappingJson !== undefined;
     return true;
   });
   adapter.mkdir.mockResolvedValue(undefined);
   adapter.write.mockResolvedValue(undefined);
   adapter.read.mockImplementation((path: string) => {
     if (path.includes('id-mapping.json') && idMapping) return JSON.stringify(idMapping);
-    if (path.includes('mapping.json') && oldMappingJson) return JSON.stringify(oldMappingJson);
     if (path.includes('state.json')) return JSON.stringify(state);
     if (path.includes('baseline.json') && baseline) return JSON.stringify(baseline);
     throw new Error('File not found');
@@ -354,54 +350,6 @@ describe('SyncStorage', () => {
       await storage.initialize();
 
       expect(storage.getIdMapping()).toEqual(idMapping);
-    });
-  });
-
-  describe('migrateFromMappingJson', () => {
-    it('should convert old mapping.json to IdMapping on initialize', async () => {
-      const oldMapping = {
-        tasks: {
-          'task-1': { caldavUID: 'cal-1' },
-          'task-2': { caldavUID: 'cal-2' },
-        },
-      };
-      setupExistingAdapter(adapter, { oldMappingJson: oldMapping });
-
-      await storage.initialize();
-
-      expect(storage.getIdMapping()).toEqual({
-        taskIdToCaldavUid: { 'task-1': 'cal-1', 'task-2': 'cal-2' },
-        caldavUidToTaskId: { 'cal-1': 'task-1', 'cal-2': 'task-2' },
-      });
-    });
-
-    it('should skip migration when IdMapping already has entries', async () => {
-      const oldMapping = {
-        tasks: {
-          'task-1': { caldavUID: 'cal-1' },
-        },
-      };
-      const idMapping: IdMapping = {
-        taskIdToCaldavUid: { 'existing': 'existing-cal' },
-        caldavUidToTaskId: { 'existing-cal': 'existing' },
-      };
-      setupExistingAdapter(adapter, { oldMappingJson: oldMapping, idMapping });
-
-      await storage.initialize();
-
-      // Should keep existing, not overwrite with old mapping data
-      expect(storage.getIdMapping()).toEqual(idMapping);
-    });
-
-    it('should skip migration when mapping.json does not exist', async () => {
-      setupFreshAdapter(adapter);
-
-      await storage.initialize();
-
-      expect(storage.getIdMapping()).toEqual({
-        taskIdToCaldavUid: {},
-        caldavUidToTaskId: {},
-      });
     });
   });
 

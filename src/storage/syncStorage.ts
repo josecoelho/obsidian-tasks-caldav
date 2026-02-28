@@ -70,8 +70,6 @@ export class SyncStorage {
     // Load data into caches
     await this.loadIntoCache();
 
-    // Migrate old mapping.json → id-mapping.json if needed
-    await this.migrateFromMappingJson();
   }
 
   /**
@@ -249,83 +247,6 @@ export class SyncStorage {
     } catch (error) {
       console.error('Failed to save IdMapping:', error);
       throw error;
-    }
-  }
-
-  /**
-   * One-time migration: reads old mapping.json and populates id-mapping.json.
-   * Skips if IdMapping already has entries or mapping.json doesn't exist.
-   */
-  private async migrateFromMappingJson(): Promise<void> {
-    const idMapping = this.getIdMapping();
-    if (Object.keys(idMapping.taskIdToCaldavUid).length > 0) return;
-
-    const adapter = this.app.vault.adapter;
-    const mappingPath = normalizePath('.caldav-sync/mapping.json');
-    if (!(await adapter.exists(mappingPath))) return;
-
-    try {
-      const content = await adapter.read(mappingPath);
-      const oldMapping = JSON.parse(content) as {
-        tasks: Record<string, { caldavUID: string }>;
-      };
-
-      if (!oldMapping.tasks || Object.keys(oldMapping.tasks).length === 0) return;
-
-      const migrated: IdMapping = {
-        taskIdToCaldavUid: {},
-        caldavUidToTaskId: {},
-      };
-
-      for (const [taskId, taskMapping] of Object.entries(oldMapping.tasks)) {
-        migrated.taskIdToCaldavUid[taskId] = taskMapping.caldavUID;
-        migrated.caldavUidToTaskId[taskMapping.caldavUID] = taskId;
-      }
-
-      this.setIdMapping(migrated);
-      await this.saveIdMappingToDisk(migrated);
-      this.idMappingDirty = false;
-    } catch (error) {
-      console.error('Failed to migrate from mapping.json:', error);
-    }
-  }
-
-  /**
-   * Migrate flat .caldav-sync/ files into a per-calendar subdirectory.
-   * Moves state.json, baseline.json, and id-mapping.json from the root sync
-   * directory into .caldav-sync/calendars/{calendarName}/ if they exist and the
-   * target directory does not yet contain them.
-   */
-  static async migrateToPerCalendarStorage(app: App, calendarName: string): Promise<void> {
-    const adapter = app.vault.adapter;
-    const rootDir = normalizePath('.caldav-sync');
-    const targetDir = normalizePath(`.caldav-sync/calendars/${calendarName}`);
-
-    const filesToMigrate = ['state.json', 'baseline.json', 'id-mapping.json'];
-
-    const rootHasFiles = await Promise.all(
-      filesToMigrate.map(f => adapter.exists(normalizePath(`${rootDir}/${f}`))),
-    );
-    if (!rootHasFiles.some(Boolean)) return;
-
-    const targetExists = await adapter.exists(normalizePath(`${targetDir}/state.json`));
-    if (targetExists) return;
-
-    const parts = targetDir.split('/');
-    let current = '';
-    for (const part of parts) {
-      current = current ? `${current}/${part}` : part;
-      if (!(await adapter.exists(current))) {
-        await adapter.mkdir(current);
-      }
-    }
-
-    for (let i = 0; i < filesToMigrate.length; i++) {
-      if (!rootHasFiles[i]) continue;
-      const src = normalizePath(`${rootDir}/${filesToMigrate[i]}`);
-      const dst = normalizePath(`${targetDir}/${filesToMigrate[i]}`);
-      const content = await adapter.read(src);
-      await adapter.write(dst, content);
     }
   }
 

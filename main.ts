@@ -5,7 +5,7 @@ import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 import { AutoSyncScheduler } from './src/sync/autoSync';
-import { SyncStorage } from './src/storage/syncStorage';
+import { runMigrations } from './src/migrations/migrationRunner';
 
 export default class CalDAVSyncPlugin extends Plugin {
 	settings: CalDAVSettings;
@@ -15,13 +15,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// Migrate flat sync files to per-calendar directories
-		if (this.settings.calendars.length === 1) {
-			await SyncStorage.migrateToPerCalendarStorage(
-				this.app,
-				this.settings.calendars[0].calendarName,
-			);
-		}
+		await runMigrations(this.app, this.settings);
 
 		await this.initializeEngines();
 
