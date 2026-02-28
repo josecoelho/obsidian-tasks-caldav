@@ -1099,4 +1099,212 @@ describe('SyncEngine', () => {
       expect(mockCreateTask).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('recurring completion flow (integration)', () => {
+    it('CalDAV completes recurring task → Obsidian toggles → ID remapped', async () => {
+      const baseline: CommonTask = {
+        uid: 'task-001',
+        title: 'Recurring task',
+        status: 'TODO',
+        dueDate: '2026-02-17',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: 'FREQ=WEEKLY',
+        body: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-001',
+        tags: ['#sync'],
+        dueDate: { format: () => '2026-02-17' } as unknown as ObsidianTask['dueDate'],
+        recurrence: { toText: () => 'every week' } as ObsidianTask['recurrence'],
+        originalMarkdown: '- [ ] Recurring task 📅 2026-02-17 🔁 every week 🆔 task-001 #sync',
+      });
+
+      // CalDAV has marked the task DONE
+      const vtodo = makeCalObj('caldav-uid-001', 'Recurring task', [
+        'DUE;VALUE=DATE:20260217',
+        'STATUS:COMPLETED',
+        'COMPLETED:20260217T140000Z',
+        'PERCENT-COMPLETE:100',
+        'RRULE:FREQ=WEEKLY',
+      ]);
+
+      // Toggle produces 2 lines: completed old + new occurrence
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) =>
+          '- [x] Recurring task 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001 #sync\n- [ ] Recurring task 📅 2026-02-24 🔁 every week 🆔 task-002 #sync',
+      );
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-001': 'caldav-uid-001' },
+        caldavUidToTaskId: { 'caldav-uid-001': 'task-001' },
+      });
+      mockFindTaskById.mockReturnValue(obsTask);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+
+      // ObsidianAdapter.applyChanges should have been called with a 'complete' change
+      expect(result.details.toObsidian.length).toBe(1);
+      expect(result.details.toObsidian[0].type).toBe('complete');
+
+      // Toggle command was invoked (updateTaskInVault called with toggled result)
+      expect(mockUpdateTaskInVault).toHaveBeenCalled();
+
+      // CalDAVAdapter should NOT have received changes (CalDAV initiated the change)
+      expect(result.details.toCalDAV.length).toBe(0);
+      expect(mockUpdateVTODO).not.toHaveBeenCalled();
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+
+      // IdMapping updated: task-002 now maps to caldav-uid-001, task-001 removed
+      expect(mockSetIdMapping).toHaveBeenCalled();
+      const savedMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      expect(savedMapping.taskIdToCaldavUid['task-001']).toBeUndefined();
+      expect(savedMapping.taskIdToCaldavUid['task-002']).toBe('caldav-uid-001');
+      expect(savedMapping.caldavUidToTaskId['caldav-uid-001']).toBe('task-002');
+    });
+
+    it('Obsidian completes recurring task → CalDAV gets complete + new create', async () => {
+      const baseline: CommonTask = {
+        uid: 'task-001',
+        title: 'Recurring task',
+        status: 'TODO',
+        dueDate: '2026-02-17',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: 'FREQ=WEEKLY',
+        body: '',
+      };
+
+      // Obsidian: task-001 is now DONE, and task-002 is the new occurrence
+      const obsTaskDone = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-001',
+        tags: ['#sync'],
+        isDone: true,
+        status: { configuration: { symbol: 'x', name: 'Done', type: 'DONE' } },
+        dueDate: { format: () => '2026-02-17' } as unknown as ObsidianTask['dueDate'],
+        doneDate: { format: () => '2026-02-17' } as unknown as ObsidianTask['doneDate'],
+        originalMarkdown: '- [x] Recurring task 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001 #sync',
+      });
+
+      const obsTaskNew = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-002',
+        tags: ['#sync'],
+        dueDate: { format: () => '2026-02-24' } as unknown as ObsidianTask['dueDate'],
+        recurrence: { toText: () => 'every week' } as ObsidianTask['recurrence'],
+        originalMarkdown: '- [ ] Recurring task 📅 2026-02-24 🔁 every week 🆔 task-002 #sync',
+      });
+
+      // CalDAV: task-001 is unchanged (still TODO)
+      const vtodo = makeCalObj('caldav-uid-001', 'Recurring task', [
+        'DUE;VALUE=DATE:20260217',
+        'RRULE:FREQ=WEEKLY',
+      ]);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTaskDone, obsTaskNew));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-001': 'caldav-uid-001' },
+        caldavUidToTaskId: { 'caldav-uid-001': 'task-001' },
+      });
+      mockFetchVTODOByUID.mockResolvedValue(vtodo);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+
+      // CalDAV should receive changes: complete for task-001, create for task-002
+      const caldavChanges = result.details.toCalDAV;
+      expect(caldavChanges.length).toBe(2);
+
+      const completeChange = caldavChanges.find(c => c.type === 'complete');
+      const createChange = caldavChanges.find(c => c.type === 'create');
+      expect(completeChange).toBeDefined();
+      expect(completeChange!.task.uid).toBe('task-001');
+      expect(createChange).toBeDefined();
+      expect(createChange!.task.uid).toBe('task-002');
+
+      // Obsidian should NOT receive changes
+      expect(result.details.toObsidian.length).toBe(0);
+      expect(mockCreateTask).not.toHaveBeenCalled();
+    });
+
+    it('CalDAV bumps dates (no STATUS change) → detected as completion', async () => {
+      const baseline: CommonTask = {
+        uid: 'task-001',
+        title: 'Recurring task',
+        status: 'TODO',
+        dueDate: '2026-02-17',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: 'FREQ=WEEKLY',
+        body: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-001',
+        tags: ['#sync'],
+        dueDate: { format: () => '2026-02-17' } as unknown as ObsidianTask['dueDate'],
+        recurrence: { toText: () => 'every week' } as ObsidianTask['recurrence'],
+        originalMarkdown: '- [ ] Recurring task 📅 2026-02-17 🔁 every week 🆔 task-001 #sync',
+      });
+
+      // CalDAV: due date bumped to next occurrence, status still TODO
+      const vtodo = makeCalObj('caldav-uid-001', 'Recurring task', [
+        'DUE;VALUE=DATE:20260224',
+        'RRULE:FREQ=WEEKLY',
+      ]);
+
+      // Toggle produces 2 lines: completed old + new occurrence
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) =>
+          '- [x] Recurring task 📅 2026-02-17 ✅ 2026-02-28 🆔 task-001 #sync\n- [ ] Recurring task 📅 2026-02-24 🔁 every week 🆔 task-002 #sync',
+      );
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-001': 'caldav-uid-001' },
+        caldavUidToTaskId: { 'caldav-uid-001': 'task-001' },
+      });
+      mockFindTaskById.mockReturnValue(obsTask);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+
+      // Should be detected as 'complete' via date-bump detection
+      expect(result.details.toObsidian.length).toBe(1);
+      expect(result.details.toObsidian[0].type).toBe('complete');
+
+      // Toggle command was invoked
+      expect(mockUpdateTaskInVault).toHaveBeenCalled();
+    });
+  });
 });
