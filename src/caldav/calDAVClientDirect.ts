@@ -1,7 +1,13 @@
-import { CalDAVSettings } from '../types';
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { HttpClient, ObsidianHttpClient } from './httpClient';
 import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_VTODOS } from './templates';
+
+export interface CalDAVConnectionConfig {
+  serverUrl: string;
+  username: string;
+  password: string;
+  calendarName: string;
+}
 
 /**
  * Interface for CalDAV client operations used by adapters.
@@ -21,19 +27,18 @@ export interface CalDAVClient {
  * (ObsidianHttpClient in production, FetchHttpClient in E2E tests).
  */
 export class CalDAVClientDirect implements CalDAVClient {
-  private settings: CalDAVSettings;
+  private config: CalDAVConnectionConfig;
   private mapper: VTODOMapper;
   private calendarUrl: string | null = null;
   private authHeader: string;
   private httpClient: HttpClient;
 
-  constructor(settings: CalDAVSettings, httpClient?: HttpClient) {
-    this.settings = settings;
+  constructor(config: CalDAVConnectionConfig, httpClient?: HttpClient) {
+    this.config = config;
     this.mapper = new VTODOMapper();
     this.httpClient = httpClient ?? new ObsidianHttpClient();
 
-    // Create Basic Auth header
-    const credentials = `${settings.username}:${settings.password}`;
+    const credentials = `${config.username}:${config.password}`;
     this.authHeader = 'Basic ' + btoa(credentials);
   }
 
@@ -49,9 +54,9 @@ export class CalDAVClientDirect implements CalDAVClient {
       const calendars = await this.findCalendars(homeUrl);
 
       // Step 3: Find our specific calendar
-      const calendar = calendars.find(c => c.displayName === this.settings.calendarName);
+      const calendar = calendars.find(c => c.displayName === this.config.calendarName);
       if (!calendar) {
-        throw new Error(`Calendar '${this.settings.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
+        throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
       }
 
       this.calendarUrl = calendar.url;
@@ -67,7 +72,7 @@ export class CalDAVClientDirect implements CalDAVClient {
    */
   private async discoverCalendarHome(): Promise<string> {
     // Try well-known CalDAV endpoint first (RFC 6764)
-    const baseUrl = new URL(this.settings.serverUrl);
+    const baseUrl = new URL(this.config.serverUrl);
     const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
 
     try {
@@ -93,7 +98,7 @@ export class CalDAVClientDirect implements CalDAVClient {
 
     // Fall back to direct PROPFIND on server URL
     const response = await this.httpClient.request({
-      url: this.settings.serverUrl,
+      url: this.config.serverUrl,
       method: 'PROPFIND',
       headers: {
         'Authorization': this.authHeader,
@@ -108,7 +113,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`PROPFIND failed: ${response.status} ${response.text.substring(0, 500)}`);
     }
 
-    return await this.discoverFromPrincipal(response.text, this.settings.serverUrl);
+    return await this.discoverFromPrincipal(response.text, this.config.serverUrl);
   }
 
   /**
@@ -224,7 +229,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`PROPFIND calendars failed: ${response.status}`);
     }
 
-    return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.settings.serverUrl);
+    return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.config.serverUrl);
   }
 
   /**
@@ -296,7 +301,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`REPORT VTODOs failed: ${response.status}`);
     }
 
-    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.settings.serverUrl);
+    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.config.serverUrl);
   }
 
   /**
@@ -407,7 +412,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       await this.connect();
       return {
         success: true,
-        message: `Successfully connected to calendar '${this.settings.calendarName}'`
+        message: `Successfully connected to calendar '${this.config.calendarName}'`
       };
     } catch (error) {
       return {
