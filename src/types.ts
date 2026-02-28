@@ -1,11 +1,14 @@
-// CalDAV connection settings
-export interface CalDAVSettings {
+export interface CalendarMapping {
+  tag: string;
+  calendarName: string;
   serverUrl: string;
   username: string;
   password: string;
-  calendarName: string;
-  syncTag: string; // Tag for sync filtering (e.g., "sync"). Empty = sync all tasks.
-  syncInterval: number; // minutes
+}
+
+export interface CalDAVSettings {
+  calendars: CalendarMapping[];
+  syncInterval: number;
   newTasksDestination: string;
   newTasksSection?: string;
   requireManualConflictResolution: boolean;
@@ -15,18 +18,14 @@ export interface CalDAVSettings {
 }
 
 export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
-  serverUrl: '',
-  username: '',
-  password: '',
-  calendarName: '',
-  syncTag: 'sync', // Default to #sync tag
+  calendars: [],
   syncInterval: 5,
   newTasksDestination: 'Inbox.md',
   newTasksSection: undefined,
   requireManualConflictResolution: true,
   autoResolveObsidianWins: false,
   syncCompletedTasks: false,
-  deleteBehavior: 'ask'
+  deleteBehavior: 'ask',
 };
 
 /** Lean bidirectional identity mapping between Obsidian task IDs and CalDAV UIDs. */
