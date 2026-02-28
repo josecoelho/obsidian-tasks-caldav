@@ -1,6 +1,6 @@
 import { App } from 'obsidian';
 import { SyncEngine } from './syncEngine';
-import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS, IdMapping } from '../types';
+import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS, IdMapping } from '../types';
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CommonTask } from './types';
@@ -28,10 +28,20 @@ function makeObsidianTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   };
 }
 
+function makeCalendarMapping(overrides: Partial<CalendarMapping> = {}): CalendarMapping {
+  return {
+    tag: '',
+    calendarName: 'TestCalendar',
+    serverUrl: 'https://caldav.example.com',
+    username: 'user',
+    password: 'pass',
+    ...overrides,
+  };
+}
+
 function makeSettings(overrides: Partial<CalDAVSettings> = {}): CalDAVSettings {
   return {
     ...DEFAULT_CALDAV_SETTINGS,
-    syncTag: '', // Default to no tag filtering; tests that need it set syncTag explicitly
     ...overrides,
   };
 }
@@ -185,7 +195,7 @@ describe('SyncEngine', () => {
 
   describe('initialize', () => {
     it('should return true when obsidian-tasks plugin is available', async () => {
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       expect(await engine.initialize()).toBe(true);
       expect(mockWrapperInitialize).toHaveBeenCalled();
       expect(mockStorageInitialize).toHaveBeenCalled();
@@ -193,7 +203,7 @@ describe('SyncEngine', () => {
 
     it('should return false when obsidian-tasks plugin is unavailable', async () => {
       mockWrapperInitialize.mockReturnValue(false);
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       expect(await engine.initialize()).toBe(false);
       expect(mockStorageInitialize).not.toHaveBeenCalled();
     });
@@ -203,7 +213,7 @@ describe('SyncEngine', () => {
     it('should return failure result when CalDAV connection fails', async () => {
       mockConnect.mockRejectedValue(new Error('Connection refused'));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -215,7 +225,7 @@ describe('SyncEngine', () => {
     it('should return failure result when fetching VTODOs fails', async () => {
       mockFetchVTODOs.mockRejectedValue(new Error('Server error'));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -233,7 +243,7 @@ describe('SyncEngine', () => {
       });
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -256,7 +266,7 @@ describe('SyncEngine', () => {
       });
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -276,7 +286,7 @@ describe('SyncEngine', () => {
       });
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -292,7 +302,7 @@ describe('SyncEngine', () => {
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetAllTasksWithBody.mockResolvedValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -326,7 +336,7 @@ describe('SyncEngine', () => {
         body: '',
       }]);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -352,7 +362,7 @@ describe('SyncEngine', () => {
       });
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task1, task2));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -369,7 +379,7 @@ describe('SyncEngine', () => {
       ]);
       mockGetAllTasksWithBody.mockResolvedValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -394,7 +404,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
       });
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -414,7 +424,7 @@ describe('SyncEngine', () => {
       mockGetBaseline.mockReturnValue([]);
       mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -455,7 +465,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
       });
 
-      const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: true }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings({ autoResolveObsidianWins: true }));
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -496,7 +506,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
       });
 
-      const engine = new SyncEngine(new App(), makeSettings({ autoResolveObsidianWins: false }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings({ autoResolveObsidianWins: false }));
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -517,7 +527,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -537,7 +547,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -555,7 +565,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       await engine.sync(false);
 
@@ -578,7 +588,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(syncedTask, unsyncedTask));
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
       await engine.sync(false);
 
@@ -599,7 +609,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -620,7 +630,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'caldav-mapped': 'task-mapped' },
       });
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -635,7 +645,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -651,7 +661,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: 'sync' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -667,7 +677,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings({ syncTag: '' }));
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: '' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -686,7 +696,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(task));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -703,7 +713,7 @@ describe('SyncEngine', () => {
     it('should not include input snapshots on error', async () => {
       mockConnect.mockRejectedValue(new Error('fail'));
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(true);
 
@@ -746,7 +756,7 @@ describe('SyncEngine', () => {
       });
       mockFindTaskById.mockReturnValue(obsTask);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -799,7 +809,7 @@ describe('SyncEngine', () => {
       });
       mockFindTaskById.mockReturnValue(obsTask);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -829,7 +839,7 @@ describe('SyncEngine', () => {
       mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
       mockFindTaskById.mockReturnValue(task);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -856,7 +866,7 @@ describe('SyncEngine', () => {
       mockFetchVTODOs.mockResolvedValue([vtodoB]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -884,7 +894,7 @@ describe('SyncEngine', () => {
       mockGetBaseline.mockReturnValue([]);
       mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
 
-      const engine1 = new SyncEngine(new App(), makeSettings());
+      const engine1 = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine1.initialize();
       const result1 = await engine1.sync(false);
 
@@ -925,7 +935,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'obsidian-20250101-aaa': '20250101-aaa' },
       });
 
-      const engine2 = new SyncEngine(new App(), makeSettings());
+      const engine2 = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine2.initialize();
       const result2 = await engine2.sync(false);
 
@@ -1091,7 +1101,7 @@ describe('SyncEngine', () => {
         .mockRejectedValueOnce(new Error('Write failed'))
         .mockResolvedValueOnce(undefined);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 

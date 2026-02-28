@@ -2,7 +2,7 @@ import { App, Notice } from "obsidian";
 import { ObsidianTasksWrapper } from "../tasks/obsidianTasksWrapper";
 import { CalDAVClientDirect } from "../caldav/calDAVClientDirect";
 import { SyncStorage } from "../storage/syncStorage";
-import { CalDAVSettings, IdMapping } from "../types";
+import { CalDAVSettings, CalendarMapping, IdMapping } from "../types";
 import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
@@ -26,20 +26,22 @@ export interface SyncResult {
 }
 
 export class SyncEngine {
+	private calendar: CalendarMapping;
 	private settings: CalDAVSettings;
 	private storage: SyncStorage;
 	private caldavAdapter: CalDAVAdapter;
 	private obsidianAdapter: ObsidianAdapter;
 
-	constructor(app: App, settings: CalDAVSettings) {
+	constructor(app: App, calendar: CalendarMapping, settings: CalDAVSettings) {
+		this.calendar = calendar;
 		this.settings = settings;
 		const wrapper = new ObsidianTasksWrapper(app);
-		this.storage = new SyncStorage(app);
+		this.storage = new SyncStorage(app, calendar.calendarName);
 		this.caldavAdapter = new CalDAVAdapter(
-			new CalDAVClientDirect(settings),
+			new CalDAVClientDirect(calendar),
 		);
 		this.obsidianAdapter = new ObsidianAdapter(wrapper, {
-			syncTag: settings.syncTag,
+			syncTag: calendar.tag,
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 		});
@@ -56,9 +58,9 @@ export class SyncEngine {
 
 	async sync(dryRun: boolean = false): Promise<SyncResult> {
 		try {
-			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync...`);
+			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
 
-			const syncTag = this.settings.syncTag;
+			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();
 
 			const caldavTasks = await this.caldavAdapter.fetchTasks(syncTag, idMapping);
