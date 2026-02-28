@@ -1,5 +1,6 @@
 import { ObsidianAdapter, ObsidianSyncSettings, TaskWithBody } from './obsidianAdapter';
 import { ObsidianTask, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
+import { CommonTask } from './types';
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
@@ -35,6 +36,7 @@ const dummyWrapper = {
   updateTaskInVault: jest.fn().mockResolvedValue(undefined),
   initialize: jest.fn().mockReturnValue(true),
   getTaskId: jest.fn(),
+  getToggleCommand: jest.fn().mockReturnValue(null),
 } as unknown as ObsidianTasksWrapper;
 
 const defaultSettings: ObsidianSyncSettings = {
@@ -111,6 +113,121 @@ describe('ObsidianAdapter', () => {
       const tasks = adapter.normalize([withBody(task)], extractId);
 
       expect(adapter.findOriginalTask(tasks[0].uid)).toBe(task);
+    });
+  });
+
+  describe('applyChanges — complete', () => {
+    it('calls executeToggleTaskDoneCommand for complete changes', async () => {
+      const toggleFn = jest.fn().mockReturnValue(
+        '- [x] Weekly review 🔁 every week 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001'
+      );
+      const wrapper = {
+        ...dummyWrapper,
+        getToggleCommand: jest.fn().mockReturnValue(toggleFn),
+        updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+        findTaskById: jest.fn().mockReturnValue(null),
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      const existingTask = makeTask({
+        description: 'Weekly review',
+        originalMarkdown: '- [ ] Weekly review 🔁 every week 📅 2026-02-17 🆔 task-001',
+        id: 'task-001',
+      });
+      adapter.normalize([withBody(existingTask)], (t) => t.id || null);
+
+      const result = await adapter.applyChanges([{
+        type: 'complete',
+        task: {
+          uid: 'task-001',
+          title: 'Weekly review',
+          status: 'DONE',
+          dueDate: '2026-02-17',
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2026-02-17',
+          priority: 'none',
+          tags: [],
+          recurrenceRule: 'FREQ=WEEKLY',
+          body: '',
+        },
+      }]);
+
+      expect(toggleFn).toHaveBeenCalledWith(
+        existingTask.originalMarkdown,
+        existingTask.taskLocation._tasksFile._path,
+      );
+      expect(wrapper.updateTaskInVault).toHaveBeenCalled();
+      expect(result.completionRemappings).toHaveLength(0); // single line = no remapping
+    });
+
+    it('returns completionRemapping when toggle produces new recurring task', async () => {
+      const toggleResult = '- [x] Weekly review 🔁 every week 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001\n- [ ] Weekly review 🔁 every week 📅 2026-02-24 🆔 task-002';
+      const toggleFn = jest.fn().mockReturnValue(toggleResult);
+      const wrapper = {
+        ...dummyWrapper,
+        getToggleCommand: jest.fn().mockReturnValue(toggleFn),
+        updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+        findTaskById: jest.fn().mockReturnValue(null),
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      const existingTask = makeTask({
+        description: 'Weekly review',
+        originalMarkdown: '- [ ] Weekly review 🔁 every week 📅 2026-02-17 🆔 task-001',
+        id: 'task-001',
+      });
+      adapter.normalize([withBody(existingTask)], (t) => t.id || null);
+
+      const result = await adapter.applyChanges([{
+        type: 'complete',
+        task: {
+          uid: 'task-001',
+          title: 'Weekly review',
+          status: 'DONE',
+          dueDate: '2026-02-17',
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2026-02-17',
+          priority: 'none',
+          tags: [],
+          recurrenceRule: 'FREQ=WEEKLY',
+          body: '',
+        },
+      }]);
+
+      expect(result.completionRemappings).toEqual([{
+        oldTaskId: 'task-001',
+        newTaskId: 'task-002',
+      }]);
+    });
+
+    it('throws when obsidian-tasks API is not available', async () => {
+      const wrapper = {
+        ...dummyWrapper,
+        getToggleCommand: jest.fn().mockReturnValue(null),
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      const existingTask = makeTask({ id: 'task-001' });
+      adapter.normalize([withBody(existingTask)], (t) => t.id || null);
+
+      await expect(adapter.applyChanges([{
+        type: 'complete',
+        task: {
+          uid: 'task-001',
+          title: 'Test',
+          status: 'DONE',
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2026-02-17',
+          priority: 'none',
+          tags: [],
+          recurrenceRule: '',
+          body: '',
+        },
+      }])).rejects.toThrow('obsidian-tasks API not available');
     });
   });
 });

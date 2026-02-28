@@ -69,7 +69,7 @@ export class SyncEngine {
 
 			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true);
 
-			const createdMappings = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
+			const { createdMappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
 			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 

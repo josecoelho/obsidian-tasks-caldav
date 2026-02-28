@@ -416,4 +416,16 @@ export class ObsidianTasksWrapper {
         return null;
     }
 
+    /**
+     * Get the obsidian-tasks toggle command for completing tasks.
+     * Returns null if the API is not available.
+     */
+    getToggleCommand(): ((line: string, path: string) => string) | null {
+        const appWithPlugins = this.app as App & {
+            plugins: { plugins: Record<string, { apiV1?: { executeToggleTaskDoneCommand: (line: string, path: string) => string } }> };
+        };
+        const tasksPlugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'];
+        return tasksPlugin?.apiV1?.executeToggleTaskDoneCommand ?? null;
+    }
+
 }

@@ -178,7 +178,7 @@ describe('Sync round-trip E2E', () => {
     const changeset = diff(obsidianTasks, caldavTasks, baseline, 'caldav-wins');
 
     expect(changeset.toObsidian).toHaveLength(1);
-    expect(changeset.toObsidian[0].type).toBe('update');
+    expect(changeset.toObsidian[0].type).toBe('complete');
     expect(changeset.toObsidian[0].task.status).toBe('DONE');
     expect(changeset.toObsidian[0].task.completedDate).toBe('2025-07-01');
     expect(changeset.toCalDAV).toHaveLength(0);

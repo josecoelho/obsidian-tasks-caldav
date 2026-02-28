@@ -9,6 +9,11 @@ import { generateTaskId } from "../utils/taskIdGenerator";
 
 export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
 
+export interface ApplyChangesResult {
+	createdMappings: Array<{ taskId: string; caldavUID: string }>;
+	completionRemappings: Array<{ oldTaskId: string; newTaskId: string }>;
+}
+
 export interface ObsidianSyncSettings {
 	syncTag?: string;
 	newTasksDestination: string;
@@ -71,10 +76,14 @@ export class ObsidianAdapter {
 	 */
 	async applyChanges(
 		changes: SyncChange[],
-	): Promise<Array<{ taskId: string; caldavUID: string }>> {
+	): Promise<ApplyChangesResult> {
 		const createdMappings: Array<{
 			taskId: string;
 			caldavUID: string;
+		}> = [];
+		const completionRemappings: Array<{
+			oldTaskId: string;
+			newTaskId: string;
 		}> = [];
 
 		for (const change of changes) {
@@ -121,12 +130,45 @@ export class ObsidianAdapter {
 						break;
 					}
 
+					case "complete": {
+						const existingTask =
+							this.tasksById.get(change.task.uid) ??
+							this.wrapper.findTaskById(change.task.uid);
+						if (!existingTask) continue;
+
+						const toggleFn = this.wrapper.getToggleCommand();
+						if (!toggleFn) {
+							throw new Error('obsidian-tasks API not available for task completion');
+						}
+
+						const result = toggleFn(
+							existingTask.originalMarkdown,
+							existingTask.taskLocation._tasksFile._path,
+						);
+
+						await this.wrapper.updateTaskInVault(existingTask, result);
+
+						// If toggle produced two lines, second is new recurring occurrence
+						const lines = result.split('\n');
+						if (lines.length > 1) {
+							const idMatch = lines[1].match(/🆔\s+(\S+)/);
+							if (idMatch) {
+								completionRemappings.push({
+									oldTaskId: change.task.uid,
+									newTaskId: idMatch[1],
+								});
+							}
+						}
+						break;
+					}
+
 					case "delete": {
 						// Return mapping removal info — SyncEngine handles storage
 						break;
 					}
 				}
 			} catch (error) {
+				if (change.type === "complete") throw error;
 				console.error(
 					`Failed to apply ${change.type} for task ${change.task.uid}:`,
 					error,
@@ -134,7 +176,7 @@ export class ObsidianAdapter {
 			}
 		}
 
-		return createdMappings;
+		return { createdMappings, completionRemappings };
 	}
 
 	/**

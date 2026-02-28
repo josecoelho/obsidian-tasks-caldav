@@ -86,6 +86,13 @@ const mockFilterByTag = jest.fn().mockImplementation(
   },
 );
 const mockExtractId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
+const mockGetToggleCommand = jest.fn().mockReturnValue(
+  (line: string, _path: string) => {
+    // Simulate obsidian-tasks toggle: mark done and add completion date
+    const today = new Date().toISOString().split('T')[0];
+    return line.replace('- [ ]', '- [x]').replace(/ #\w+$/, ` ✅ ${today} $&`.trim());
+  },
+);
 
 jest.mock('../tasks/obsidianTasksWrapper', () => ({
   ObsidianTasksWrapper: jest.fn().mockImplementation(() => ({
@@ -97,6 +104,7 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
     getTaskId: mockGetTaskId,
     filterByTag: mockFilterByTag,
     extractId: mockExtractId,
+    getToggleCommand: mockGetToggleCommand,
   })),
 }));
 
@@ -748,7 +756,7 @@ describe('SyncEngine', () => {
       expect((mockUpdateTaskInVault.mock.calls[0] as [ObsidianTask, string])[0]).toBe(obsTask);
     });
 
-    it('should include completion date when CalDAV marks task as done', async () => {
+    it('should use toggle command when CalDAV marks task as done', async () => {
       const baseline = {
         uid: '20250101-abc',
         description: 'Task to complete',
@@ -776,6 +784,11 @@ describe('SyncEngine', () => {
         'COMPLETED:20250715T140000Z',
         'PERCENT-COMPLETE:100',
       ]);
+
+      const toggledMarkdown = '- [x] Task to complete 📅 2025-07-01 ✅ 2025-07-15 🆔 20250101-abc #sync';
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) => toggledMarkdown,
+      );
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
