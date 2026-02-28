@@ -643,6 +643,40 @@ END:VTODO`;
       expect(task.body).toBe('Meeting at 10:30 with team: discuss roadmap');
     });
 
+    it('should handle SUMMARY with time range containing colons', () => {
+      const vtodoData = `BEGIN:VTODO
+UID:colon-summary-time
+SUMMARY:09:00 - 09:15 a task
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.title).toBe('09:00 - 09:15 a task');
+    });
+
+    it('should handle SUMMARY with URL containing colons', () => {
+      const vtodoData = `BEGIN:VTODO
+UID:colon-summary-url
+SUMMARY:follow up on https://aurl.com
+STATUS:NEEDS-ACTION
+END:VTODO`;
+
+      const vtodo: CalendarObject = {
+        data: vtodoData,
+        etag: 'test-etag',
+        url: 'http://example.com/test.ics'
+      };
+
+      const task = mapper.vtodoToTask(vtodo);
+      expect(task.title).toBe('follow up on https://aurl.com');
+    });
+
     it('should handle folded DESCRIPTION lines', () => {
       const vtodoData = `BEGIN:VTODO\r\nUID:folded-desc\r\nSUMMARY:Task\r\nDESCRIPTION:A very long description that has been \r\n folded by the server into multiple lines\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO`;
 

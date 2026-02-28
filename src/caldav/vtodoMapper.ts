@@ -89,7 +89,7 @@ export class VTODOMapper {
     const data = vtodoMatch ? vtodoMatch[0] : unfolded;
 
     return {
-      title: this.extractProperty(data, 'SUMMARY') || 'Untitled Task',
+      title: this.extractRawProperty(data, 'SUMMARY') || 'Untitled Task',
       status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION') as CommonTask['status'],
       dueDate: this.extractDateProperty(data, 'DUE'),
       scheduledDate: null,
