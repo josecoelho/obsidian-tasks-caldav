@@ -1307,4 +1307,88 @@ describe('SyncEngine', () => {
       expect(mockUpdateTaskInVault).toHaveBeenCalled();
     });
   });
+
+  describe('Multi-calendar tag routing', () => {
+    it('should route tasks to the correct calendar based on tag', async () => {
+      const workTask = makeObsidianTask({
+        description: 'Work meeting',
+        id: 'work-001',
+        tags: ['#work'],
+        originalMarkdown: '- [ ] Work meeting 🆔 work-001 #work',
+      });
+      const personalTask = makeObsidianTask({
+        description: 'Buy groceries',
+        id: 'personal-001',
+        tags: ['#personal'],
+        originalMarkdown: '- [ ] Buy groceries 🆔 personal-001 #personal',
+      });
+
+      // Both tasks visible to the wrapper — filtering happens in adapter
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(workTask, personalTask));
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+
+      const settings = makeSettings();
+
+      const workEngine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ tag: 'work', calendarName: 'Work' }),
+        settings,
+      );
+      await workEngine.initialize();
+      const workResult = await workEngine.sync(false);
+
+      // Work engine should only create the work task on CalDAV
+      expect(workResult.details.toCalDAV).toHaveLength(1);
+      expect(workResult.details.toCalDAV[0].task.title).toBe('Work meeting');
+      expect(workResult.details.toCalDAV[0].type).toBe('create');
+
+      // Reset mocks for personal engine
+      mockCreateVTODO.mockClear();
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(workTask, personalTask));
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+
+      const personalEngine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ tag: 'personal', calendarName: 'Personal' }),
+        settings,
+      );
+      await personalEngine.initialize();
+      const personalResult = await personalEngine.sync(false);
+
+      // Personal engine should only create the personal task on CalDAV
+      expect(personalResult.details.toCalDAV).toHaveLength(1);
+      expect(personalResult.details.toCalDAV[0].task.title).toBe('Buy groceries');
+      expect(personalResult.details.toCalDAV[0].type).toBe('create');
+    });
+
+    it('should not sync tasks that match no calendar tag', async () => {
+      const unmatchedTask = makeObsidianTask({
+        description: 'Random task',
+        id: 'random-001',
+        tags: ['#random'],
+        originalMarkdown: '- [ ] Random task 🆔 random-001 #random',
+      });
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(unmatchedTask));
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ tag: 'work', calendarName: 'Work' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      // No changes — task doesn't match this calendar's tag
+      expect(result.details.toCalDAV).toHaveLength(0);
+      expect(result.details.toObsidian).toHaveLength(0);
+    });
+  });
 });
