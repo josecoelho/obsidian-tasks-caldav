@@ -277,6 +277,38 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('SyncResult includes calendarName', () => {
+    it('should include calendarName in dry run result', async () => {
+      mockGetAllTasksWithBody.mockResolvedValue([]);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Work' }), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.calendarName).toBe('Work');
+    });
+
+    it('should include calendarName in real sync result', async () => {
+      mockGetAllTasksWithBody.mockResolvedValue([]);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Personal' }), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.calendarName).toBe('Personal');
+    });
+
+    it('should include calendarName in error result', async () => {
+      mockConnect.mockRejectedValue(new Error('Connection refused'));
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Broken' }), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(true);
+
+      expect(result.calendarName).toBe('Broken');
+    });
+  });
+
   describe('real sync', () => {
     it('should apply changes and save state', async () => {
       const task = makeObsidianTask({

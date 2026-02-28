@@ -3,13 +3,13 @@ import { SyncResult } from '../sync/syncEngine';
 import { CommonTask, Conflict, SyncChange } from '../sync/types';
 
 export class SyncResultModal extends Modal {
-  private result: SyncResult;
+  private results: SyncResult[];
   private isDryRun: boolean;
-  private onApply?: () => Promise<SyncResult>;
+  private onApply?: () => Promise<SyncResult[]>;
 
-  constructor(app: App, result: SyncResult, isDryRun: boolean, onApply?: () => Promise<SyncResult>) {
+  constructor(app: App, results: SyncResult[], isDryRun: boolean, onApply?: () => Promise<SyncResult[]>) {
     super(app);
-    this.result = result;
+    this.results = results;
     this.isDryRun = isDryRun;
     this.onApply = onApply;
   }
@@ -20,59 +20,10 @@ export class SyncResultModal extends Modal {
 
     this.setTitle(this.isDryRun ? 'Sync preview (dry run)' : 'Sync results');
 
-    this.renderSummary(contentEl);
-
-    const details = this.result.details;
-
-    // Inputs section (collapsed)
-    if (details.obsidianTasks || details.caldavTasks || details.baselineTasks) {
-      this.renderSection(contentEl, 'Inputs', (container) => {
-        if (details.obsidianTasks) {
-          container.createEl('h4', { text: `Obsidian Tasks (${details.obsidianTasks.length})` });
-          this.renderTaskTable(container, details.obsidianTasks);
-        }
-        if (details.caldavTasks) {
-          container.createEl('h4', { text: `CalDAV Tasks (${details.caldavTasks.length})` });
-          this.renderTaskTable(container, details.caldavTasks);
-        }
-        if (details.baselineTasks) {
-          container.createEl('h4', { text: `Baseline Tasks (${details.baselineTasks.length})` });
-          this.renderTaskTable(container, details.baselineTasks);
-        }
-      }, true);
+    for (const result of this.results) {
+      this.renderCalendarSection(contentEl, result);
     }
 
-    // Changes section (expanded)
-    const hasChanges = details.toObsidian.length > 0 || details.toCalDAV.length > 0;
-    if (hasChanges) {
-      this.renderSection(contentEl, 'Changes', (container) => {
-        if (details.toObsidian.length > 0) {
-          container.createEl('h4', { text: `→ Obsidian (${details.toObsidian.length})` });
-          this.renderChanges(container, details.toObsidian);
-        }
-        if (details.toCalDAV.length > 0) {
-          container.createEl('h4', { text: `→ CalDAV (${details.toCalDAV.length})` });
-          this.renderChanges(container, details.toCalDAV);
-        }
-      }, false);
-    }
-
-    // Conflicts section (expanded if any)
-    if (details.conflictDetails.length > 0) {
-      this.renderSection(contentEl, `Conflicts (${details.conflictDetails.length})`, (container) => {
-        this.renderConflicts(container, details.conflictDetails);
-      }, false);
-    }
-
-    // No changes message
-    if (!hasChanges && details.conflictDetails.length === 0) {
-      contentEl.createEl('p', {
-        text: 'Everything is in sync. No changes needed.',
-        cls: 'sync-no-changes',
-      });
-    }
-
-    // Action buttons
     this.renderActions(contentEl);
   }
 
@@ -80,47 +31,98 @@ export class SyncResultModal extends Modal {
     this.contentEl.empty();
   }
 
-  private renderSummary(container: HTMLElement): void {
+  private renderCalendarSection(container: HTMLElement, result: SyncResult): void {
+    const section = container.createDiv({ cls: 'sync-calendar-section' });
+    section.createEl('h3', { text: result.calendarName, cls: 'sync-calendar-heading' });
+
+    this.renderSummary(section, result);
+
+    const details = result.details;
+
+    if (details.obsidianTasks || details.caldavTasks || details.baselineTasks) {
+      this.renderSection(section, 'Inputs', (el) => {
+        if (details.obsidianTasks) {
+          el.createEl('h4', { text: `Obsidian tasks (${details.obsidianTasks.length})` });
+          this.renderTaskTable(el, details.obsidianTasks);
+        }
+        if (details.caldavTasks) {
+          el.createEl('h4', { text: `CalDAV tasks (${details.caldavTasks.length})` });
+          this.renderTaskTable(el, details.caldavTasks);
+        }
+        if (details.baselineTasks) {
+          el.createEl('h4', { text: `Baseline tasks (${details.baselineTasks.length})` });
+          this.renderTaskTable(el, details.baselineTasks);
+        }
+      }, true);
+    }
+
+    const hasChanges = details.toObsidian.length > 0 || details.toCalDAV.length > 0;
+    if (hasChanges) {
+      this.renderSection(section, 'Changes', (el) => {
+        if (details.toObsidian.length > 0) {
+          el.createEl('h4', { text: `→ Obsidian (${details.toObsidian.length})` });
+          this.renderChanges(el, details.toObsidian);
+        }
+        if (details.toCalDAV.length > 0) {
+          el.createEl('h4', { text: `→ CalDAV (${details.toCalDAV.length})` });
+          this.renderChanges(el, details.toCalDAV);
+        }
+      }, false);
+    }
+
+    if (details.conflictDetails.length > 0) {
+      this.renderSection(section, `Conflicts (${details.conflictDetails.length})`, (el) => {
+        this.renderConflicts(el, details.conflictDetails);
+      }, false);
+    }
+
+    if (!hasChanges && details.conflictDetails.length === 0) {
+      section.createEl('p', {
+        text: 'Everything is in sync. No changes needed.',
+        cls: 'sync-no-changes',
+      });
+    }
+  }
+
+  private renderSummary(container: HTMLElement, result: SyncResult): void {
     const summary = container.createDiv({ cls: 'sync-summary' });
-    const r = this.result;
 
     const parts: string[] = [];
 
-    const toObs = r.created.toObsidian + r.updated.toObsidian + r.deleted.toObsidian;
+    const toObs = result.created.toObsidian + result.updated.toObsidian + result.deleted.toObsidian;
     if (toObs > 0) {
       const segments: string[] = [];
-      if (r.created.toObsidian) segments.push(`${r.created.toObsidian} created`);
-      if (r.updated.toObsidian) segments.push(`${r.updated.toObsidian} updated`);
-      if (r.deleted.toObsidian) segments.push(`${r.deleted.toObsidian} deleted`);
+      if (result.created.toObsidian) segments.push(`${result.created.toObsidian} created`);
+      if (result.updated.toObsidian) segments.push(`${result.updated.toObsidian} updated`);
+      if (result.deleted.toObsidian) segments.push(`${result.deleted.toObsidian} deleted`);
       parts.push(`→ Obsidian: ${segments.join(', ')}`);
     }
 
-    const toCal = r.created.toCalDAV + r.updated.toCalDAV + r.deleted.toCalDAV;
+    const toCal = result.created.toCalDAV + result.updated.toCalDAV + result.deleted.toCalDAV;
     if (toCal > 0) {
       const segments: string[] = [];
-      if (r.created.toCalDAV) segments.push(`${r.created.toCalDAV} created`);
-      if (r.updated.toCalDAV) segments.push(`${r.updated.toCalDAV} updated`);
-      if (r.deleted.toCalDAV) segments.push(`${r.deleted.toCalDAV} deleted`);
+      if (result.created.toCalDAV) segments.push(`${result.created.toCalDAV} created`);
+      if (result.updated.toCalDAV) segments.push(`${result.updated.toCalDAV} updated`);
+      if (result.deleted.toCalDAV) segments.push(`${result.deleted.toCalDAV} deleted`);
       parts.push(`→ CalDAV: ${segments.join(', ')}`);
     }
 
-    if (r.conflicts > 0) {
-      parts.push(`${r.conflicts} conflict${r.conflicts > 1 ? 's' : ''}`);
+    if (result.conflicts > 0) {
+      parts.push(`${result.conflicts} conflict${result.conflicts > 1 ? 's' : ''}`);
     }
 
     if (parts.length === 0) {
       parts.push('No changes');
     }
 
-    // Render as badge items
     for (const part of parts) {
       const badge = summary.createSpan({ cls: 'sync-summary-item' });
       badge.textContent = part;
     }
 
-    if (!this.result.success) {
+    if (!result.success) {
       const errorBadge = summary.createSpan({ cls: 'sync-summary-item sync-summary-error' });
-      errorBadge.textContent = `Error: ${this.result.message}`;
+      errorBadge.textContent = `Error: ${result.message}`;
     }
   }
 
@@ -179,7 +181,6 @@ export class SyncResultModal extends Modal {
       uid.textContent = this.truncateUid(change.task.uid);
       uid.setAttribute('title', change.task.uid);
 
-      // Show what changed for updates
       if (change.type === 'update' && change.previousVersion) {
         const diff = this.describeChanges(change.previousVersion, change.task);
         if (diff) {
@@ -198,17 +199,14 @@ export class SyncResultModal extends Modal {
 
       const grid = conflictEl.createDiv({ cls: 'sync-conflict-grid' });
 
-      // Obsidian version
       const obsCol = grid.createDiv({ cls: 'sync-conflict-col' });
       obsCol.createEl('h6', { text: 'Obsidian' });
       this.renderTaskDetail(obsCol, conflict.obsidianVersion);
 
-      // CalDAV version
       const calCol = grid.createDiv({ cls: 'sync-conflict-col' });
       calCol.createEl('h6', { text: 'CalDAV' });
       this.renderTaskDetail(calCol, conflict.caldavVersion);
 
-      // Baseline version
       const baseCol = grid.createDiv({ cls: 'sync-conflict-col' });
       baseCol.createEl('h6', { text: 'Baseline' });
       this.renderTaskDetail(baseCol, conflict.baselineVersion);
@@ -243,9 +241,9 @@ export class SyncResultModal extends Modal {
         applyBtn.disabled = true;
         applyBtn.textContent = 'Applying...';
         this.onApply!()
-          .then((result) => {
+          .then((results) => {
             this.close();
-            new SyncResultModal(this.app, result, false).open();
+            new SyncResultModal(this.app, results, false).open();
           })
           .catch(() => {
             applyBtn.textContent = 'Apply changes';

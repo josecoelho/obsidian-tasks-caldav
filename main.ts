@@ -1,7 +1,7 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
-import { SyncEngine } from './src/sync/syncEngine';
+import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 import { AutoSyncScheduler } from './src/sync/autoSync';
@@ -62,10 +62,8 @@ export default class CalDAVSyncPlugin extends Plugin {
 					new Notice('No calendars configured');
 					return;
 				}
-				for (const engine of this.syncEngines) {
-					const result = await engine.sync();
-					new SyncResultModal(this.app, result, false).open();
-				}
+				const results = await this.syncAllEngines(false);
+				new SyncResultModal(this.app, results, false).open();
 			}
 		});
 
@@ -77,12 +75,8 @@ export default class CalDAVSyncPlugin extends Plugin {
 					new Notice('No calendars configured');
 					return;
 				}
-				for (const engine of this.syncEngines) {
-					const result = await engine.sync(true);
-					new SyncResultModal(this.app, result, true, async () => {
-						return await engine.sync(false);
-					}).open();
-				}
+				const results = await this.syncAllEngines(true);
+				new SyncResultModal(this.app, results, true, () => this.syncAllEngines(false)).open();
 			}
 		});
 
@@ -172,6 +166,14 @@ export default class CalDAVSyncPlugin extends Plugin {
 		for (const engine of this.syncEngines) {
 			await engine.sync();
 		}
+	}
+
+	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
+		const results: SyncResult[] = [];
+		for (const engine of this.syncEngines) {
+			results.push(await engine.sync(dryRun));
+		}
+		return results;
 	}
 }
 
