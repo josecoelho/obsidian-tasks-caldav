@@ -69,11 +69,11 @@ export class SyncEngine {
 
 			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true);
 
-			const { createdMappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
 			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
-			this.updateIdMapping(idMapping, createdMappings, changeset);
+			this.updateIdMapping(idMapping, createdMappings, completionRemappings, changeset);
 			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
 			await this.storage.save();
 
@@ -140,11 +140,22 @@ export class SyncEngine {
 	private updateIdMapping(
 		idMapping: IdMapping,
 		createdMappings: Array<{ taskId: string; caldavUID: string }>,
+		completionRemappings: Array<{ oldTaskId: string; newTaskId: string }>,
 		changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
 	): void {
 		for (const { taskId, caldavUID } of createdMappings) {
 			idMapping.taskIdToCaldavUid[taskId] = caldavUID;
 			idMapping.caldavUidToTaskId[caldavUID] = taskId;
+		}
+
+		for (const { oldTaskId, newTaskId } of completionRemappings) {
+			const caldavUID = idMapping.taskIdToCaldavUid[oldTaskId];
+			if (caldavUID) {
+				delete idMapping.taskIdToCaldavUid[oldTaskId];
+				delete idMapping.caldavUidToTaskId[caldavUID];
+				idMapping.taskIdToCaldavUid[newTaskId] = caldavUID;
+				idMapping.caldavUidToTaskId[caldavUID] = newTaskId;
+			}
 		}
 
 		for (const change of changeset.toCalDAV) {

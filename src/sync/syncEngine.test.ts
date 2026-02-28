@@ -939,6 +939,145 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('recurring completion ID mapping', () => {
+    it('transfers CalDAV UID from old task to new task on recurring completion', async () => {
+      const baseline: CommonTask = {
+        uid: 'task-001',
+        description: 'Recurring task',
+        status: 'TODO',
+        dueDate: '2025-07-01',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: 'FREQ=WEEKLY',
+        body: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-001',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Recurring task 📅 2025-07-01 🔁 every week 🆔 task-001 #sync',
+        recurrence: { toText: () => 'every week' } as ObsidianTask['recurrence'],
+      });
+
+      // CalDAV marks this recurring task as completed
+      const vtodo = makeCalObj('caldav-uid-001', 'Recurring task', [
+        'DUE;VALUE=DATE:20250701',
+        'STATUS:COMPLETED',
+        'COMPLETED:20250715T140000Z',
+        'PERCENT-COMPLETE:100',
+        'RRULE:FREQ=WEEKLY',
+      ]);
+
+      const toggledMarkdown = '- [x] Recurring task 📅 2025-07-01 ✅ 2025-07-15 🆔 task-001 #sync';
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) => toggledMarkdown,
+      );
+
+      // The toggle command for recurring tasks creates a new line for the next occurrence
+      // ObsidianAdapter detects this and returns a completionRemapping
+      // We need to mock the wrapper so that after toggle, a new task appears
+      const newTask = makeObsidianTask({
+        description: 'Recurring task',
+        id: 'task-002',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Recurring task 📅 2025-07-08 🔁 every week 🆔 task-002 #sync',
+      });
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'task-001': 'caldav-uid-001' },
+        caldavUidToTaskId: { 'caldav-uid-001': 'task-001' },
+      };
+      mockGetIdMapping.mockReturnValue(idMapping);
+      mockFindTaskById.mockReturnValue(obsTask);
+
+      // Mock the toggle to simulate recurring: returns two lines (completed + new)
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) =>
+          '- [x] Recurring task 📅 2025-07-01 ✅ 2025-07-15 🆔 task-001 #sync\n- [ ] Recurring task 📅 2025-07-08 🔁 every week 🆔 task-002 #sync',
+      );
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+
+      // Verify IdMapping was updated: task-001 removed, task-002 now maps to caldav-uid-001
+      expect(mockSetIdMapping).toHaveBeenCalled();
+      const savedMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      expect(savedMapping.taskIdToCaldavUid['task-001']).toBeUndefined();
+      expect(savedMapping.taskIdToCaldavUid['task-002']).toBe('caldav-uid-001');
+      expect(savedMapping.caldavUidToTaskId['caldav-uid-001']).toBe('task-002');
+    });
+
+    it('keeps mapping unchanged when no completionRemappings', async () => {
+      const baseline: CommonTask = {
+        uid: '20250101-abc',
+        description: 'Normal task',
+        status: 'TODO',
+        dueDate: '2025-07-01',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      const obsTask = makeObsidianTask({
+        description: 'Normal task',
+        id: '20250101-abc',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Normal task 📅 2025-07-01 🆔 20250101-abc #sync',
+      });
+
+      // CalDAV marks a non-recurring task as completed
+      const vtodo = makeCalObj('caldav-abc', 'Normal task', [
+        'DUE;VALUE=DATE:20250701',
+        'STATUS:COMPLETED',
+        'COMPLETED:20250715T140000Z',
+        'PERCENT-COMPLETE:100',
+      ]);
+
+      const toggledMarkdown = '- [x] Normal task 📅 2025-07-01 ✅ 2025-07-15 🆔 20250101-abc #sync';
+      mockGetToggleCommand.mockReturnValue(
+        (_line: string, _path: string) => toggledMarkdown,
+      );
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
+      };
+      mockGetIdMapping.mockReturnValue(idMapping);
+      mockFindTaskById.mockReturnValue(obsTask);
+
+      const engine = new SyncEngine(new App(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync(false);
+
+      expect(result.success).toBe(true);
+
+      // Mapping should remain unchanged for non-recurring task
+      expect(mockSetIdMapping).toHaveBeenCalled();
+      const savedMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      expect(savedMapping.taskIdToCaldavUid['20250101-abc']).toBe('caldav-abc');
+      expect(savedMapping.caldavUidToTaskId['caldav-abc']).toBe('20250101-abc');
+    });
+  });
+
   describe('error resilience', () => {
     it('should continue applying remaining changes after one fails', async () => {
       const vtodo1 = makeCalObj('caldav-001', 'Task one');
