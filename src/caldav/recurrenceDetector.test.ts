@@ -54,4 +54,78 @@ describe('detectRecurrenceCompletion', () => {
 
     expect(result).toEqual({ isCompletion: false, reason: 'none' });
   });
+
+  describe('date-bump detection', () => {
+    it('detects completion when weekly task due date moves +7 days', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17' });
+      const current = makeTask({ dueDate: '2026-02-24' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: true, reason: 'date-bumped' });
+    });
+
+    it('detects completion when monthly task due date moves +1 month', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17', recurrenceRule: 'FREQ=MONTHLY' });
+      const current = makeTask({ dueDate: '2026-03-17', recurrenceRule: 'FREQ=MONTHLY' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: true, reason: 'date-bumped' });
+    });
+
+    it('detects completion when daily task due date moves +1 day', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17', recurrenceRule: 'FREQ=DAILY' });
+      const current = makeTask({ dueDate: '2026-02-18', recurrenceRule: 'FREQ=DAILY' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: true, reason: 'date-bumped' });
+    });
+
+    it('does not detect when date moves to arbitrary value', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17' });
+      const current = makeTask({ dueDate: '2026-02-20' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: false, reason: 'none' });
+    });
+
+    it('does not detect when date moves backward', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17' });
+      const current = makeTask({ dueDate: '2026-02-10' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: false, reason: 'none' });
+    });
+
+    it('does not detect on non-recurring task', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17', recurrenceRule: '' });
+      const current = makeTask({ dueDate: '2026-02-24', recurrenceRule: '' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: false, reason: 'none' });
+    });
+
+    it('does not detect when due dates are identical', () => {
+      const baseline = makeTask({ dueDate: '2026-02-17' });
+      const current = makeTask({ dueDate: '2026-02-17' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: false, reason: 'none' });
+    });
+
+    it('does not detect when baseline has no due date', () => {
+      const baseline = makeTask({ dueDate: null });
+      const current = makeTask({ dueDate: '2026-02-24' });
+
+      const result = detectRecurrenceCompletion(current, baseline);
+
+      expect(result).toEqual({ isCompletion: false, reason: 'none' });
+    });
+  });
 });
