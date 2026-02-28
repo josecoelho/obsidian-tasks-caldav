@@ -453,6 +453,61 @@ describe('SyncStorage', () => {
     });
   });
 
+  describe('per-calendar storage', () => {
+    it('stores files under calendars/{calendarId}/ when calendarId is provided', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      setupFreshAdapter(calAdapter);
+
+      await calStorage.initialize();
+
+      expect(calAdapter.mkdir).toHaveBeenCalledWith(
+        expect.stringContaining('calendars/work')
+      );
+    });
+
+    it('reads baseline from calendar-specific path', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      const baseline = [makeCommonTask({ uid: 'cal-task' })];
+
+      calAdapter.exists.mockImplementation((path: string) => {
+        if (path.includes('calendars/work/baseline.json')) return true;
+        if (path.includes('calendars/work')) return true;
+        if (path.includes('calendars')) return true;
+        return path.includes('.caldav-sync');
+      });
+      calAdapter.mkdir.mockResolvedValue(undefined);
+      calAdapter.write.mockResolvedValue(undefined);
+      calAdapter.read.mockImplementation((path: string) => {
+        if (path.includes('calendars/work/baseline.json')) return JSON.stringify(baseline);
+        if (path.includes('state.json')) return JSON.stringify({ lastSyncTime: '', conflicts: [] });
+        throw new Error('File not found');
+      });
+
+      await calStorage.initialize();
+      expect(calStorage.getBaseline()).toEqual(baseline);
+    });
+
+    it('saves id-mapping to calendar-specific path', async () => {
+      const calAdapter = createMockAdapter();
+      const app = createMockApp(calAdapter);
+      const calStorage = new SyncStorage(app, 'work');
+      setupFreshAdapter(calAdapter);
+
+      await calStorage.initialize();
+      calAdapter.write.mockClear();
+
+      calStorage.setIdMapping({ taskIdToCaldavUid: { 'a': 'b' }, caldavUidToTaskId: { 'b': 'a' } });
+      await calStorage.save();
+
+      expect(calAdapter.write).toHaveBeenCalledTimes(1);
+      expect((calAdapter.write.mock.calls[0] as [string, string])[0]).toContain('calendars/work/id-mapping.json');
+    });
+  });
+
   describe('error recovery', () => {
     it('returns default state when state.json is corrupted', async () => {
       adapter.exists.mockResolvedValue(true);
