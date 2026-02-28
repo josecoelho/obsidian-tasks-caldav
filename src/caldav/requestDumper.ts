@@ -1,5 +1,5 @@
 import { App, requestUrl } from 'obsidian';
-import { CalDAVSettings } from '../types';
+import { CalendarMapping } from '../types';
 import { CalDAVClientDirect } from './calDAVClientDirect';
 import { VTODOMapper } from './vtodoMapper';
 
@@ -132,12 +132,12 @@ function formatDateOnly(date: Date): string {
  * Dump all CalDAV request/response exchanges to JSON fixture files.
  * Performs: discovery → fetch → create → fetch → update → fetch → delete → fetch
  */
-export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Promise<string> {
+export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): Promise<string> {
 	const log: string[] = [];
 	const exchanges: CapturedExchange[] = [];
 	const mapper = new VTODOMapper();
 
-	const authHeader = 'Basic ' + btoa(`${settings.username}:${settings.password}`);
+	const authHeader = 'Basic ' + btoa(`${calendar.username}:${calendar.password}`);
 	const xmlHeaders = {
 		'Authorization': authHeader,
 		'Content-Type': 'application/xml; charset=utf-8',
@@ -201,7 +201,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 	try {
 		// ── Step 1: Well-known discovery ──
 		addLog('Step 1: PROPFIND well-known CalDAV endpoint');
-		const baseUrl = new URL(settings.serverUrl);
+		const baseUrl = new URL(calendar.serverUrl);
 		const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
 
 		const wk = await capturedRequest(
@@ -228,7 +228,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 				'01b-propfind-direct',
 				'Fallback: PROPFIND on server URL for current-user-principal',
 				'PROPFIND',
-				settings.serverUrl,
+				calendar.serverUrl,
 				xmlHeaders,
 				propfindPrincipalBody
 			);
@@ -239,7 +239,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 			}
 
 			principalXml = direct.response.text;
-			principalContextUrl = settings.serverUrl;
+			principalContextUrl = calendar.serverUrl;
 		}
 
 		// Extract principal URL
@@ -297,14 +297,14 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 			throw new Error(`PROPFIND calendars failed: ${step3.response.status}`);
 		}
 
-		const calendars = CalDAVClientDirect.parseCalendarsFromXML(step3.response.text, settings.serverUrl);
+		const calendars = CalDAVClientDirect.parseCalendarsFromXML(step3.response.text, calendar.serverUrl);
 		addLog(`  Found ${calendars.length} calendars: ${calendars.map(c => c.displayName).join(', ')}`);
 
-		const calendar = calendars.find(c => c.displayName === settings.calendarName);
-		if (!calendar) {
-			throw new Error(`Calendar '${settings.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
+		const matchedCalendar = calendars.find(c => c.displayName === calendar.calendarName);
+		if (!matchedCalendar) {
+			throw new Error(`Calendar '${calendar.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
 		}
-		const calendarUrl = calendar.url;
+		const calendarUrl = matchedCalendar.url;
 		addLog(`  Using calendar: ${calendarUrl}`);
 
 		const reportHeaders = {
@@ -325,7 +325,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 		);
 		await saveExchange(step4.exchange);
 
-		const initialVtodos = CalDAVClientDirect.parseVTODOsFromXML(step4.response.text, settings.serverUrl);
+		const initialVtodos = CalDAVClientDirect.parseVTODOsFromXML(step4.response.text, calendar.serverUrl);
 		addLog(`  Found ${initialVtodos.length} VTODOs`);
 
 		// Clean up any leftover test VTODO from previous run
@@ -374,7 +374,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 		);
 		await saveExchange(step6.exchange);
 
-		const afterCreateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step6.response.text, settings.serverUrl);
+		const afterCreateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step6.response.text, calendar.serverUrl);
 		const created = afterCreateVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (!created) {
 			throw new Error('Test VTODO not found after creation');
@@ -418,7 +418,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 		);
 		await saveExchange(step8.exchange);
 
-		const afterUpdateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step8.response.text, settings.serverUrl);
+		const afterUpdateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step8.response.text, calendar.serverUrl);
 		const updated = afterUpdateVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (!updated) {
 			throw new Error('Test VTODO not found after update');
@@ -457,7 +457,7 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 		);
 		await saveExchange(step10.exchange);
 
-		const finalVtodos = CalDAVClientDirect.parseVTODOsFromXML(step10.response.text, settings.serverUrl);
+		const finalVtodos = CalDAVClientDirect.parseVTODOsFromXML(step10.response.text, calendar.serverUrl);
 		const stillExists = finalVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (stillExists) {
 			addLog('  WARNING: Test VTODO still exists after delete!');
@@ -468,8 +468,8 @@ export async function dumpCalDAVRequests(app: App, settings: CalDAVSettings): Pr
 
 		// ── Write dump log ──
 		const summary = `CalDAV Request Dump — ${new Date().toISOString()}
-Server: ${settings.serverUrl}
-Calendar: ${settings.calendarName}
+Server: ${calendar.serverUrl}
+Calendar: ${calendar.calendarName}
 Files: ${exchanges.length} exchanges saved
 
 ${log.join('\n')}
@@ -486,7 +486,7 @@ ${log.join('\n')}
 
 		// Save log even on failure
 		const summary = `CalDAV Request Dump (FAILED) — ${new Date().toISOString()}
-Server: ${settings.serverUrl}
+Server: ${calendar.serverUrl}
 Error: ${errMsg}
 
 ${log.join('\n')}

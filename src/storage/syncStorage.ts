@@ -27,12 +27,16 @@ export class SyncStorage {
   private baselineDirty: boolean = false;
   private idMappingDirty: boolean = false;
 
-  constructor(app: App) {
+  constructor(app: App, calendarId?: string) {
     this.app = app;
-    this.syncDir = normalizePath('.caldav-sync');
-    this.statePath = normalizePath('.caldav-sync/state.json');
-    this.baselinePath = normalizePath('.caldav-sync/baseline.json');
-    this.idMappingPath = normalizePath('.caldav-sync/id-mapping.json');
+    if (calendarId) {
+      this.syncDir = normalizePath(`.caldav-sync/calendars/${calendarId}`);
+    } else {
+      this.syncDir = normalizePath('.caldav-sync');
+    }
+    this.statePath = normalizePath(`${this.syncDir}/state.json`);
+    this.baselinePath = normalizePath(`${this.syncDir}/baseline.json`);
+    this.idMappingPath = normalizePath(`${this.syncDir}/id-mapping.json`);
   }
 
   /**
@@ -42,9 +46,16 @@ export class SyncStorage {
   async initialize(): Promise<void> {
     const adapter = this.app.vault.adapter;
 
-    // Create .caldav-sync directory if it doesn't exist
+    // Create directory tree if it doesn't exist
     if (!(await adapter.exists(this.syncDir))) {
-      await adapter.mkdir(this.syncDir);
+      const parts = this.syncDir.split('/');
+      let current = '';
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        if (!(await adapter.exists(current))) {
+          await adapter.mkdir(current);
+        }
+      }
     }
 
     // Initialize state.json if it doesn't exist
@@ -276,6 +287,45 @@ export class SyncStorage {
       this.idMappingDirty = false;
     } catch (error) {
       console.error('Failed to migrate from mapping.json:', error);
+    }
+  }
+
+  /**
+   * Migrate flat .caldav-sync/ files into a per-calendar subdirectory.
+   * Moves state.json, baseline.json, and id-mapping.json from the root sync
+   * directory into .caldav-sync/calendars/{calendarName}/ if they exist and the
+   * target directory does not yet contain them.
+   */
+  static async migrateToPerCalendarStorage(app: App, calendarName: string): Promise<void> {
+    const adapter = app.vault.adapter;
+    const rootDir = normalizePath('.caldav-sync');
+    const targetDir = normalizePath(`.caldav-sync/calendars/${calendarName}`);
+
+    const filesToMigrate = ['state.json', 'baseline.json', 'id-mapping.json'];
+
+    const rootHasFiles = await Promise.all(
+      filesToMigrate.map(f => adapter.exists(normalizePath(`${rootDir}/${f}`))),
+    );
+    if (!rootHasFiles.some(Boolean)) return;
+
+    const targetExists = await adapter.exists(normalizePath(`${targetDir}/state.json`));
+    if (targetExists) return;
+
+    const parts = targetDir.split('/');
+    let current = '';
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      if (!(await adapter.exists(current))) {
+        await adapter.mkdir(current);
+      }
+    }
+
+    for (let i = 0; i < filesToMigrate.length; i++) {
+      if (!rootHasFiles[i]) continue;
+      const src = normalizePath(`${rootDir}/${filesToMigrate[i]}`);
+      const dst = normalizePath(`${targetDir}/${filesToMigrate[i]}`);
+      const content = await adapter.read(src);
+      await adapter.write(dst, content);
     }
   }
 
