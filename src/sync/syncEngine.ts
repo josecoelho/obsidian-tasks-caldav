@@ -165,7 +165,7 @@ export class SyncEngine {
 
 		for (const change of changeset.toCalDAV) {
 			if (change.type === "create") {
-				const caldavUID = `obsidian-${change.task.uid}`;
+				const caldavUID = change.task.uid;
 				idMapping.taskIdToCaldavUid[change.task.uid] = caldavUID;
 				idMapping.caldavUidToTaskId[caldavUID] = change.task.uid;
 			}
@@ -222,8 +222,15 @@ export class SyncEngine {
 			}
 		}
 
-		for (const change of [...changeset.toObsidian, ...changeset.toCalDAV]) {
+		for (const change of changeset.toObsidian) {
 			if (change.type === "create" || change.type === "update" || change.type === "complete" || change.type === "reconcile") {
+				baselineMap.set(change.task.uid, change.task);
+			} else if (change.type === "delete") {
+				baselineMap.delete(change.task.uid);
+			}
+		}
+		for (const change of changeset.toCalDAV) {
+			if (change.type === "create" || change.type === "update" || change.type === "complete") {
 				baselineMap.set(change.task.uid, change.task);
 			} else if (change.type === "delete") {
 				baselineMap.delete(change.task.uid);

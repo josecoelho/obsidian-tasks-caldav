@@ -124,6 +124,6 @@ export class CalDAVAdapter {
    * Resolve an Obsidian task UID to the corresponding CalDAV UID.
    */
   private resolveCaldavUid(taskUid: string, idMapping: IdMapping): string {
-    return idMapping.taskIdToCaldavUid[taskUid] ?? `obsidian-${taskUid}`;
+    return idMapping.taskIdToCaldavUid[taskUid] ?? taskUid;
   }
 }

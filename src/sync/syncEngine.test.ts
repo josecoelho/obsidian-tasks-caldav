@@ -878,9 +878,9 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(result.created.toCalDAV).toBe(1);
       expect(mockSetIdMapping).toHaveBeenCalledTimes(1);
-      // The IdMapping should include the new task with obsidian- prefix
+      // The IdMapping should use the task ID as the CalDAV UID
       const savedMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
-      expect(savedMapping.taskIdToCaldavUid['20250101-new']).toMatch(/^obsidian-/);
+      expect(savedMapping.taskIdToCaldavUid['20250101-new']).toBe('20250101-new');
     });
   });
 
