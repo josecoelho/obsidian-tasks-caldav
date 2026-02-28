@@ -2,7 +2,7 @@ import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { ObsidianMapper } from '../../src/tasks/obsidianMapper';
 import { diff } from '../../src/sync/diff';
-import { CommonTask } from '../../src/sync/types';
+import { CommonTask, SyncChange } from '../../src/sync/types';
 import { IdMapping } from '../../src/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
 import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
@@ -244,6 +244,136 @@ describe('Sync round-trip E2E', () => {
     // CalDAV wins: update should go to Obsidian
     expect(changeset.toObsidian).toHaveLength(1);
     expect(changeset.toObsidian[0].task.title).toBe('CalDAV version');
+    expect(changeset.toCalDAV).toHaveLength(0);
+  });
+
+  it('should detect completion of recurring VTODO and emit complete change', async () => {
+    const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const uid = `e2e-recur-complete-${Date.now()}`;
+    await client.createVTODO(
+      buildVTODO(uid, 'Weekly recurring task', [
+        'RRULE:FREQ=WEEKLY',
+        'DUE;VALUE=DATE:20260217',
+      ]),
+      uid,
+    );
+
+    // Establish baseline
+    let vtodos = await client.fetchVTODOs();
+    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    expect(baseline).toHaveLength(1);
+    expect(baseline[0].recurrenceRule).toBe('FREQ=WEEKLY');
+
+    // Mark as completed on CalDAV
+    const completedVTODO = buildVTODO(uid, 'Weekly recurring task', [
+      'RRULE:FREQ=WEEKLY',
+      'DUE;VALUE=DATE:20260217',
+      'STATUS:COMPLETED',
+      'COMPLETED:20260217T120000Z',
+      'PERCENT-COMPLETE:100',
+    ]);
+    await client.updateVTODO(vtodos[0], completedVTODO);
+
+    // Re-fetch and diff
+    vtodos = await client.fetchVTODOs();
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const obsidianTasks = [...baseline];
+
+    const changeset = diff(obsidianTasks, caldavTasks, baseline, 'caldav-wins');
+
+    expect(changeset.toObsidian).toHaveLength(1);
+    expect(changeset.toObsidian[0].type).toBe('complete');
+    expect(changeset.toObsidian[0].task.status).toBe('DONE');
+    expect(changeset.toObsidian[0].task.recurrenceRule).toBe('FREQ=WEEKLY');
+    expect(changeset.toCalDAV).toHaveLength(0);
+  });
+
+  it('should strip RRULE when applying complete change via CalDAVAdapter', async () => {
+    const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const uid = `e2e-recur-strip-${Date.now()}`;
+    await client.createVTODO(
+      buildVTODO(uid, 'Daily recurring task', [
+        'RRULE:FREQ=DAILY',
+        'DUE;VALUE=DATE:20260301',
+      ]),
+      uid,
+    );
+
+    // Fetch and normalize
+    const vtodos = await client.fetchVTODOs();
+    const tasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].recurrenceRule).toBe('FREQ=DAILY');
+
+    // Apply a 'complete' change via the adapter
+    const completeChange: SyncChange = {
+      type: 'complete',
+      task: {
+        ...tasks[0],
+        status: 'DONE',
+        completedDate: '2026-03-01',
+        recurrenceRule: 'FREQ=DAILY',
+      },
+    };
+    const idMapping: IdMapping = {
+      taskIdToCaldavUid: { [uid]: uid },
+      caldavUidToTaskId: { [uid]: uid },
+    };
+    await caldavAdapter.applyChanges([completeChange], idMapping);
+
+    // Re-fetch and verify RRULE is stripped, STATUS is COMPLETED
+    const updated = await client.fetchVTODOs();
+    expect(updated).toHaveLength(1);
+    const updatedTasks = caldavAdapter.normalize(updated, emptyIdMapping);
+    expect(updatedTasks[0].status).toBe('DONE');
+    expect(updatedTasks[0].recurrenceRule).toBe('');
+  });
+
+  it('should detect date-bump on recurring VTODO as completion', async () => {
+    const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const uid = `e2e-recur-bump-${Date.now()}`;
+    await client.createVTODO(
+      buildVTODO(uid, 'Weekly bumped task', [
+        'RRULE:FREQ=WEEKLY',
+        'DUE;VALUE=DATE:20260217',
+      ]),
+      uid,
+    );
+
+    // Establish baseline
+    let vtodos = await client.fetchVTODOs();
+    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    expect(baseline).toHaveLength(1);
+    expect(baseline[0].dueDate).toBe('2026-02-17');
+
+    // Bump the due date to next week, keep STATUS:NEEDS-ACTION
+    const bumpedVTODO = buildVTODO(uid, 'Weekly bumped task', [
+      'RRULE:FREQ=WEEKLY',
+      'DUE;VALUE=DATE:20260224',
+    ]);
+    await client.updateVTODO(vtodos[0], bumpedVTODO);
+
+    // Re-fetch and diff
+    vtodos = await client.fetchVTODOs();
+    const caldavTasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const obsidianTasks = [...baseline];
+
+    const changeset = diff(obsidianTasks, caldavTasks, baseline, 'caldav-wins');
+
+    expect(changeset.toObsidian).toHaveLength(1);
+    expect(changeset.toObsidian[0].type).toBe('complete');
+    expect(changeset.toObsidian[0].task.status).toBe('TODO');
+    expect(changeset.toObsidian[0].task.dueDate).toBe('2026-02-24');
+    expect(changeset.toObsidian[0].task.recurrenceRule).toBe('FREQ=WEEKLY');
     expect(changeset.toCalDAV).toHaveLength(0);
   });
 
