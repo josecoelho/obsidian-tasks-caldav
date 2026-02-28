@@ -943,7 +943,7 @@ describe('SyncEngine', () => {
     it('transfers CalDAV UID from old task to new task on recurring completion', async () => {
       const baseline: CommonTask = {
         uid: 'task-001',
-        description: 'Recurring task',
+        title: 'Recurring task',
         status: 'TODO',
         dueDate: '2025-07-01',
         startDate: null,
@@ -980,7 +980,7 @@ describe('SyncEngine', () => {
       // The toggle command for recurring tasks creates a new line for the next occurrence
       // ObsidianAdapter detects this and returns a completionRemapping
       // We need to mock the wrapper so that after toggle, a new task appears
-      const newTask = makeObsidianTask({
+      const _newTask = makeObsidianTask({
         description: 'Recurring task',
         id: 'task-002',
         tags: ['#sync'],
@@ -1021,7 +1021,7 @@ describe('SyncEngine', () => {
     it('keeps mapping unchanged when no completionRemappings', async () => {
       const baseline: CommonTask = {
         uid: '20250101-abc',
-        description: 'Normal task',
+        title: 'Normal task',
         status: 'TODO',
         dueDate: '2025-07-01',
         startDate: null,

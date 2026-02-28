@@ -1,6 +1,6 @@
 import { ObsidianAdapter, ObsidianSyncSettings, TaskWithBody } from './obsidianAdapter';
 import { ObsidianTask, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
-import { CommonTask } from './types';
+// CommonTask used indirectly via adapter types
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
@@ -157,6 +157,7 @@ describe('ObsidianAdapter', () => {
         existingTask.originalMarkdown,
         existingTask.taskLocation._tasksFile._path,
       );
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(wrapper.updateTaskInVault).toHaveBeenCalled();
       expect(result.completionRemappings).toHaveLength(0); // single line = no remapping
     });
