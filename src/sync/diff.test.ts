@@ -156,7 +156,7 @@ describe('diff', () => {
       expect(result.toCalDAV).toHaveLength(0);
     });
 
-    it('should detect status change as update', () => {
+    it('should detect status change to DONE as complete', () => {
       const baseline = makeCommonTask({ uid: 't1', status: 'TODO' });
       const obsidian = makeCommonTask({ uid: 't1', status: 'DONE', completedDate: '2025-01-15' });
       const caldav = makeCommonTask({ uid: 't1', status: 'TODO' });
@@ -164,6 +164,7 @@ describe('diff', () => {
       const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
 
       expect(result.toCalDAV).toHaveLength(1);
+      expect(result.toCalDAV[0].type).toBe('complete');
       expect(result.toCalDAV[0].task.status).toBe('DONE');
     });
   });
@@ -342,6 +343,67 @@ describe('diff', () => {
 
       expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(2);
       expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(1);
+    });
+  });
+
+  describe('completion detection', () => {
+    it('should emit complete when CalDAV marks recurring task as DONE', () => {
+      const baseline = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const obsidian = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const caldav = makeCommonTask({ uid: 't1', status: 'DONE', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13', completedDate: '2025-01-13' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(1);
+      expect(result.toObsidian[0].type).toBe('complete');
+      expect(result.toObsidian[0].task.status).toBe('DONE');
+    });
+
+    it('should emit complete when CalDAV bumps recurring task due date', () => {
+      const baseline = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const obsidian = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const caldav = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-20' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(1);
+      expect(result.toObsidian[0].type).toBe('complete');
+      expect(result.toObsidian[0].task.dueDate).toBe('2025-01-20');
+    });
+
+    it('should emit complete when CalDAV marks non-recurring task as DONE', () => {
+      const baseline = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: '' });
+      const obsidian = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: '' });
+      const caldav = makeCommonTask({ uid: 't1', status: 'DONE', recurrenceRule: '', completedDate: '2025-01-15' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(1);
+      expect(result.toObsidian[0].type).toBe('complete');
+      expect(result.toObsidian[0].task.status).toBe('DONE');
+    });
+
+    it('should emit complete when Obsidian marks recurring task as DONE', () => {
+      const baseline = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const obsidian = makeCommonTask({ uid: 't1', status: 'DONE', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13', completedDate: '2025-01-13' });
+      const caldav = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toCalDAV).toHaveLength(1);
+      expect(result.toCalDAV[0].type).toBe('complete');
+      expect(result.toCalDAV[0].task.status).toBe('DONE');
+    });
+
+    it('should emit update for non-status non-date changes', () => {
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Original', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'Renamed', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(1);
+      expect(result.toObsidian[0].type).toBe('update');
     });
   });
 });

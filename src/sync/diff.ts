@@ -1,4 +1,5 @@
 import { CommonTask, Changeset, SyncChange, Conflict, ConflictStrategy } from './types';
+import { detectRecurrenceCompletion } from '../caldav/recurrenceDetector';
 
 /**
  * Compare two CommonTasks for equality across all synced fields.
@@ -17,6 +18,17 @@ export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
     a.tags.length === b.tags.length &&
     a.tags.every((tag, i) => tag === b.tags[i])
   );
+}
+
+function resolveChangeType(current: CommonTask, baseline: CommonTask): 'update' | 'complete' {
+  if (baseline.status !== 'DONE' && current.status === 'DONE') {
+    return 'complete';
+  }
+  const recurrence = detectRecurrenceCompletion(current, baseline);
+  if (recurrence.isCompletion) {
+    return 'complete';
+  }
+  return 'update';
 }
 
 /**
@@ -63,9 +75,9 @@ export function diff(
       if (obsChanged && calChanged) {
         // Conflict: both sides modified
         if (strategy === 'obsidian-wins') {
-          toCalDAV.push({ type: 'update', task: obs, previousVersion: base });
+          toCalDAV.push({ type: resolveChangeType(obs, base), task: obs, previousVersion: base });
         } else {
-          toObsidian.push({ type: 'update', task: cal, previousVersion: base });
+          toObsidian.push({ type: resolveChangeType(cal, base), task: cal, previousVersion: base });
         }
         conflicts.push({
           uid,
@@ -74,9 +86,9 @@ export function diff(
           baselineVersion: base,
         });
       } else if (obsChanged) {
-        toCalDAV.push({ type: 'update', task: obs, previousVersion: base });
+        toCalDAV.push({ type: resolveChangeType(obs, base), task: obs, previousVersion: base });
       } else if (calChanged) {
-        toObsidian.push({ type: 'update', task: cal, previousVersion: base });
+        toObsidian.push({ type: resolveChangeType(cal, base), task: cal, previousVersion: base });
       }
       // Neither changed — no-op
 
