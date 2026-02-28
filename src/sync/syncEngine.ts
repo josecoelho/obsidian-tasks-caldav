@@ -16,6 +16,7 @@ export interface SyncResult {
 	created: { toObsidian: number; toCalDAV: number };
 	updated: { toObsidian: number; toCalDAV: number };
 	deleted: { toObsidian: number; toCalDAV: number };
+	reconciled: number;
 	conflicts: number;
 	details: {
 		toObsidian: SyncChange[];
@@ -174,6 +175,12 @@ export class SyncEngine {
 		}
 
 		for (const change of changeset.toObsidian) {
+			if (change.type === "reconcile" && change.counterpartUid) {
+				const obsidianUid = change.task.uid;
+				const caldavUid = change.counterpartUid;
+				idMapping.taskIdToCaldavUid[obsidianUid] = caldavUid;
+				idMapping.caldavUidToTaskId[caldavUid] = obsidianUid;
+			}
 			if (change.type === "delete") {
 				this.removeFromIdMapping(idMapping, change.task.uid);
 			}
@@ -216,7 +223,7 @@ export class SyncEngine {
 		}
 
 		for (const change of [...changeset.toObsidian, ...changeset.toCalDAV]) {
-			if (change.type === "create" || change.type === "update" || change.type === "complete") {
+			if (change.type === "create" || change.type === "update" || change.type === "complete" || change.type === "reconcile") {
 				baselineMap.set(change.task.uid, change.task);
 			} else if (change.type === "delete") {
 				baselineMap.delete(change.task.uid);
@@ -236,14 +243,18 @@ export class SyncEngine {
 		const counts = this.countChanges(changeset);
 
 		const name = this.calendar.calendarName;
+		const reconciledSuffix = counts.reconciled > 0 ? ` | Reconciled: ${counts.reconciled}` : "";
 		const message = dryRun
 			? `[${name}] Dry run complete! Would sync:\n` +
 				`From CalDAV: ${counts.created.toObsidian} created, ${counts.updated.toObsidian} updated, ${counts.deleted.toObsidian} deleted\n` +
 				`To CalDAV: ${counts.created.toCalDAV} created, ${counts.updated.toCalDAV} updated, ${counts.deleted.toCalDAV} deleted\n` +
-				`Conflicts: ${changeset.conflicts.length}\n\nNo changes were made.`
+				`Conflicts: ${changeset.conflicts.length}` +
+				(counts.reconciled > 0 ? `\nReconciled: ${counts.reconciled}` : "") +
+				`\n\nNo changes were made.`
 			: `[${name}] Sync complete! ` +
 				`From CalDAV: ${counts.created.toObsidian}+${counts.updated.toObsidian}+${counts.deleted.toObsidian} | ` +
-				`To CalDAV: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}`;
+				`To CalDAV: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}` +
+				reconciledSuffix;
 
 		new Notice(message, dryRun ? 10000 : 5000);
 
@@ -268,6 +279,7 @@ export class SyncEngine {
 		created: { toObsidian: number; toCalDAV: number };
 		updated: { toObsidian: number; toCalDAV: number };
 		deleted: { toObsidian: number; toCalDAV: number };
+		reconciled: number;
 	} {
 		const count = (changes: SyncChange[], type: string) =>
 			changes.filter((c) => c.type === type).length;
@@ -279,6 +291,7 @@ export class SyncEngine {
 				toCalDAV: count(changeset.toCalDAV, "update") + count(changeset.toCalDAV, "complete"),
 			},
 			deleted: { toObsidian: count(changeset.toObsidian, "delete"), toCalDAV: count(changeset.toCalDAV, "delete") },
+			reconciled: count(changeset.toObsidian, "reconcile"),
 		};
 	}
 
@@ -294,6 +307,7 @@ export class SyncEngine {
 			created: { toObsidian: 0, toCalDAV: 0 },
 			updated: { toObsidian: 0, toCalDAV: 0 },
 			deleted: { toObsidian: 0, toCalDAV: 0 },
+			reconciled: 0,
 			conflicts: 0,
 			details: { toObsidian: [], toCalDAV: [], conflictDetails: [] },
 		};

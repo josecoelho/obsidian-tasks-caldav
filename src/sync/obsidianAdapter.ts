@@ -166,6 +166,8 @@ export class ObsidianAdapter {
 						// Return mapping removal info — SyncEngine handles storage
 						break;
 					}
+					case "reconcile":
+						break;
 				}
 			} catch (error) {
 				if (change.type === "complete") throw error;

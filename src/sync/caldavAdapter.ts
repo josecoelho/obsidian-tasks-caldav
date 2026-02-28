@@ -103,6 +103,8 @@ export class CalDAVAdapter {
           await this.client.deleteVTODOByUID(caldavUID);
           break;
         }
+        case 'reconcile':
+          break;
       }
     }
   }

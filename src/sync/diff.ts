@@ -62,6 +62,13 @@ export function diff(
   const toCalDAV: SyncChange[] = [];
   const conflicts: Conflict[] = [];
 
+  const reconciledUids = reconcileOrphans(
+    obsidianByUid, caldavByUid, baselineByUid, toObsidian, toCalDAV,
+  );
+  for (const uid of reconciledUids) {
+    allUids.delete(uid);
+  }
+
   for (const uid of allUids) {
     const obs = obsidianByUid.get(uid);
     const cal = caldavByUid.get(uid);
@@ -123,4 +130,43 @@ export function diff(
   }
 
   return { toObsidian, toCalDAV, conflicts };
+}
+
+function reconcileOrphans(
+  obsidianByUid: Map<string, CommonTask>,
+  caldavByUid: Map<string, CommonTask>,
+  baselineByUid: Map<string, CommonTask>,
+  toObsidian: SyncChange[],
+  toCalDAV: SyncChange[],
+): Set<string> {
+  const reconciledUids = new Set<string>();
+
+  const obsOrphans: CommonTask[] = [];
+  for (const [uid, task] of obsidianByUid) {
+    if (!caldavByUid.has(uid) && !baselineByUid.has(uid)) {
+      obsOrphans.push(task);
+    }
+  }
+
+  const calOrphanPool = new Map<string, CommonTask>();
+  for (const [uid, task] of caldavByUid) {
+    if (!obsidianByUid.has(uid) && !baselineByUid.has(uid)) {
+      calOrphanPool.set(uid, task);
+    }
+  }
+
+  for (const obsTask of obsOrphans) {
+    for (const [calUid, calTask] of calOrphanPool) {
+      if (tasksEqual(obsTask, calTask)) {
+        toObsidian.push({ type: 'reconcile', task: obsTask, counterpartUid: calUid });
+        toCalDAV.push({ type: 'reconcile', task: calTask, counterpartUid: obsTask.uid });
+        reconciledUids.add(obsTask.uid);
+        reconciledUids.add(calUid);
+        calOrphanPool.delete(calUid);
+        break;
+      }
+    }
+  }
+
+  return reconciledUids;
 }

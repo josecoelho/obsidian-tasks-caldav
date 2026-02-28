@@ -16,9 +16,10 @@ export interface CommonTask {
 }
 
 export interface SyncChange {
-  type: 'create' | 'update' | 'delete' | 'complete';
+  type: 'create' | 'update' | 'delete' | 'complete' | 'reconcile';
   task: CommonTask;
   previousVersion?: CommonTask;
+  counterpartUid?: string;
 }
 
 export interface Changeset {

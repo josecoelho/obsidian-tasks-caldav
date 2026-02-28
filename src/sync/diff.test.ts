@@ -346,6 +346,87 @@ describe('diff', () => {
     });
   });
 
+  describe('reconciliation', () => {
+    it('should reconcile orphans with identical content instead of creating duplicates', () => {
+      const obsTask = makeCommonTask({ uid: 'obs-1', title: 'Buy milk', status: 'TODO' });
+      const calTask = makeCommonTask({ uid: 'cal-1', title: 'Buy milk', status: 'TODO' });
+
+      const result = diff([obsTask], [calTask], [], 'caldav-wins');
+
+      const obsReconciles = result.toObsidian.filter(c => c.type === 'reconcile');
+      const calReconciles = result.toCalDAV.filter(c => c.type === 'reconcile');
+      expect(obsReconciles).toHaveLength(1);
+      expect(obsReconciles[0].task.uid).toBe('obs-1');
+      expect(obsReconciles[0].counterpartUid).toBe('cal-1');
+      expect(calReconciles).toHaveLength(1);
+      expect(calReconciles[0].task.uid).toBe('cal-1');
+      expect(calReconciles[0].counterpartUid).toBe('obs-1');
+
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(0);
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(0);
+    });
+
+    it('should not reconcile orphans with different content', () => {
+      const obsTask = makeCommonTask({ uid: 'obs-1', title: 'Buy milk' });
+      const calTask = makeCommonTask({ uid: 'cal-1', title: 'Buy eggs' });
+
+      const result = diff([obsTask], [calTask], [], 'caldav-wins');
+
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(0);
+      expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(0);
+    });
+
+    it('should reconcile multiple matching pairs', () => {
+      const obs1 = makeCommonTask({ uid: 'obs-1', title: 'Task A' });
+      const obs2 = makeCommonTask({ uid: 'obs-2', title: 'Task B' });
+      const cal1 = makeCommonTask({ uid: 'cal-1', title: 'Task A' });
+      const cal2 = makeCommonTask({ uid: 'cal-2', title: 'Task B' });
+
+      const result = diff([obs1, obs2], [cal1, cal2], [], 'caldav-wins');
+
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(2);
+      expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(2);
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(0);
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(0);
+    });
+
+    it('should not reconcile tasks that have a baseline (only orphans)', () => {
+      const baseline = makeCommonTask({ uid: 'obs-1', title: 'Task A' });
+      const obsTask = makeCommonTask({ uid: 'obs-1', title: 'Task A' });
+      const calTask = makeCommonTask({ uid: 'cal-new', title: 'Task A' });
+
+      const result = diff([obsTask], [calTask], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(1);
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(0);
+    });
+
+    it('should handle mix of reconcilable and non-reconcilable orphans', () => {
+      const obs1 = makeCommonTask({ uid: 'obs-1', title: 'Matching task' });
+      const obs2 = makeCommonTask({ uid: 'obs-2', title: 'Only in Obsidian' });
+      const cal1 = makeCommonTask({ uid: 'cal-1', title: 'Matching task' });
+      const cal2 = makeCommonTask({ uid: 'cal-2', title: 'Only in CalDAV' });
+
+      const result = diff([obs1, obs2], [cal1, cal2], [], 'caldav-wins');
+
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(1);
+      expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(1);
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(1);
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(1);
+    });
+
+    it('should pick first match when multiple CalDAV tasks match one Obsidian task', () => {
+      const obs1 = makeCommonTask({ uid: 'obs-1', title: 'Duplicate' });
+      const cal1 = makeCommonTask({ uid: 'cal-1', title: 'Duplicate' });
+      const cal2 = makeCommonTask({ uid: 'cal-2', title: 'Duplicate' });
+
+      const result = diff([obs1], [cal1, cal2], [], 'caldav-wins');
+
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(1);
+      expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(1);
+    });
+  });
+
   describe('completion detection', () => {
     it('should emit complete when CalDAV marks recurring task as DONE', () => {
       const baseline = makeCommonTask({ uid: 't1', status: 'TODO', recurrenceRule: 'FREQ=WEEKLY', dueDate: '2025-01-13' });
