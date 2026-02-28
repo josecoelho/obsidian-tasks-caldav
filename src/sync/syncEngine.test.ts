@@ -987,16 +987,6 @@ describe('SyncEngine', () => {
         (_line: string, _path: string) => toggledMarkdown,
       );
 
-      // The toggle command for recurring tasks creates a new line for the next occurrence
-      // ObsidianAdapter detects this and returns a completionRemapping
-      // We need to mock the wrapper so that after toggle, a new task appears
-      const _newTask = makeObsidianTask({
-        description: 'Recurring task',
-        id: 'task-002',
-        tags: ['#sync'],
-        originalMarkdown: '- [ ] Recurring task 📅 2025-07-08 🔁 every week 🆔 task-002 #sync',
-      });
-
       mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
       mockFetchVTODOs.mockResolvedValue([vtodo]);
       mockGetBaseline.mockReturnValue([baseline]);
@@ -1014,7 +1004,7 @@ describe('SyncEngine', () => {
           '- [x] Recurring task 📅 2025-07-01 ✅ 2025-07-15 🆔 task-001 #sync\n- [ ] Recurring task 📅 2025-07-08 🔁 every week 🆔 task-002 #sync',
       );
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -1074,7 +1064,7 @@ describe('SyncEngine', () => {
       mockGetIdMapping.mockReturnValue(idMapping);
       mockFindTaskById.mockReturnValue(obsTask);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -1159,7 +1149,7 @@ describe('SyncEngine', () => {
       });
       mockFindTaskById.mockReturnValue(obsTask);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -1236,7 +1226,7 @@ describe('SyncEngine', () => {
       });
       mockFetchVTODOByUID.mockResolvedValue(vtodo);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
@@ -1303,7 +1293,7 @@ describe('SyncEngine', () => {
       });
       mockFindTaskById.mockReturnValue(obsTask);
 
-      const engine = new SyncEngine(new App(), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
       const result = await engine.sync(false);
 
