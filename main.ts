@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS } from './src/types';
+import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
@@ -138,10 +138,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const loaded = (await this.loadData()) ?? {};
-		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded);
+		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
+		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
 
-		const legacy = loaded as Record<string, unknown>;
+		const legacy = loaded;
 		if (legacy.serverUrl && !legacy.calendars) {
 			this.settings.calendars = [{
 				tag: (legacy.syncTag as string) ?? 'sync',
@@ -217,7 +217,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('General')
+			.setName('Behavior')
 			.setHeading();
 
 		new Setting(containerEl)
@@ -289,7 +289,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 			.setName('Tag')
 			.setDesc('Tag that routes tasks to this calendar (without #)')
 			.addText(text => text
-				.setPlaceholder('work')
+				.setPlaceholder('Work')
 				.setValue(calendar.tag)
 				.onChange(async (value) => {
 					calendar.tag = value;

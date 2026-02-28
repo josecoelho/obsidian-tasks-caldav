@@ -20,13 +20,6 @@ function makeClient(): CalDAVClientDirect {
       username: RADICALE.username,
       password: RADICALE.password,
       calendarName,
-      syncTag: '',
-      syncInterval: 5,
-      newTasksDestination: 'Inbox.md',
-      requireManualConflictResolution: false,
-      autoResolveObsidianWins: false,
-      syncCompletedTasks: false,
-      deleteBehavior: 'ask',
     },
     httpClient,
   );
