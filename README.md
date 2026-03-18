@@ -4,6 +4,8 @@ Bidirectional sync between [obsidian-tasks](https://github.com/obsidian-tasks-gr
 
 Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin — syncs task status, dates, priorities, recurrence, tags, and notes as standard VTODO items.
 
+![Demo](docs/demo.gif)
+
 ## Features
 
 - **Multi-calendar support** — sync different tags to different calendars and servers (tasks must have the tag on both sides — Obsidian `#tag` and CalDAV `CATEGORIES`)
