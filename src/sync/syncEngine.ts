@@ -52,7 +52,7 @@ export class SyncEngine {
 
 	async initialize(): Promise<boolean> {
 		if (!this.obsidianAdapter.isReady()) {
-			new Notice("obsidian-tasks plugin required for sync");
+			new Notice("Tasks plugin required for sync");
 			return false;
 		}
 		await this.storage.initialize();
@@ -253,14 +253,14 @@ export class SyncEngine {
 		const reconciledSuffix = counts.reconciled > 0 ? ` | Reconciled: ${counts.reconciled}` : "";
 		const message = dryRun
 			? `[${name}] Dry run complete! Would sync:\n` +
-				`From CalDAV: ${counts.created.toObsidian} created, ${counts.updated.toObsidian} updated, ${counts.deleted.toObsidian} deleted\n` +
-				`To CalDAV: ${counts.created.toCalDAV} created, ${counts.updated.toCalDAV} updated, ${counts.deleted.toCalDAV} deleted\n` +
+				`From calendar: ${counts.created.toObsidian} created, ${counts.updated.toObsidian} updated, ${counts.deleted.toObsidian} deleted\n` +
+				`To calendar: ${counts.created.toCalDAV} created, ${counts.updated.toCalDAV} updated, ${counts.deleted.toCalDAV} deleted\n` +
 				`Conflicts: ${changeset.conflicts.length}` +
 				(counts.reconciled > 0 ? `\nReconciled: ${counts.reconciled}` : "") +
 				`\n\nNo changes were made.`
 			: `[${name}] Sync complete! ` +
-				`From CalDAV: ${counts.created.toObsidian}+${counts.updated.toObsidian}+${counts.deleted.toObsidian} | ` +
-				`To CalDAV: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}` +
+				`From calendar: ${counts.created.toObsidian}+${counts.updated.toObsidian}+${counts.deleted.toObsidian} | ` +
+				`To calendar: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}` +
 				reconciledSuffix;
 
 		new Notice(message, dryRun ? 10000 : 5000);

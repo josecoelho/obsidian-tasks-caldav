@@ -27,8 +27,7 @@ export default tseslint.config(
 		plugins: { obsidianmd },
 		rules: {
 			"obsidianmd/ui/sentence-case": ["error", {
-				brands: ["CalDAV", "Obsidian", "obsidian-tasks"],
-				acronyms: ["ID", "URL"],
+				mode: "strict",
 			}],
 		},
 	},

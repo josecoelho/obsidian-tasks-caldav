@@ -34,11 +34,11 @@ describe('CalDAVClientDirect', () => {
         });
 
         it('should throw when fetching VTODOs without connection', async () => {
-            await expect(client.fetchVTODOs()).rejects.toThrow('Not connected to CalDAV server');
+            await expect(client.fetchVTODOs()).rejects.toThrow('Not connected to calendar server');
         });
 
         it('should throw when creating VTODO without connection', async () => {
-            await expect(client.createVTODO('VTODO data', 'uid-123')).rejects.toThrow('Not connected to CalDAV server');
+            await expect(client.createVTODO('VTODO data', 'uid-123')).rejects.toThrow('Not connected to calendar server');
         });
     });
 

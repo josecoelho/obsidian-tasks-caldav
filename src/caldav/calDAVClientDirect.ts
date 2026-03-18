@@ -281,7 +281,7 @@ export class CalDAVClientDirect implements CalDAVClient {
    */
   async fetchVTODOs(): Promise<CalendarObject[]> {
     if (!this.calendarUrl) {
-      throw new Error('Not connected to CalDAV server');
+      throw new Error('Not connected to calendar server');
     }
 
     // REPORT query to get all VTODOs
@@ -317,7 +317,7 @@ export class CalDAVClientDirect implements CalDAVClient {
    */
   async createVTODO(vtodoData: string, uid: string): Promise<void> {
     if (!this.calendarUrl) {
-      throw new Error('Not connected to CalDAV server');
+      throw new Error('Not connected to calendar server');
     }
 
     const filename = `${uid}.ics`;

@@ -56,7 +56,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'sync-now',
-			name: 'Sync with CalDAV now',
+			name: 'Sync now',
 			callback: async () => {
 				if (this.syncEngines.length === 0) {
 					new Notice('No calendars configured');
@@ -95,19 +95,19 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'dump-caldav-requests',
-			name: 'Dump CalDAV requests for debugging',
+			name: 'Dump server requests for debugging',
 			callback: async () => {
 				if (this.settings.calendars.length === 0) {
 					new Notice('No calendars configured');
 					return;
 				}
-				new Notice('Dumping CalDAV requests...');
+				new Notice('Dumping server requests...');
 				try {
 					const result = await dumpCalDAVRequests(this.app, this.settings.calendars[0]);
 					new Notice(`${result}\nCheck .caldav-sync/test-caldav-requests/ in your vault.`, 10000);
 				} catch (error) {
 					const msg = error instanceof Error ? error.message : String(error);
-					new Notice(`CalDAV dump failed: ${msg}`, 8000);
+					new Notice(`Server dump failed: ${msg}`, 8000);
 					console.error('[CalDAV] Dump failed:', error);
 				}
 			}
@@ -158,7 +158,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 			}
 		}
 		if (this.syncEngines.length === 0 && this.settings.calendars.length > 0) {
-			new Notice('CalDAV sync: obsidian-tasks plugin not available');
+			new Notice('Sync failed: tasks plugin not available');
 		}
 	}
 
@@ -232,7 +232,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('New tasks destination')
-			.setDesc('File where new CalDAV tasks will be added')
+			.setDesc('File where new calendar tasks will be added')
 			.addText(text => text
 				.setPlaceholder('Inbox.md')
 				.setValue(this.plugin.settings.newTasksDestination)
@@ -305,7 +305,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Server URL')
-			.setDesc('CalDAV server URL')
+			.setDesc('Calendar server URL')
 			.addText(text => text
 				.setPlaceholder('https://caldav.example.com')
 				.setValue(calendar.serverUrl)

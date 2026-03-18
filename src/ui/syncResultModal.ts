@@ -46,7 +46,7 @@ export class SyncResultModal extends Modal {
           this.renderTaskTable(el, details.obsidianTasks);
         }
         if (details.caldavTasks) {
-          el.createEl('h4', { text: `CalDAV tasks (${details.caldavTasks.length})` });
+          el.createEl('h4', { text: `Calendar tasks (${details.caldavTasks.length})` });
           this.renderTaskTable(el, details.caldavTasks);
         }
         if (details.baselineTasks) {
@@ -64,7 +64,7 @@ export class SyncResultModal extends Modal {
           this.renderChanges(el, details.toObsidian);
         }
         if (details.toCalDAV.length > 0) {
-          el.createEl('h4', { text: `→ CalDAV (${details.toCalDAV.length})` });
+          el.createEl('h4', { text: `→ Calendar (${details.toCalDAV.length})` });
           this.renderChanges(el, details.toCalDAV);
         }
       }, false);
@@ -104,7 +104,7 @@ export class SyncResultModal extends Modal {
       if (result.created.toCalDAV) segments.push(`${result.created.toCalDAV} created`);
       if (result.updated.toCalDAV) segments.push(`${result.updated.toCalDAV} updated`);
       if (result.deleted.toCalDAV) segments.push(`${result.deleted.toCalDAV} deleted`);
-      parts.push(`→ CalDAV: ${segments.join(', ')}`);
+      parts.push(`→ Calendar: ${segments.join(', ')}`);
     }
 
     if (result.conflicts > 0) {
@@ -204,7 +204,7 @@ export class SyncResultModal extends Modal {
       this.renderTaskDetail(obsCol, conflict.obsidianVersion);
 
       const calCol = grid.createDiv({ cls: 'sync-conflict-col' });
-      calCol.createEl('h6', { text: 'CalDAV' });
+      calCol.createEl('h6', { text: 'Calendar' });
       this.renderTaskDetail(calCol, conflict.caldavVersion);
 
       const baseCol = grid.createDiv({ cls: 'sync-conflict-col' });
