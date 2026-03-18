@@ -39,6 +39,12 @@ export class ObsidianMapper {
 
     line += task.title;
 
+    const syncTagName = syncTag?.replace(/^#/, '').trim();
+    const nonSyncTags = task.tags.filter(t => t !== syncTagName);
+    for (const tag of nonSyncTags) {
+      line += ` #${tag}`;
+    }
+
     // Dates in obsidian-tasks order: start, scheduled, due, completed
     if (task.startDate) {
       line += ` 🛫 ${task.startDate}`;

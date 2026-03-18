@@ -181,6 +181,26 @@ describe('ObsidianMapper', () => {
       const md = mapper.toMarkdown(baseTask, 'sync');
       expect(md).not.toContain('\n');
     });
+
+    it('should include non-sync tags in markdown output', () => {
+      const task = { ...baseTask, tags: ['sync', 'shopping', 'errands'] };
+      const md = mapper.toMarkdown(task, 'sync');
+      expect(md).toContain('#shopping');
+      expect(md).toContain('#errands');
+    });
+
+    it('should not duplicate the sync tag', () => {
+      const task = { ...baseTask, tags: ['sync', 'shopping'] };
+      const md = mapper.toMarkdown(task, 'sync');
+      const syncCount = (md.match(/#sync/g) || []).length;
+      expect(syncCount).toBe(1);
+    });
+
+    it('should place non-sync tags before date emojis', () => {
+      const task = { ...baseTask, tags: ['sync', 'shopping'], dueDate: '2025-01-15' };
+      const md = mapper.toMarkdown(task, 'sync');
+      expect(md.indexOf('#shopping')).toBeLessThan(md.indexOf('📅'));
+    });
   });
 
 });
