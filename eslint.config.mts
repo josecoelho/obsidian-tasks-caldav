@@ -29,6 +29,7 @@ export default tseslint.config(
 			"obsidianmd/ui/sentence-case": ["error", {
 				mode: "strict",
 			}],
+			"@typescript-eslint/require-await": "error",
 		},
 	},
 	// Test files: add jest globals and relax some rules

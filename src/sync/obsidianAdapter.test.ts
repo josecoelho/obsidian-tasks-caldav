@@ -121,10 +121,11 @@ describe('ObsidianAdapter', () => {
       const toggleFn = jest.fn().mockReturnValue(
         '- [x] Weekly review 🔁 every week 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001'
       );
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
       const wrapper = {
         ...dummyWrapper,
         getToggleCommand: jest.fn().mockReturnValue(toggleFn),
-        updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+        updateTaskInVault,
         findTaskById: jest.fn().mockReturnValue(null),
       } as unknown as ObsidianTasksWrapper;
 
@@ -157,8 +158,7 @@ describe('ObsidianAdapter', () => {
         existingTask.originalMarkdown,
         existingTask.taskLocation._tasksFile._path,
       );
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(wrapper.updateTaskInVault).toHaveBeenCalled();
+      expect(updateTaskInVault).toHaveBeenCalled();
       expect(result.completionRemappings).toHaveLength(0); // single line = no remapping
     });
 

@@ -35,8 +35,8 @@ describe('runMigrations', () => {
   it('runs all migrations in order', async () => {
     const order: string[] = [];
     const fakeMigrations: Migration[] = [
-      { name: 'first', async run() { order.push('first'); } },
-      { name: 'second', async run() { order.push('second'); } },
+      { name: 'first', async run() { await Promise.resolve(); order.push('first'); } },
+      { name: 'second', async run() { await Promise.resolve(); order.push('second'); } },
     ];
 
     const adapter = createMockAdapter();
