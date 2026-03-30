@@ -25,8 +25,8 @@ services:
       VIKUNJA_DATABASE_TYPE: sqlite
       VIKUNJA_DATABASE_PATH: /db/vikunja.db
     tmpfs:
-      - /db
-      - /app/vikunja/files
+      - /db:uid=1000
+      - /app/vikunja/files:uid=1000
     healthcheck:
       test: ["CMD", "/app/vikunja/vikunja", "help"]
       interval: 2s

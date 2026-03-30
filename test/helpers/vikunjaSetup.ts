@@ -12,6 +12,7 @@ export const VIKUNJA = {
 const http = new FetchHttpClient();
 
 let bootstrapped = false;
+let cachedToken: string | null = null;
 
 /**
  * Register a test user and ensure they exist.
@@ -32,7 +33,13 @@ export async function bootstrapVikunjaUser(): Promise<void> {
     }),
   });
 
-  if (registerResp.status !== 200 && registerResp.status !== 201) {
+  if (registerResp.status === 200 || registerResp.status === 201) {
+    // Registration succeeded — extract token from response
+    const data = JSON.parse(registerResp.text) as Record<string, unknown>;
+    if (typeof data.token === 'string') {
+      cachedToken = data.token;
+    }
+  } else {
     // User may already exist — verify by logging in
     const loginResp = await http.request({
       url: `${VIKUNJA.baseUrl}/api/v1/login`,
@@ -48,15 +55,19 @@ export async function bootstrapVikunjaUser(): Promise<void> {
         `Vikunja bootstrap failed: register=${registerResp.status} login=${loginResp.status} ${loginResp.text}`,
       );
     }
+    const data = JSON.parse(loginResp.text) as { token: string };
+    cachedToken = data.token;
   }
 
   bootstrapped = true;
 }
 
 /**
- * Get a JWT token for API calls.
+ * Get a JWT token for API calls. Caches the token to avoid rate limiting.
  */
 async function getToken(): Promise<string> {
+  if (cachedToken) return cachedToken;
+
   const resp = await http.request({
     url: `${VIKUNJA.baseUrl}/api/v1/login`,
     method: 'POST',
@@ -70,7 +81,8 @@ async function getToken(): Promise<string> {
     throw new Error(`Vikunja login failed: ${resp.status} ${resp.text}`);
   }
   const data = JSON.parse(resp.text) as { token: string };
-  return data.token;
+  cachedToken = data.token;
+  return cachedToken;
 }
 
 /**
