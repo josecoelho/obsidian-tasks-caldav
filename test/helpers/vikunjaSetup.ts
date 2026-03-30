@@ -1,4 +1,5 @@
-import { FetchHttpClient } from './fetchHttpClient';
+import { FetchHttpClient, } from './fetchHttpClient';
+import { HttpResponse } from '../../src/caldav/httpClient';
 import * as crypto from 'crypto';
 
 export const VIKUNJA = {
@@ -14,6 +15,29 @@ const http = new FetchHttpClient();
 let bootstrapped = false;
 let cachedToken: string | null = null;
 
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry a request with exponential backoff on 429 responses.
+ */
+async function withRetry(
+  fn: () => Promise<HttpResponse>,
+  maxRetries = 5,
+  baseDelayMs = 2000,
+): Promise<HttpResponse> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fn();
+    if (resp.status !== 429) return resp;
+    if (attempt < maxRetries) {
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      await sleep(delay);
+    }
+  }
+  return fn();
+}
+
 /**
  * Register a test user and ensure they exist.
  * Idempotent — skips if already bootstrapped this process.
@@ -21,35 +45,36 @@ let cachedToken: string | null = null;
 export async function bootstrapVikunjaUser(): Promise<void> {
   if (bootstrapped) return;
 
-  // Try to register — 200 means created, 400 may mean already exists
-  const registerResp = await http.request({
-    url: `${VIKUNJA.baseUrl}/api/v1/register`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: VIKUNJA.username,
-      email: VIKUNJA.email,
-      password: VIKUNJA.password,
+  const registerResp = await withRetry(() =>
+    http.request({
+      url: `${VIKUNJA.baseUrl}/api/v1/register`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: VIKUNJA.username,
+        email: VIKUNJA.email,
+        password: VIKUNJA.password,
+      }),
     }),
-  });
+  );
 
   if (registerResp.status === 200 || registerResp.status === 201) {
-    // Registration succeeded — extract token from response
     const data = JSON.parse(registerResp.text) as Record<string, unknown>;
     if (typeof data.token === 'string') {
       cachedToken = data.token;
     }
   } else {
-    // User may already exist — verify by logging in
-    const loginResp = await http.request({
-      url: `${VIKUNJA.baseUrl}/api/v1/login`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: VIKUNJA.username,
-        password: VIKUNJA.password,
+    const loginResp = await withRetry(() =>
+      http.request({
+        url: `${VIKUNJA.baseUrl}/api/v1/login`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: VIKUNJA.username,
+          password: VIKUNJA.password,
+        }),
       }),
-    });
+    );
     if (loginResp.status !== 200) {
       throw new Error(
         `Vikunja bootstrap failed: register=${registerResp.status} login=${loginResp.status} ${loginResp.text}`,
@@ -68,15 +93,17 @@ export async function bootstrapVikunjaUser(): Promise<void> {
 async function getToken(): Promise<string> {
   if (cachedToken) return cachedToken;
 
-  const resp = await http.request({
-    url: `${VIKUNJA.baseUrl}/api/v1/login`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: VIKUNJA.username,
-      password: VIKUNJA.password,
+  const resp = await withRetry(() =>
+    http.request({
+      url: `${VIKUNJA.baseUrl}/api/v1/login`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: VIKUNJA.username,
+        password: VIKUNJA.password,
+      }),
     }),
-  });
+  );
   if (resp.status !== 200) {
     throw new Error(`Vikunja login failed: ${resp.status} ${resp.text}`);
   }
