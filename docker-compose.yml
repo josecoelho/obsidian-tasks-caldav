@@ -13,3 +13,23 @@ services:
       interval: 2s
       timeout: 5s
       retries: 10
+
+  vikunja:
+    image: vikunja/vikunja
+    ports:
+      - "3457:3456"
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: http://localhost:3457
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: "true"
+      VIKUNJA_SERVICE_TESTINGTOKEN: ""
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /db/vikunja.db
+    tmpfs:
+      - /db
+      - /app/vikunja/files
+    healthcheck:
+      test: ["CMD", "/app/vikunja/vikunja", "help"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
