@@ -268,7 +268,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
       if (!dataMatch) continue;
 
-      const data = dataMatch[1].trim();
+      const data = decodeXMLEntities(dataMatch[1].trim());
 
       vtodos.push({ data, url, etag });
     }
@@ -428,4 +428,19 @@ export class CalDAVClientDirect implements CalDAVClient {
   getMapper(): VTODOMapper {
     return this.mapper;
   }
+}
+
+/**
+ * Decode XML character entities in calendar-data.
+ * Some servers (e.g. Vikunja) return iCal data with XML-escaped newlines
+ * (&#xA;) instead of actual newlines or CDATA wrapping.
+ */
+function decodeXMLEntities(text: string): string {
+  return text
+    .replace(/&#xA;/g, '\n')
+    .replace(/&#xD;/g, '\r')
+    .replace(/&#x9;/g, '\t')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
 }
