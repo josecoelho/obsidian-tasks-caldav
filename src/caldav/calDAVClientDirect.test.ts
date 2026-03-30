@@ -210,6 +210,49 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].etag).toBeUndefined();
         });
 
+        it('should decode XML entities in calendar-data (Vikunja format)', () => {
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/dav/projects/3/task1.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <D:getetag>"5-123456"</D:getetag>
+                <C:calendar-data>BEGIN:VCALENDAR&#xA;VERSION:2.0&#xA;PRODID:-//Vikunja//EN&#xA;BEGIN:VTODO&#xA;UID:vikunja-task-1&#xA;SUMMARY:Buy groceries&#xA;STATUS:NEEDS-ACTION&#xA;END:VTODO&#xA;END:VCALENDAR</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'http://localhost:3457');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].data).toContain('UID:vikunja-task-1');
+            expect(vtodos[0].data).toContain('SUMMARY:Buy groceries');
+            // Verify newlines are actual newlines, not &#xA;
+            expect(vtodos[0].data).not.toContain('&#xA;');
+            expect(vtodos[0].data.split('\n').length).toBeGreaterThan(1);
+        });
+
+        it('should decode mixed XML entities in calendar-data', () => {
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/task.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <C:calendar-data>BEGIN:VTODO&#xA;UID:1&#xA;SUMMARY:Fix &lt;html&gt; &amp; stuff&#xA;END:VTODO</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://example.com');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].data).toContain('SUMMARY:Fix <html> & stuff');
+            expect(vtodos[0].data).not.toContain('&lt;');
+            expect(vtodos[0].data).not.toContain('&amp;');
+        });
+
         it('should parse multiple VTODOs from single response', () => {
             const response = `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
     <d:response>
