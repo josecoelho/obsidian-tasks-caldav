@@ -7,7 +7,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"test": "node scripts/ensure-radicale.mjs && jest --coverage",
+		"test": "node scripts/ensure-servers.mjs && jest --coverage",
 		"test:watch": "jest --selectProjects unit --watch",
 		"lint": "eslint .",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
