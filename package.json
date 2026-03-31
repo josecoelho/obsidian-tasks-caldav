@@ -9,6 +9,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"test": "node scripts/ensure-servers.mjs && jest --coverage",
 		"test:unit": "jest --selectProjects unit --coverage --coverageThreshold='{}'",
+		"test:core": "node scripts/ensure-servers.mjs --only radicale && jest --selectProjects unit e2e --testPathPatterns='src/|test/e2e/(caldavClient|caldavAdapter|syncRoundTrip)' --coverage",
 		"test:e2e:radicale": "node scripts/ensure-servers.mjs --only radicale && jest --selectProjects e2e --testPathPatterns='test/e2e/(caldavClient|caldavAdapter|syncRoundTrip)'",
 		"test:e2e:vikunja": "node scripts/ensure-servers.mjs --only vikunja && jest --selectProjects e2e --testPathPatterns='test/e2e/vikunja/'",
 		"test:e2e:nextcloud": "node scripts/ensure-servers.mjs --only nextcloud && jest --selectProjects e2e --testPathPatterns='test/e2e/nextcloud/'",
