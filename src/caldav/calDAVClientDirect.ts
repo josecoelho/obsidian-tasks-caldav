@@ -261,8 +261,11 @@ export class CalDAVClientDirect implements CalDAVClient {
       }
 
       // Extract etag (any namespace prefix or none)
+      // Nextcloud returns ETags with XML-encoded quotes: &quot;abc123&quot;
       const etagMatch = responseBlock.match(/<(?:\w+:)?getetag>([^<]+)<\/(?:\w+:)?getetag>/);
-      const etag = etagMatch ? etagMatch[1].replace(/"/g, '') : undefined;
+      const etag = etagMatch
+        ? etagMatch[1].replace(/&quot;/g, '').replace(/"/g, '')
+        : undefined;
 
       // Extract calendar data (VTODO) — handle optional CDATA wrapping, any namespace prefix
       const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
