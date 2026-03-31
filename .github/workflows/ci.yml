@@ -37,14 +37,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Unit tests
+      - name: Unit tests with coverage
         run: npm run test:unit
 
-      - name: Upload coverage
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: coverage-unit
+          name: coverage
           path: coverage/
           retention-days: 14
 
@@ -63,14 +62,6 @@ jobs:
       - name: E2E tests (Radicale)
         run: npm run test:e2e:radicale
 
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-e2e-radicale
-          path: coverage/
-          retention-days: 14
-
   test-e2e-vikunja:
     runs-on: ubuntu-latest
     steps:
@@ -85,14 +76,6 @@ jobs:
 
       - name: E2E tests (Vikunja)
         run: npm run test:e2e:vikunja
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-e2e-vikunja
-          path: coverage/
-          retention-days: 14
 
   test-e2e-nextcloud:
     runs-on: ubuntu-latest
@@ -109,11 +92,3 @@ jobs:
 
       - name: E2E tests (Nextcloud)
         run: npm run test:e2e:nextcloud
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-e2e-nextcloud
-          path: coverage/
-          retention-days: 14
