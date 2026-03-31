@@ -12,6 +12,11 @@ export const NEXTCLOUD = {
 } as const;
 
 const http = new FetchHttpClient();
+const SQLITE_SETTLE_MS = 500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function authHeader(): Record<string, string> {
   const encoded = Buffer.from(`${NEXTCLOUD.username}:${NEXTCLOUD.password}`).toString('base64');
@@ -93,6 +98,11 @@ async function clearCalendarContents(name: string): Promise<void> {
       method: 'DELETE',
       headers: authHeader(),
     });
+  }
+
+  // Nextcloud + SQLite needs time to release DB locks after deletes
+  if (hrefMatches.length > 0) {
+    await sleep(SQLITE_SETTLE_MS);
   }
 }
 
