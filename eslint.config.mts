@@ -64,5 +64,6 @@ export default tseslint.config(
 		".worktrees/",
 		"obsidian-releases/",
 		"docs/",
+		"eslint-plugin/",
 	]),
 );

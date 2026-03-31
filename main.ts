@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
@@ -8,7 +8,7 @@ import { AutoSyncScheduler } from './src/sync/autoSync';
 import { runMigrations } from './src/migrations/migrationRunner';
 
 export default class CalDAVSyncPlugin extends Plugin {
-	settings: CalDAVSettings;
+	settings!: CalDAVSettings;
 	private syncEngines: SyncEngine[] = [];
 	private autoSync: AutoSyncScheduler | null = null;
 
@@ -22,7 +22,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 		this.addCommand({
 			id: 'validate-task-ids',
 			name: 'Validate task ids in current document',
-			editorCallback: (editor: Editor, _view: MarkdownView) => {
+			editorCallback: (editor: Editor) => {
 				const content = editor.getValue();
 				const lines = content.split('\n');
 

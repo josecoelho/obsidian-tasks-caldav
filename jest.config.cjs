@@ -2,7 +2,7 @@ const shared = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   moduleFileExtensions: ['ts', 'js', 'json'],
-  transform: { '^.+\\.ts$': 'ts-jest' },
+  transform: { '^.+\\.ts$': ['ts-jest', { diagnostics: false }] },
   moduleNameMapper: { '^obsidian$': '<rootDir>/__mocks__/obsidian.ts' },
 };
 

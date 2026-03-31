@@ -108,7 +108,7 @@ describe('SyncStorage', () => {
 
       expect(adapter.exists).toHaveBeenCalled();
       expect(adapter.mkdir).toHaveBeenCalledWith(expect.stringContaining('.caldav-sync'));
-      const writeCalls = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
+      const writeCalls = adapter.write.mock.calls.map((c: unknown[]) => c[0] as string);
       expect(writeCalls.some((p: string) => p.includes('state.json'))).toBe(true);
     });
 
@@ -182,7 +182,7 @@ describe('SyncStorage', () => {
       await storage.save();
 
       expect(adapter.write).toHaveBeenCalledTimes(3);
-      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
+      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0] as string);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('id-mapping.json'))).toBe(true);
@@ -394,7 +394,7 @@ describe('SyncStorage', () => {
       await storage.clearAll();
 
       expect(adapter.write).toHaveBeenCalledTimes(3);
-      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0]);
+      const paths = adapter.write.mock.calls.map((c: unknown[]) => c[0] as string);
       expect(paths.some((p: string) => p.includes('state.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('baseline.json'))).toBe(true);
       expect(paths.some((p: string) => p.includes('id-mapping.json'))).toBe(true);
