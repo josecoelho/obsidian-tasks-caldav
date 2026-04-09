@@ -13,6 +13,7 @@ export interface CommonTask {
   tags: string[];               // without # prefix
   recurrenceRule: string;       // RRULE string or ''
   body: string;                 // multi-line body text, '' = no body
+  obsidianUrl?: string;         // obsidian://open link, set by ObsidianAdapter when enabled
 }
 
 export interface SyncChange {
