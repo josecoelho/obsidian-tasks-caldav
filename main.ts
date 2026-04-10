@@ -242,6 +242,16 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Include Obsidian link in CalDAV tasks')
+			.setDesc('Add an obsidian:// link to each synced task so you can open it from your CalDAV client')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.includeObsidianLink)
+				.onChange(async (value) => {
+					this.plugin.settings.includeObsidianLink = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('Conflict resolution')
 			.setHeading();
 

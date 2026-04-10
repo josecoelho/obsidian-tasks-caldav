@@ -15,6 +15,7 @@ export interface CalDAVSettings {
   autoResolveObsidianWins: boolean;
   syncCompletedTasks: boolean;
   deleteBehavior: 'ask' | 'deleteCalDAV' | 'deleteObsidian' | 'keepBoth';
+  includeObsidianLink: boolean;
 }
 
 export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
@@ -26,6 +27,7 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   autoResolveObsidianWins: false,
   syncCompletedTasks: false,
   deleteBehavior: 'ask',
+  includeObsidianLink: false,
 };
 
 /** Lean bidirectional identity mapping between Obsidian task IDs and CalDAV UIDs. */
