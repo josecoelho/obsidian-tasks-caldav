@@ -98,7 +98,7 @@ export class VTODOMapper {
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0') as CommonTask['priority'],
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
       tags: this.extractCategories(data),
-      body: this.extractRawProperty(data, 'DESCRIPTION') || '',
+      body: this.stripObsidianLinks(this.extractRawProperty(data, 'DESCRIPTION') || ''),
     };
   }
 
@@ -354,6 +354,12 @@ export class VTODOMapper {
       .replace(/;/g, '\\;')
       .replace(/,/g, '\\,')
       .replace(/\n/g, '\\n');
+  }
+
+  private stripObsidianLinks(body: string): string {
+    const lines = body.split('\n');
+    const filtered = lines.filter(line => !line.match(/^obsidian:\/\/open\?vault=/));
+    return filtered.join('\n').replace(/^\n+/, '');
   }
 
   /**

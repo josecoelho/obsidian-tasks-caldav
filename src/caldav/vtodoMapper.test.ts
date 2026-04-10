@@ -1092,4 +1092,101 @@ END:VTODO`;
       expect(task2.startDate).toBe('2026-03-10');
     });
   });
+
+  describe('obsidian link stripping', () => {
+    it('should strip obsidian:// link from first line of DESCRIPTION', () => {
+      const vtodo: CalendarObject = {
+        url: '/cal/test.ics',
+        data: [
+          'BEGIN:VCALENDAR',
+          'BEGIN:VTODO',
+          'UID:strip-test-1',
+          'SUMMARY:Test task',
+          'DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md\\nActual body text',
+          'STATUS:NEEDS-ACTION',
+          'END:VTODO',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+      };
+
+      const result = mapper.vtodoToTask(vtodo);
+      expect(result.body).toBe('Actual body text');
+    });
+
+    it('should strip obsidian:// link followed by blank line', () => {
+      const vtodo: CalendarObject = {
+        url: '/cal/test.ics',
+        data: [
+          'BEGIN:VCALENDAR',
+          'BEGIN:VTODO',
+          'UID:strip-test-2',
+          'SUMMARY:Test task',
+          'DESCRIPTION:obsidian://open?vault=My%20Vault&file=Projects%2Ftasks.md\\n\\nReal body here',
+          'STATUS:NEEDS-ACTION',
+          'END:VTODO',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+      };
+
+      const result = mapper.vtodoToTask(vtodo);
+      expect(result.body).toBe('Real body here');
+    });
+
+    it('should return empty body when DESCRIPTION is only an obsidian link', () => {
+      const vtodo: CalendarObject = {
+        url: '/cal/test.ics',
+        data: [
+          'BEGIN:VCALENDAR',
+          'BEGIN:VTODO',
+          'UID:strip-test-3',
+          'SUMMARY:Test task',
+          'DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md',
+          'STATUS:NEEDS-ACTION',
+          'END:VTODO',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+      };
+
+      const result = mapper.vtodoToTask(vtodo);
+      expect(result.body).toBe('');
+    });
+
+    it('should not strip obsidian links that are not at start of a line', () => {
+      const vtodo: CalendarObject = {
+        url: '/cal/test.ics',
+        data: [
+          'BEGIN:VCALENDAR',
+          'BEGIN:VTODO',
+          'UID:strip-test-4',
+          'SUMMARY:Test task',
+          'DESCRIPTION:See obsidian://open?vault=Notes&file=Tasks.md for details',
+          'STATUS:NEEDS-ACTION',
+          'END:VTODO',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+      };
+
+      const result = mapper.vtodoToTask(vtodo);
+      expect(result.body).toBe('See obsidian://open?vault=Notes&file=Tasks.md for details');
+    });
+
+    it('should preserve body without obsidian links unchanged', () => {
+      const vtodo: CalendarObject = {
+        url: '/cal/test.ics',
+        data: [
+          'BEGIN:VCALENDAR',
+          'BEGIN:VTODO',
+          'UID:strip-test-5',
+          'SUMMARY:Test task',
+          'DESCRIPTION:Just a normal body',
+          'STATUS:NEEDS-ACTION',
+          'END:VTODO',
+          'END:VCALENDAR',
+        ].join('\r\n'),
+      };
+
+      const result = mapper.vtodoToTask(vtodo);
+      expect(result.body).toBe('Just a normal body');
+    });
+  });
 });
