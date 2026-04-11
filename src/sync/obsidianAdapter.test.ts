@@ -116,6 +116,107 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('obsidianUrl population', () => {
+    it('should set obsidianUrl when includeObsidianLink is true', () => {
+      const settings: ObsidianSyncSettings = {
+        syncTag: 'sync',
+        newTasksDestination: 'Inbox.md',
+        includeObsidianLink: true,
+        vaultName: 'TestVault',
+      };
+      const adapter = new ObsidianAdapter(dummyWrapper, settings);
+      const inputs: TaskWithBody[] = [{
+        task: {
+          description: 'Test task',
+          status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+          isDone: false,
+          priority: '0',
+          tags: [],
+          taskLocation: { _tasksFile: { _path: 'Projects/tasks.md' }, _lineNumber: 5 },
+          originalMarkdown: '- [ ] Test task',
+          createdDate: null,
+          startDate: null,
+          scheduledDate: null,
+          dueDate: null,
+          doneDate: null,
+          cancelledDate: null,
+          recurrence: null,
+          id: 'test-id-1',
+        },
+        body: '',
+      }];
+
+      const result = adapter.normalize(inputs, (task) => task.id || null);
+      expect(result[0].obsidianUrl).toBe('obsidian://open?vault=TestVault&file=Projects%2Ftasks.md');
+    });
+
+    it('should not set obsidianUrl when includeObsidianLink is false', () => {
+      const settings: ObsidianSyncSettings = {
+        syncTag: 'sync',
+        newTasksDestination: 'Inbox.md',
+        includeObsidianLink: false,
+        vaultName: 'TestVault',
+      };
+      const adapter = new ObsidianAdapter(dummyWrapper, settings);
+      const inputs: TaskWithBody[] = [{
+        task: {
+          description: 'Test task',
+          status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+          isDone: false,
+          priority: '0',
+          tags: [],
+          taskLocation: { _tasksFile: { _path: 'Projects/tasks.md' }, _lineNumber: 5 },
+          originalMarkdown: '- [ ] Test task',
+          createdDate: null,
+          startDate: null,
+          scheduledDate: null,
+          dueDate: null,
+          doneDate: null,
+          cancelledDate: null,
+          recurrence: null,
+          id: 'test-id-2',
+        },
+        body: '',
+      }];
+
+      const result = adapter.normalize(inputs, (task) => task.id || null);
+      expect(result[0].obsidianUrl).toBeUndefined();
+    });
+
+    it('should encode vault name and file path with spaces', () => {
+      const settings: ObsidianSyncSettings = {
+        syncTag: 'sync',
+        newTasksDestination: 'Inbox.md',
+        includeObsidianLink: true,
+        vaultName: 'My Vault',
+      };
+      const adapter = new ObsidianAdapter(dummyWrapper, settings);
+      const inputs: TaskWithBody[] = [{
+        task: {
+          description: 'Test task',
+          status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+          isDone: false,
+          priority: '0',
+          tags: [],
+          taskLocation: { _tasksFile: { _path: 'My Folder/tasks file.md' }, _lineNumber: 1 },
+          originalMarkdown: '- [ ] Test task',
+          createdDate: null,
+          startDate: null,
+          scheduledDate: null,
+          dueDate: null,
+          doneDate: null,
+          cancelledDate: null,
+          recurrence: null,
+          id: 'test-id-3',
+        },
+        body: '',
+      }];
+
+      const result = adapter.normalize(inputs, (task) => task.id || null);
+      expect(result[0].obsidianUrl).toBe('obsidian://open?vault=My%20Vault&file=My%20Folder%2Ftasks%20file.md');
+    });
+  });
+
   describe('applyChanges — complete', () => {
     it('calls executeToggleTaskDoneCommand for complete changes', async () => {
       const toggleFn = jest.fn().mockReturnValue(

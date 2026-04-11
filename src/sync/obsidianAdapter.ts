@@ -18,6 +18,8 @@ export interface ObsidianSyncSettings {
 	syncTag?: string;
 	newTasksDestination: string;
 	newTasksSection?: string;
+	includeObsidianLink?: boolean;
+	vaultName?: string;
 }
 
 export class ObsidianAdapter {
@@ -65,10 +67,23 @@ export class ObsidianAdapter {
 		for (const { task, body } of inputs) {
 			const taskId = extractId(task) ?? generateTaskId();
 			this.tasksById.set(taskId, task);
-			tasks.push(this.mapper.toCommonTask(task, taskId, body));
+			const common = this.mapper.toCommonTask(task, taskId, body);
+
+			if (this.settings.includeObsidianLink && this.settings.vaultName) {
+				common.obsidianUrl = this.buildObsidianUrl(
+					this.settings.vaultName,
+					task.taskLocation._tasksFile._path,
+				);
+			}
+
+			tasks.push(common);
 		}
 
 		return tasks;
+	}
+
+	private buildObsidianUrl(vaultName: string, filePath: string): string {
+		return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(filePath)}`;
 	}
 
 	/**
