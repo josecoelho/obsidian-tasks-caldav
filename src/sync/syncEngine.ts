@@ -47,6 +47,8 @@ export class SyncEngine {
 			syncTag: calendar.tag,
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
+			includeObsidianLink: settings.includeObsidianLink,
+			vaultName: app.vault.getName(),
 		});
 	}
 

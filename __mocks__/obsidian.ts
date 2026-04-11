@@ -13,6 +13,7 @@ export class Vault {
     modify = jest.fn();
     create = jest.fn();
     getMarkdownFiles = jest.fn();
+    getName = jest.fn().mockReturnValue('TestVault');
 }
 
 export class TFile {
