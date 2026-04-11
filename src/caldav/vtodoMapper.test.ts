@@ -202,6 +202,51 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
 
       expect(vtodo).toContain('RRULE:FREQ=DAILY;COUNT=10');
     });
+
+    describe('obsidian link embedding', () => {
+      const baseTask: Omit<CommonTask, 'uid'> = {
+        title: 'Test task',
+        status: 'TODO' as TaskStatus,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as TaskPriority,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      it('should add URL property when obsidianUrl is set', () => {
+        const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md' };
+        const vtodo = mapper.taskToVTODO(task, 'url-test-1');
+        expect(vtodo).toContain('URL:obsidian://open?vault=Notes&file=Tasks.md');
+      });
+
+      it('should prepend obsidian link to DESCRIPTION when obsidianUrl is set and body exists', () => {
+        const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md', body: 'My notes' };
+        const vtodo = mapper.taskToVTODO(task, 'url-test-2');
+        expect(vtodo).toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md\\n\\nMy notes');
+      });
+
+      it('should set DESCRIPTION to obsidian link when obsidianUrl is set and body is empty', () => {
+        const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md', body: '' };
+        const vtodo = mapper.taskToVTODO(task, 'url-test-3');
+        expect(vtodo).toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md');
+        expect(vtodo).not.toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md\\n');
+      });
+
+      it('should not add URL property when obsidianUrl is not set', () => {
+        const vtodo = mapper.taskToVTODO(baseTask, 'url-test-4');
+        expect(vtodo).not.toMatch(/^URL:/m);
+      });
+
+      it('should handle obsidianUrl with encoded characters', () => {
+        const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=My%20Vault&file=Projects%2Ftodo.md' };
+        const vtodo = mapper.taskToVTODO(task, 'url-test-5');
+        expect(vtodo).toContain('URL:obsidian://open?vault=My%20Vault&file=Projects%2Ftodo.md');
+      });
+    });
   });
 
   describe('vtodoToTask', () => {

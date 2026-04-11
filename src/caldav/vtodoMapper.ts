@@ -34,9 +34,15 @@ export class VTODOMapper {
     lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
     lines.push(`SUMMARY:${this.escapeText(task.title)}`);
 
-    // Description (body text)
-    if (task.body) {
-      lines.push(`DESCRIPTION:${this.escapeText(task.body)}`);
+    // Description (body text), with optional obsidian link prepended
+    const description = this.buildDescription(task.body, task.obsidianUrl);
+    if (description) {
+      lines.push(`DESCRIPTION:${this.escapeText(description)}`);
+    }
+
+    // Obsidian vault link
+    if (task.obsidianUrl) {
+      lines.push(`URL:${task.obsidianUrl}`);
     }
 
     // Status mapping
@@ -354,6 +360,13 @@ export class VTODOMapper {
       .replace(/;/g, '\\;')
       .replace(/,/g, '\\,')
       .replace(/\n/g, '\\n');
+  }
+
+  private buildDescription(body: string, obsidianUrl?: string): string {
+    if (!obsidianUrl && !body) return '';
+    if (!obsidianUrl) return body;
+    if (!body) return obsidianUrl;
+    return `${obsidianUrl}\n\n${body}`;
   }
 
   private stripObsidianLinks(body: string): string {
