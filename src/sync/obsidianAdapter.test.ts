@@ -122,7 +122,7 @@ describe('ObsidianAdapter', () => {
         syncTag: 'sync',
         newTasksDestination: 'Inbox.md',
         includeObsidianLink: true,
-        vaultName: 'TestVault',
+        getVaultName: () => 'TestVault',
       };
       const adapter = new ObsidianAdapter(dummyWrapper, settings);
       const inputs: TaskWithBody[] = [{
@@ -155,7 +155,7 @@ describe('ObsidianAdapter', () => {
         syncTag: 'sync',
         newTasksDestination: 'Inbox.md',
         includeObsidianLink: false,
-        vaultName: 'TestVault',
+        getVaultName: () => 'TestVault',
       };
       const adapter = new ObsidianAdapter(dummyWrapper, settings);
       const inputs: TaskWithBody[] = [{
@@ -188,7 +188,7 @@ describe('ObsidianAdapter', () => {
         syncTag: 'sync',
         newTasksDestination: 'Inbox.md',
         includeObsidianLink: true,
-        vaultName: 'My Vault',
+        getVaultName: () => 'My Vault',
       };
       const adapter = new ObsidianAdapter(dummyWrapper, settings);
       const inputs: TaskWithBody[] = [{

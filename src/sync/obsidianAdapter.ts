@@ -19,7 +19,8 @@ export interface ObsidianSyncSettings {
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
-	vaultName?: string;
+	// Called at normalize time so vault renames are picked up without reconstructing the adapter.
+	getVaultName?: () => string;
 }
 
 export class ObsidianAdapter {
@@ -69,9 +70,9 @@ export class ObsidianAdapter {
 			this.tasksById.set(taskId, task);
 			const common = this.mapper.toCommonTask(task, taskId, body);
 
-			if (this.settings.includeObsidianLink && this.settings.vaultName) {
+			if (this.settings.includeObsidianLink && this.settings.getVaultName) {
 				common.obsidianUrl = this.buildObsidianUrl(
-					this.settings.vaultName,
+					this.settings.getVaultName(),
 					task.taskLocation._tasksFile._path,
 				);
 			}

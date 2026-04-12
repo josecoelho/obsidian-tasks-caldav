@@ -242,8 +242,8 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Include Obsidian link in CalDAV tasks')
-			.setDesc('Add an obsidian:// link to each synced task so you can open it from your CalDAV client')
+			.setName('Include Obsidian link in synced tasks')
+			.setDesc('Embed a deep link to each synced task so you can open it in Obsidian from your calendar client. The link refreshes only when the task itself changes, so moving the source file will not update already-synced tasks. Existing link lines inside task bodies are stripped on sync-back.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.includeObsidianLink)
 				.onChange(async (value) => {
