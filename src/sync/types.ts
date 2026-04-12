@@ -13,7 +13,9 @@ export interface CommonTask {
   tags: string[];               // without # prefix
   recurrenceRule: string;       // RRULE string or ''
   body: string;                 // multi-line body text, '' = no body
-  obsidianUrl?: string;         // obsidian://open link, set by ObsidianAdapter when enabled
+  // Outbound-only: set by ObsidianAdapter when includeObsidianLink is enabled.
+  // Never populated on inbound, and must not participate in diff equality.
+  obsidianUrl?: string;
 }
 
 export interface SyncChange {

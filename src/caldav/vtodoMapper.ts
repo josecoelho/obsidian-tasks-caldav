@@ -40,7 +40,8 @@ export class VTODOMapper {
       lines.push(`DESCRIPTION:${this.escapeText(description)}`);
     }
 
-    // Obsidian vault link
+    // Obsidian vault link. When set, this plugin owns the URL property —
+    // any value previously set by another CalDAV client will be overwritten.
     if (task.obsidianUrl) {
       lines.push(`URL:${task.obsidianUrl}`);
     }
