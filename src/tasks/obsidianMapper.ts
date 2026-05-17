@@ -137,6 +137,8 @@ export class ObsidianMapper {
    * unambiguous bracket syntax.
    */
   detectFormat(line: string): 'emoji' | 'dataview' | null {
+    // `recurrence` and `priority` are accepted on read (users/older obsidian-tasks
+    // may write them) even though the serializer emits `repeat` and never priority.
     if (/\[(due|scheduled|start|completion|repeat|recurrence|id|priority)::/.test(line)) {
       return 'dataview';
     }

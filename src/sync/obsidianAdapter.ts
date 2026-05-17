@@ -174,11 +174,13 @@ export class ObsidianAdapter {
 						// If toggle produced two lines, second is new recurring occurrence
 						const lines = result.split('\n');
 						if (lines.length > 1) {
-							const idMatch = lines[1].match(/🆔\s+(\S+)/);
-							if (idMatch) {
+							const idMatch =
+							lines[1].match(/\[id::\s*([^\]]+)\]/) ??
+							lines[1].match(/🆔\s+(\S+)/);
+						if (idMatch) {
 								completionRemappings.push({
 									oldTaskId: change.task.uid,
-									newTaskId: idMatch[1],
+									newTaskId: idMatch[1].trim(),
 								});
 							}
 						}

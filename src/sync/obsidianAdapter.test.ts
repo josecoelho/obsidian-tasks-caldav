@@ -429,6 +429,47 @@ describe('ObsidianAdapter', () => {
       }]);
     });
 
+    it('returns completionRemapping when toggle produces new recurring task in dataview format', async () => {
+      const toggleResult = '- [x] Weekly review [repeat:: every week] [due:: 2026-02-17] [completion:: 2026-02-17] [id:: task-001]\n- [ ] Weekly review [repeat:: every week] [due:: 2026-02-24] [id:: task-002]';
+      const toggleFn = jest.fn().mockReturnValue(toggleResult);
+      const wrapper = {
+        ...dummyWrapper,
+        getToggleCommand: jest.fn().mockReturnValue(toggleFn),
+        updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+        findTaskById: jest.fn().mockReturnValue(null),
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      const existingTask = makeTask({
+        description: 'Weekly review',
+        originalMarkdown: '- [ ] Weekly review [repeat:: every week] [due:: 2026-02-17] [id:: task-001]',
+        id: 'task-001',
+      });
+      adapter.normalize([withBody(existingTask)], (t) => t.id || null);
+
+      const result = await adapter.applyChanges([{
+        type: 'complete',
+        task: {
+          uid: 'task-001',
+          title: 'Weekly review',
+          status: 'DONE',
+          dueDate: '2026-02-17',
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2026-02-17',
+          priority: 'none',
+          tags: [],
+          recurrenceRule: 'FREQ=WEEKLY',
+          body: '',
+        },
+      }]);
+
+      expect(result.completionRemappings).toEqual([{
+        oldTaskId: 'task-001',
+        newTaskId: 'task-002',
+      }]);
+    });
+
     it('throws when obsidian-tasks API is not available', async () => {
       const wrapper = {
         ...dummyWrapper,
