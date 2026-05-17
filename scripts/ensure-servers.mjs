@@ -11,6 +11,7 @@ const SERVERS = [
   { name: 'radicale', url: 'http://localhost:5232/.web/' },
   { name: 'vikunja', url: 'http://localhost:3457/api/v1/info' },
   { name: 'nextcloud', url: 'http://localhost:8080/status.php' },
+  { name: 'baikal', url: 'http://localhost:8081/admin/' },
 ];
 const TIMEOUT_MS = 2000;
 

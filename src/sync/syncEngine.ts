@@ -28,6 +28,13 @@ export interface SyncResult {
 	};
 }
 
+export interface SyncOptions {
+	/** Preview changes without writing to either side. */
+	dryRun?: boolean;
+	/** Sync was triggered automatically (not by an explicit user command). */
+	background?: boolean;
+}
+
 export class SyncEngine {
 	private calendar: CalendarMapping;
 	private settings: CalDAVSettings;
@@ -61,9 +68,12 @@ export class SyncEngine {
 		return true;
 	}
 
-	async sync(dryRun: boolean = false): Promise<SyncResult> {
+	async sync({ dryRun = false, background = false }: SyncOptions = {}): Promise<SyncResult> {
 		try {
-			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+			const showProgress = !background || this.settings.showAutoSyncNotifications;
+			if (showProgress) {
+				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+			}
 
 			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();
@@ -74,7 +84,7 @@ export class SyncEngine {
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
 
-			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true);
+			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
 			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
 			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
@@ -84,7 +94,7 @@ export class SyncEngine {
 			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false);
+			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}
@@ -248,6 +258,7 @@ export class SyncEngine {
 		caldavTasks: CommonTask[],
 		baseline: CommonTask[],
 		dryRun: boolean,
+		showProgress: boolean,
 	): SyncResult {
 		const counts = this.countChanges(changeset);
 
@@ -265,7 +276,9 @@ export class SyncEngine {
 				`To calendar: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}` +
 				reconciledSuffix;
 
-		new Notice(message, dryRun ? 10000 : 5000);
+		if (showProgress) {
+			new Notice(message, dryRun ? 10000 : 5000);
+		}
 
 		return {
 			calendarName: this.calendar.calendarName,

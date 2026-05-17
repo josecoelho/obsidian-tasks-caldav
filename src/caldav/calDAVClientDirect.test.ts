@@ -282,4 +282,67 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[1].data).toContain('todo-2');
         });
     });
+
+    describe('parseHrefForProperty - pure function principal/home discovery', () => {
+        it('should extract href when the property element has predeclared namespace', () => {
+            const xml = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/principals/user/</d:href>
+    <d:propstat>
+      <d:prop>
+        <c:calendar-home-set><d:href>/calendars/user/</d:href></c:calendar-home-set>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+            expect(CalDAVClientDirect.parseHrefForProperty(xml, 'calendar-home-set'))
+                .toBe('/calendars/user/');
+        });
+
+        it('should extract href when SabreDAV/Baïkal declares xmlns inline on the element (issue #71)', () => {
+            const xml = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/dav.php/principals/user/</d:href>
+    <d:propstat>
+      <d:prop>
+        <cal:calendar-home-set xmlns:cal="urn:ietf:params:xml:ns:caldav">
+          <d:href>/dav.php/calendars/user/</d:href>
+        </cal:calendar-home-set>
+      </d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+            expect(CalDAVClientDirect.parseHrefForProperty(xml, 'calendar-home-set'))
+                .toBe('/dav.php/calendars/user/');
+        });
+
+        it('should extract current-user-principal href with inline xmlns', () => {
+            const xml = `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/dav.php/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:current-user-principal xmlns:d="DAV:">
+          <d:href>/dav.php/principals/user/</d:href>
+        </d:current-user-principal>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+            expect(CalDAVClientDirect.parseHrefForProperty(xml, 'current-user-principal'))
+                .toBe('/dav.php/principals/user/');
+        });
+
+        it('should return null when the property is absent', () => {
+            const xml = `<d:multistatus xmlns:d="DAV:"><d:response><d:href>/x/</d:href></d:response></d:multistatus>`;
+            expect(CalDAVClientDirect.parseHrefForProperty(xml, 'calendar-home-set')).toBeNull();
+        });
+    });
 });

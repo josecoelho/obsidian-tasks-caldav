@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
@@ -128,3 +131,35 @@ jobs:
 
       - name: E2E tests (Nextcloud)
         run: npm run test:e2e:nextcloud
+
+  test-e2e-baikal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Cache Baïkal image
+        id: cache-baikal
+        uses: actions/cache@v4
+        with:
+          path: /tmp/docker-cache/baikal.tar
+          key: docker-baikal-${{ hashFiles('docker-compose.yml') }}
+
+      - name: Load or pull Baïkal image
+        run: |
+          mkdir -p /tmp/docker-cache
+          if [ "${{ steps.cache-baikal.outputs.cache-hit }}" = "true" ]; then
+            docker load -i /tmp/docker-cache/baikal.tar
+          else
+            docker pull ckulka/baikal:nginx
+            docker save ckulka/baikal:nginx -o /tmp/docker-cache/baikal.tar
+          fi
+
+      - name: E2E tests (Baïkal)
+        run: npm run test:e2e:baikal

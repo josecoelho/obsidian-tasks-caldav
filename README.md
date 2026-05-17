@@ -1,6 +1,6 @@
 # Tasks CalDAV Sync
 
-Bidirectional sync between [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) and any CalDAV server (Nextcloud, Radicale, Fastmail, iCloud, etc.).
+Bidirectional sync between [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) and any CalDAV server (Nextcloud, Radicale, Baïkal, Fastmail, etc.).
 
 Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin — syncs task status, dates, priorities, recurrence, tags, and notes as standard VTODO items.
 
@@ -132,10 +132,25 @@ These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
 ## Tested CalDAV servers
 
-- Radicale (E2E test suite)
-- Fastmail
+| Server | Coverage |
+| --- | --- |
+| Radicale | Automated E2E suite |
+| Nextcloud | Automated E2E suite |
+| Vikunja | Automated E2E suite |
+| Baïkal (SabreDAV) | Automated E2E suite |
+| Fastmail | Manually verified |
 
-Should work with any CalDAV server that supports VTODO (Nextcloud, iCloud, Synology, Baikal, etc.).
+Should work with any CalDAV server that supports VTODO, such as Synology.
+
+### iCloud
+
+iCloud Reminders is **not supported directly** — Apple does not expose it as a
+standard CalDAV/VTODO backend, so sync fails at later steps even with the
+correct server URL ([#74](https://github.com/josecoelho/obsidian-tasks-caldav/issues/74)).
+
+Workaround: sync Obsidian with a standards-compliant CalDAV account (e.g.
+[fruux](https://fruux.com)) and add that same account to the iOS Reminders app.
+Reported working by [@Jane2100117](https://github.com/josecoelho/obsidian-tasks-caldav/issues/74).
 
 ## Development
 
