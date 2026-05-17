@@ -19,6 +19,7 @@ export interface ObsidianSyncSettings {
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
+	taskFormat?: 'emoji' | 'dataview';
 	// Called at normalize time so vault renames are picked up without reconstructing the adapter.
 	getVaultName?: () => string;
 }
@@ -114,6 +115,7 @@ export class ObsidianAdapter {
 						const markdown = this.mapper.toMarkdown(
 							taskWithId,
 							this.settings.syncTag,
+							this.settings.taskFormat ?? 'emoji',
 						);
 
 						await this.wrapper.createTask(
@@ -135,9 +137,14 @@ export class ObsidianAdapter {
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
 
+						const format =
+							this.mapper.detectFormat(existingTask.originalMarkdown) ??
+							this.settings.taskFormat ??
+							'emoji';
 						const markdown = this.mapper.toMarkdown(
 							change.task,
 							this.settings.syncTag,
+							format,
 						);
 						await this.wrapper.updateTaskInVault(
 							existingTask,
@@ -209,9 +216,14 @@ export class ObsidianAdapter {
 			if (this.wrapper.extractId(original)) continue;
 
 			try {
+				const format =
+					this.mapper.detectFormat(original.originalMarkdown) ??
+					this.settings.taskFormat ??
+					'emoji';
 				const markdown = this.mapper.toMarkdown(
 					task,
 					this.settings.syncTag,
+					format,
 				);
 				await this.wrapper.updateTaskInVault(original, markdown);
 			} catch (error) {
