@@ -253,7 +253,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Task format')
-			.setDesc('Format used when writing new tasks back to your vault. Existing tasks keep their current format on update.')
+			.setDesc('Format used when writing new tasks back to your vault. Existing tasks keep their current format on update. Match this to your tasks plugin format setting to avoid mixed-format tasks.')
 			.addDropdown(dropdown => dropdown
 				.addOption('emoji', 'Emoji')
 				.addOption('dataview', 'Dataview')
