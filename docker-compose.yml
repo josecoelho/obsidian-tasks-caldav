@@ -28,7 +28,9 @@ services:
       - /db:uid=1000
       - /app/vikunja/files:uid=1000
     healthcheck:
-      test: ["CMD", "/app/vikunja/vikunja", "help"]
+      # `help` exits 0 instantly, before the API/DB is ready; `healthcheck`
+      # actually probes the running API server so `--wait` is meaningful.
+      test: ["CMD", "/app/vikunja/vikunja", "healthcheck"]
       interval: 2s
       timeout: 5s
       retries: 15
