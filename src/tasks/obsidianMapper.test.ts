@@ -289,6 +289,10 @@ describe('ObsidianMapper', () => {
     it('prefers dataview when a line mixes both', () => {
       expect(mapper.detectFormat('- [ ] Task 📅 2025-01-15 [id:: abc]')).toBe('dataview');
     });
+
+    it('does not false-positive on a plain line that merely contains a colon', () => {
+      expect(mapper.detectFormat('- [ ] Read chapter: introduction')).toBeNull();
+    });
   });
 
 });
