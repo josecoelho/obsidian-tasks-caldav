@@ -1,5 +1,4 @@
 import { browser, expect } from '@wdio/globals';
-import { describe, it } from 'mocha';
 
 describe('wdio harness bootstrap', function () {
   it('loads Obsidian with both plugins enabled', async function () {
