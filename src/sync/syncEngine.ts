@@ -61,9 +61,12 @@ export class SyncEngine {
 		return true;
 	}
 
-	async sync(dryRun: boolean = false): Promise<SyncResult> {
+	async sync(dryRun: boolean = false, background: boolean = false): Promise<SyncResult> {
 		try {
-			new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+			const showProgress = !background || this.settings.showAutoSyncNotifications;
+			if (showProgress) {
+				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+			}
 
 			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();

@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, Notice } from 'obsidian';
 import { SyncEngine } from './syncEngine';
 import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS, IdMapping } from '../types';
 import { CalendarObject } from '../caldav/vtodoMapper';
@@ -231,6 +231,53 @@ describe('SyncEngine', () => {
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Server error');
+    });
+  });
+
+  describe('sync notifications', () => {
+    it('suppresses the start notice for background sync when the setting is off', async () => {
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ showAutoSyncNotifications: false }),
+      );
+      await engine.initialize();
+
+      await engine.sync(false, true);
+
+      const startCalls = (Notice as jest.Mock).mock.calls
+        .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
+      expect(startCalls).toHaveLength(0);
+    });
+
+    it('shows the start notice for background sync when the setting is on', async () => {
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ showAutoSyncNotifications: true }),
+      );
+      await engine.initialize();
+
+      await engine.sync(false, true);
+
+      const startCalls = (Notice as jest.Mock).mock.calls
+        .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
+      expect(startCalls.length).toBeGreaterThan(0);
+    });
+
+    it('shows the start notice for manual sync even when the setting is off', async () => {
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ showAutoSyncNotifications: false }),
+      );
+      await engine.initialize();
+
+      await engine.sync(false, false);
+
+      const startCalls = (Notice as jest.Mock).mock.calls
+        .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
+      expect(startCalls.length).toBeGreaterThan(0);
     });
   });
 
