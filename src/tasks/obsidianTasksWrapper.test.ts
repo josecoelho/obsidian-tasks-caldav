@@ -863,6 +863,30 @@ More content`;
             expect(result[0].body).toBe('');
         });
 
+        it('skips a task with no resolvable path instead of aborting the whole sync', async () => {
+            const goodTask = createMockTask({
+                originalMarkdown: '- [ ] Good task',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            const brokenTask = createMockTask({
+                originalMarkdown: '- [ ] Broken task',
+                taskLocation: {} as ObsidianTask['taskLocation'],
+            });
+            mockPlugin.getTasks.mockReturnValue([goodTask, brokenTask]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Good task\n    - Body\n');
+            const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].task).toBe(goodTask);
+            expect(warnSpy).toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+
         it('resolves body via the public taskLocation.path accessor (issue #73)', async () => {
             const task = createMockTask({
                 originalMarkdown: '- [ ] Nextcloud task',

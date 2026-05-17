@@ -61,6 +61,7 @@ export default tseslint.config(
 		"coverage/",
 		"coverage-e2e/",
 		"coverage-unit/",
+		".obsidian-cache/",
 		".worktrees/",
 		"obsidian-releases/",
 		"docs/",

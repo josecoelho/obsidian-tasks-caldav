@@ -320,6 +320,22 @@ export class ObsidianTasksWrapper {
     }
 
     /**
+     * Resolve a task's containing file path via the public obsidian-tasks
+     * accessor. Returns null (and warns) if the path is absent, so one task
+     * with an unexpected shape can't abort the entire sync.
+     */
+    private resolveTaskPath(task: ObsidianTask): string | null {
+        const path = task.taskLocation?.path;
+        if (!path) {
+            console.warn(
+                `[ObsidianTasksWrapper] Skipping task with no resolvable path: ${task.originalMarkdown}`,
+            );
+            return null;
+        }
+        return path;
+    }
+
+    /**
      * Pair tasks with their body text by reading vault files.
      * Groups tasks by file to avoid re-reading the same file multiple times.
      */
@@ -328,7 +344,10 @@ export class ObsidianTasksWrapper {
 
         const tasksByFile = new Map<string, ObsidianTask[]>();
         for (const task of tasks) {
-            const filePath = task.taskLocation.path;
+            const filePath = this.resolveTaskPath(task);
+            if (filePath === null) {
+                continue;
+            }
             if (!tasksByFile.has(filePath)) {
                 tasksByFile.set(filePath, []);
             }
