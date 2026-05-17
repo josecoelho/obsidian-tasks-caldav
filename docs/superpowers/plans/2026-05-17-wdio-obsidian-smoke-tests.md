@@ -22,6 +22,14 @@
 
 To avoid interactive modals during automated sync, the fixture settings use `requireManualConflictResolution: false`, `syncCompletedTasks: true`, and `deleteBehavior: 'deleteCalDAV'` (Obsidian-side delete propagates to CalDAV; the delete test only exercises that direction).
 
+## Correction (post-Task 3, authoritative)
+
+During Task 3 it was found that `PROPFIND Depth:1` returns only DAV metadata, never VTODO bodies, so the `calendarText()` PROPFIND helper sketched inside Tasks 5 and 6 below **cannot** match task titles/STATUS and is wrong. Tasks 5 and 6 MUST instead use the shared helper created in Task 3's review:
+
+`test/wdio/helpers/calendarQuery.ts` exports `fetchVtodos(calendarName: string): Promise<string>` — issues a CalDAV `REPORT` calendar-query (reusing production `REPORT_VTODOS` from `src/caldav/templates.ts`), throws on non-207, and returns the VTODO iCal text. Wherever Tasks 5/6 call `calendarText(calendarName)`, call `fetchVtodos(calendarName)` instead and delete the local PROPFIND `calendarText` definition.
+
+Also authoritative for all specs: use `function`-style mocha callbacks (NOT arrow); do NOT `import { describe, it } from 'mocha'` (they are globals); declare `let cleanup: (() => Promise<void>) | undefined;` and call `await cleanup?.();` in `afterEach`.
+
 ## File structure
 
 - Create `wdio.conf.ts` — wdio + obsidian-service config (root).
