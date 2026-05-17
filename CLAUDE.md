@@ -137,7 +137,7 @@ Excluded: `requestDumper.ts`, `obsidianTasksApi.ts`, `src/ui/`
 - Local Radicale server via Docker (`docker-compose.yml`)
 
 ### Obsidian smoke tests (wdio)
-Uses [wdio-obsidian-service](https://github.com/obsidian-tasks-group/wdio-obsidian-service) to launch a real Obsidian instance with the real obsidian-tasks plugin and our built plugin against a local Docker Radicale server.
+Uses [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service) to launch a real Obsidian instance with the real obsidian-tasks plugin and our built plugin against a local Docker Radicale server.
 
 **Scope:** four happy-path scenarios only — Obsidian→CalDAV create, CalDAV→Obsidian create, bidirectional update, completion+delete. Edge cases and error paths stay in the Jest unit/E2E suites.
 
