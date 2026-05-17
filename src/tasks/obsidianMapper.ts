@@ -52,7 +52,6 @@ export class ObsidianMapper {
       line += ` #${tag}`;
     }
 
-    // Dates in obsidian-tasks order: start, scheduled, due, completed
     if (task.startDate) {
       line += ` 🛫 ${task.startDate}`;
     }
@@ -66,7 +65,6 @@ export class ObsidianMapper {
       line += ` ✅ ${task.completedDate}`;
     }
 
-    // Recurrence rule in obsidian-tasks format
     if (task.recurrenceRule) {
       const text = this.rruleToText(task.recurrenceRule);
       if (text) {
@@ -74,10 +72,8 @@ export class ObsidianMapper {
       }
     }
 
-    // Task ID in obsidian-tasks emoji format
     line += ` 🆔 ${task.uid}`;
 
-    // Sync tag after ID
     if (syncTag && syncTag.trim() !== '') {
       const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
       line += ` ${tag}`;
