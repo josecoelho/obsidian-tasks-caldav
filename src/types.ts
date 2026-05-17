@@ -17,6 +17,7 @@ export interface CalDAVSettings {
   deleteBehavior: 'ask' | 'deleteCalDAV' | 'deleteObsidian' | 'keepBoth';
   includeObsidianLink: boolean;
   taskFormat: 'emoji' | 'dataview';
+  showAutoSyncNotifications: boolean;
 }
 
 export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
@@ -30,6 +31,7 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   deleteBehavior: 'ask',
   includeObsidianLink: false,
   taskFormat: 'emoji',
+  showAutoSyncNotifications: false,
 };
 
 /** Lean bidirectional identity mapping between Obsidian task IDs and CalDAV UIDs. */
