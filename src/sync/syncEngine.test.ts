@@ -215,7 +215,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Connection refused');
@@ -227,7 +227,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Server error');
@@ -243,7 +243,7 @@ describe('SyncEngine', () => {
       );
       await engine.initialize();
 
-      await engine.sync(false, true);
+      await engine.sync({ background: true });
 
       const startCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
@@ -258,7 +258,7 @@ describe('SyncEngine', () => {
       );
       await engine.initialize();
 
-      await engine.sync(false, true);
+      await engine.sync({ background: true });
 
       const startCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
@@ -273,7 +273,7 @@ describe('SyncEngine', () => {
       );
       await engine.initialize();
 
-      await engine.sync(false, false);
+      await engine.sync();
 
       const startCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
@@ -288,7 +288,7 @@ describe('SyncEngine', () => {
       );
       await engine.initialize();
 
-      const result = await engine.sync(false, true);
+      const result = await engine.sync({ background: true });
 
       const completeCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Sync complete'));
@@ -306,7 +306,7 @@ describe('SyncEngine', () => {
       );
       await engine.initialize();
 
-      const result = await engine.sync(false, true);
+      const result = await engine.sync({ background: true });
 
       const errorCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Sync failed'));
@@ -326,7 +326,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(mockCreateTask).not.toHaveBeenCalled();
@@ -349,7 +349,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.created.toCalDAV).toBe(1);
       expect(result.details.toCalDAV.length).toBe(1);
@@ -364,7 +364,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Work' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.calendarName).toBe('Work');
     });
@@ -374,7 +374,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Personal' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.calendarName).toBe('Personal');
     });
@@ -384,7 +384,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ calendarName: 'Broken' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.calendarName).toBe('Broken');
     });
@@ -401,7 +401,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
@@ -417,7 +417,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(result.created.toObsidian).toBe(1);
@@ -451,7 +451,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(result.deleted.toCalDAV).toBe(1);
@@ -477,7 +477,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.created.toCalDAV).toBe(2);
       expect(result.updated.toCalDAV).toBe(0);
@@ -494,7 +494,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.created.toObsidian).toBe(2);
       expect(result.created.toCalDAV).toBe(0);
@@ -519,7 +519,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       // The task exists on both sides and was in the IdMapping →
       // baseline should have been seeded, preventing duplication
@@ -539,7 +539,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.created.toCalDAV).toBe(1);
     });
@@ -580,7 +580,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings({ autoResolveObsidianWins: true }));
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.conflicts).toBe(1);
       expect(result.updated.toCalDAV).toBe(1);
@@ -621,7 +621,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings({ autoResolveObsidianWins: false }));
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.conflicts).toBe(1);
       expect(result.updated.toObsidian).toBe(1);
@@ -642,7 +642,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(mockUpdateTaskInVault).toHaveBeenCalledTimes(1);
@@ -662,7 +662,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
@@ -680,7 +680,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      await engine.sync(false);
+      await engine.sync();
 
       expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
     });
@@ -703,7 +703,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
-      await engine.sync(false);
+      await engine.sync();
 
       const writebackCalls = mockUpdateTaskInVault.mock.calls.filter(
         (call: [ObsidianTask, string]) => call[1].includes('🆔')
@@ -724,7 +724,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.created.toObsidian).toBe(1);
@@ -745,7 +745,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(0);
@@ -760,7 +760,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(0);
@@ -776,7 +776,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(1);
@@ -792,7 +792,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: '' }), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(2);
@@ -811,7 +811,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.obsidianTasks).toBeDefined();
@@ -828,7 +828,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(true);
+      const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(false);
       expect(result.details.obsidianTasks).toBeUndefined();
@@ -871,7 +871,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(result.updated.toObsidian).toBe(1);
@@ -924,7 +924,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(result.updated.toObsidian).toBe(1);
@@ -954,7 +954,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(result.created.toCalDAV).toBe(1);
@@ -981,7 +981,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(mockSetBaseline).toHaveBeenCalledTimes(1);
@@ -1009,7 +1009,7 @@ describe('SyncEngine', () => {
 
       const engine1 = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine1.initialize();
-      const result1 = await engine1.sync(false);
+      const result1 = await engine1.sync();
 
       expect(result1.success).toBe(true);
       expect(result1.created.toCalDAV).toBe(1);
@@ -1050,7 +1050,7 @@ describe('SyncEngine', () => {
 
       const engine2 = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine2.initialize();
-      const result2 = await engine2.sync(false);
+      const result2 = await engine2.sync();
 
       expect(result2.success).toBe(true);
       expect(result2.created.toCalDAV).toBe(0);
@@ -1119,7 +1119,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
 
@@ -1179,7 +1179,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
 
@@ -1206,7 +1206,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
       expect(mockCreateTask).toHaveBeenCalledTimes(2);
@@ -1264,7 +1264,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
 
@@ -1341,7 +1341,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
 
@@ -1408,7 +1408,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
 
@@ -1450,7 +1450,7 @@ describe('SyncEngine', () => {
         settings,
       );
       await workEngine.initialize();
-      const workResult = await workEngine.sync(false);
+      const workResult = await workEngine.sync();
 
       // Work engine should only create the work task on CalDAV
       expect(workResult.details.toCalDAV).toHaveLength(1);
@@ -1470,7 +1470,7 @@ describe('SyncEngine', () => {
         settings,
       );
       await personalEngine.initialize();
-      const personalResult = await personalEngine.sync(false);
+      const personalResult = await personalEngine.sync();
 
       // Personal engine should only create the personal task on CalDAV
       expect(personalResult.details.toCalDAV).toHaveLength(1);
@@ -1497,7 +1497,7 @@ describe('SyncEngine', () => {
         makeSettings(),
       );
       await engine.initialize();
-      const result = await engine.sync(false);
+      const result = await engine.sync();
 
       // No changes — task doesn't match this calendar's tag
       expect(result.details.toCalDAV).toHaveLength(0);

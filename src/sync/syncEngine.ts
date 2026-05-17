@@ -28,6 +28,13 @@ export interface SyncResult {
 	};
 }
 
+export interface SyncOptions {
+	/** Preview changes without writing to either side. */
+	dryRun?: boolean;
+	/** Sync was triggered automatically (not by an explicit user command). */
+	background?: boolean;
+}
+
 export class SyncEngine {
 	private calendar: CalendarMapping;
 	private settings: CalDAVSettings;
@@ -61,7 +68,7 @@ export class SyncEngine {
 		return true;
 	}
 
-	async sync(dryRun: boolean = false, background: boolean = false): Promise<SyncResult> {
+	async sync({ dryRun = false, background = false }: SyncOptions = {}): Promise<SyncResult> {
 		try {
 			const showProgress = !background || this.settings.showAutoSyncNotifications;
 			if (showProgress) {

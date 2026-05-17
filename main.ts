@@ -164,14 +164,14 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	private async syncAll(): Promise<void> {
 		for (const engine of this.syncEngines) {
-			await engine.sync(false, true);
+			await engine.sync({ background: true });
 		}
 	}
 
 	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
 		const results: SyncResult[] = [];
 		for (const engine of this.syncEngines) {
-			results.push(await engine.sync(dryRun, false));
+			results.push(await engine.sync({ dryRun }));
 		}
 		return results;
 	}
