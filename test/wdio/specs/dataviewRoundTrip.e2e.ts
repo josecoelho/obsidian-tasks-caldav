@@ -26,13 +26,6 @@ describe('dataview full round-trip', function () {
     calendarName = cal.calendarName;
     cleanup = cal.cleanup;
     await useCalendar(calendarName);
-    // The wdio plugin installer copies data.json from the emoji-vault plugin source,
-    // overwriting the dataview vault's taskFormat setting. Force it to 'dataview'.
-    await browser.executeObsidian(async ({ app }) => {
-      const plugin = (app as any).plugins.plugins['tasks-caldav-sync'];
-      plugin.settings.taskFormat = 'dataview';
-      await plugin.saveSettings();
-    });
   });
 
   afterEach(async function () { await cleanup?.(); });
