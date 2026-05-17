@@ -22,11 +22,9 @@ export class TFile {
     extension: string = 'md';
 }
 
-export class Notice {
-    constructor(_message: string, _timeout?: number) {
-        // Mock notice - does nothing in tests
-    }
-}
+export const Notice = jest.fn(function Notice(_message: string, _timeout?: number) {
+    // Mock notice - records calls so tests can assert
+});
 
 export class Modal {
     app: App;
