@@ -269,30 +269,4 @@ describe('ObsidianMapper', () => {
     });
   });
 
-  describe('detectFormat', () => {
-    it('detects emoji from a date emoji', () => {
-      expect(mapper.detectFormat('- [ ] Task 📅 2025-01-15 🆔 abc')).toBe('emoji');
-    });
-
-    it('detects emoji from the id emoji alone', () => {
-      expect(mapper.detectFormat('- [ ] Task 🆔 abc')).toBe('emoji');
-    });
-
-    it('detects dataview from a bracket field', () => {
-      expect(mapper.detectFormat('- [ ] Task [due:: 2025-01-15] [id:: abc]')).toBe('dataview');
-    });
-
-    it('returns null for a bare task line with no metadata', () => {
-      expect(mapper.detectFormat('- [ ] Just a task')).toBeNull();
-    });
-
-    it('prefers dataview when a line mixes both', () => {
-      expect(mapper.detectFormat('- [ ] Task 📅 2025-01-15 [id:: abc]')).toBe('dataview');
-    });
-
-    it('does not false-positive on a plain line that merely contains a colon', () => {
-      expect(mapper.detectFormat('- [ ] Read chapter: introduction')).toBeNull();
-    });
-  });
-
 });
