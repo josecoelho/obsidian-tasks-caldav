@@ -1,5 +1,6 @@
 import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
+import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
@@ -150,16 +151,34 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	private async initializeEngines(): Promise<void> {
 		this.syncEngines = [];
-		for (const calendar of this.settings.calendars) {
+		const skipped: string[] = [];
+		let configuredCount = 0;
+		for (let index = 0; index < this.settings.calendars.length; index++) {
+			const calendar = this.settings.calendars[index];
+			const incomplete = describeIncompleteCalendar(calendar, index);
+			if (incomplete) {
+				skipped.push(incomplete);
+				continue;
+			}
+			configuredCount++;
 			const engine = new SyncEngine(this.app, calendar, this.settings);
 			const ready = await engine.initialize();
 			if (ready) {
 				this.syncEngines.push(engine);
 			}
 		}
-		if (this.syncEngines.length === 0 && this.settings.calendars.length > 0) {
+		this.notifySkippedCalendars(skipped);
+		if (this.syncEngines.length === 0 && configuredCount > 0) {
 			new Notice('Sync failed: tasks plugin not available');
 		}
+	}
+
+	private notifySkippedCalendars(skipped: string[]): void {
+		if (skipped.length === 0) {
+			return;
+		}
+		const noun = skipped.length === 1 ? 'calendar' : 'calendars';
+		new Notice(`Skipped ${skipped.length} incomplete ${noun}: ${skipped.join('; ')}. Configure in settings.`, 8000);
 	}
 
 	private async syncAll(): Promise<void> {

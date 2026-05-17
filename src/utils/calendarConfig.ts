@@ -18,3 +18,16 @@ export function missingCalendarFields(calendar: CalendarMapping): string[] {
 export function isCalendarConfigured(calendar: CalendarMapping): boolean {
   return missingCalendarFields(calendar).length === 0;
 }
+
+/**
+ * Human-readable reason a calendar can't sync, or null when it is fully configured.
+ * Names the calendar by its name, falling back to its server URL, then its position.
+ */
+export function describeIncompleteCalendar(calendar: CalendarMapping, index: number): string | null {
+  const missing = missingCalendarFields(calendar);
+  if (missing.length === 0) {
+    return null;
+  }
+  const name = calendar.calendarName.trim() || calendar.serverUrl.trim() || `Calendar ${index + 1}`;
+  return `${name} (missing ${missing.join(', ')})`;
+}

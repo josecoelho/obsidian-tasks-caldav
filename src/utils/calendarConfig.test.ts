@@ -1,4 +1,4 @@
-import { missingCalendarFields, isCalendarConfigured } from './calendarConfig';
+import { missingCalendarFields, isCalendarConfigured, describeIncompleteCalendar } from './calendarConfig';
 import { CalendarMapping } from '../types';
 
 const full: CalendarMapping = {
@@ -30,5 +30,30 @@ describe('calendarConfig', () => {
   it('does not require tag or password', () => {
     const noTagNoPass: CalendarMapping = { ...full, tag: '', password: '' };
     expect(isCalendarConfigured(noTagNoPass)).toBe(true);
+  });
+
+  describe('describeIncompleteCalendar', () => {
+    it('returns null for a fully configured calendar', () => {
+      expect(describeIncompleteCalendar(full, 0)).toBeNull();
+    });
+
+    it('falls back to a positional name for a blank calendar (issue #72)', () => {
+      const blank: CalendarMapping = { tag: '', calendarName: '', serverUrl: '', username: '', password: '' };
+      expect(describeIncompleteCalendar(blank, 1)).toBe(
+        'Calendar 2 (missing server URL, username, calendar name)',
+      );
+    });
+
+    it('uses the server URL when the calendar name is empty', () => {
+      const noName: CalendarMapping = { ...full, calendarName: '', username: '' };
+      expect(describeIncompleteCalendar(noName, 0)).toBe(
+        'http://localhost:37358/ (missing username, calendar name)',
+      );
+    });
+
+    it('uses the calendar name when present', () => {
+      const noUser: CalendarMapping = { ...full, username: '' };
+      expect(describeIncompleteCalendar(noUser, 3)).toBe('J ToDo (missing username)');
+    });
   });
 });
