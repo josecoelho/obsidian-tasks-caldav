@@ -3,6 +3,7 @@ import { createIsolatedCalendar } from '../../helpers/radicaleSetup';
 import { useCalendar, waitForTaskInCache, syncNow } from '../helpers/pluginConfig';
 import { fetchVtodos } from '../helpers/calendarQuery';
 import { buildVtodoIcs, putVtodo } from '../helpers/serverVtodo';
+import { appendTaskLine, replaceInFile } from '../helpers/vaultEdit';
 
 describe('bidirectional update', function () {
   let calendarName: string;
@@ -22,22 +23,14 @@ describe('bidirectional update', function () {
     const edited = `${original} EDITED`;
 
     // Phase 1: Create task in Obsidian and verify it lands on server
-    await browser.executeObsidian(async ({ app }, t) => {
-      const f = app.vault.getAbstractFileByPath('Tasks.md');
-      const body = await app.vault.read(f as any);
-      await app.vault.modify(f as any, body + `\n- [ ] ${t} #sync`);
-    }, original);
+    await appendTaskLine('Tasks.md', `- [ ] ${original} #sync`);
     await waitForTaskInCache(original);
     await syncNow();
     await browser.waitUntil(async () => (await fetchVtodos(calendarName)).includes(original),
       { timeout: 15000, interval: 500, timeoutMsg: `original "${original}" not on server` });
 
     // Phase 2: Edit task in Obsidian and verify the update propagates to server
-    await browser.executeObsidian(async ({ app }, args) => {
-      const f = app.vault.getAbstractFileByPath('Tasks.md');
-      const body = await app.vault.read(f as any);
-      await app.vault.modify(f as any, body.replace(args.original, args.edited));
-    }, { original, edited });
+    await replaceInFile('Tasks.md', original, edited);
     await waitForTaskInCache(edited);
     await syncNow();
     await browser.waitUntil(async () => (await fetchVtodos(calendarName)).includes(edited),
@@ -45,9 +38,15 @@ describe('bidirectional update', function () {
 
     // Phase 3: Complete task on server and verify completion reflects in Obsidian
     const ical = await fetchVtodos(calendarName);
-    const uidMatch = ical.match(/UID:([^\s<]+)/);
+    // fetchVtodos returns the REPORT multistatus body; unfold RFC5545 folded
+    // lines the same way the production VTODOMapper.unfold does before matching.
+    const unfolded = ical.replace(/\r?\n[ \t]/g, '');
+    const uidMatch = unfolded.match(/^UID:(.+)$/m);
     if (!uidMatch) throw new Error(`could not parse UID from server response:\n${ical}`);
-    const uid = uidMatch[1];
+    const uid = uidMatch[1].trim();
+    // Replace the server VTODO with a completed minimal copy (UID + CATEGORIES:sync
+    // preserved). UID is the sync join key, so this exercises completion propagation;
+    // it is a replacement, not an in-place field-preserving mutation.
     await putVtodo(calendarName, uid, buildVtodoIcs(uid, edited, { STATUS: 'COMPLETED', 'PERCENT-COMPLETE': '100' }));
     await syncNow();
 
