@@ -262,7 +262,7 @@ describe('SyncEngine', () => {
 
       const startCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
-      expect(startCalls.length).toBeGreaterThan(0);
+      expect(startCalls).toHaveLength(1);
     });
 
     it('shows the start notice for manual sync even when the setting is off', async () => {
@@ -277,7 +277,7 @@ describe('SyncEngine', () => {
 
       const startCalls = (Notice as jest.Mock).mock.calls
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
-      expect(startCalls.length).toBeGreaterThan(0);
+      expect(startCalls).toHaveLength(1);
     });
 
     it('suppresses the completion notice for background sync when the setting is off but still returns the result', async () => {
