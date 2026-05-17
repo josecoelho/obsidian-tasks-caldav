@@ -225,7 +225,11 @@ describe('ObsidianAdapter', () => {
     };
 
     it('creates new tasks using the configured dataview format', async () => {
-      const createTask = jest.fn().mockResolvedValue(undefined);
+      let written = '';
+      const createTask = jest.fn().mockImplementation((markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
       const wrapper = { ...dummyWrapper, createTask } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, {
         syncTag: 'sync', newTasksDestination: 'Inbox.md', taskFormat: 'dataview',
@@ -233,13 +237,16 @@ describe('ObsidianAdapter', () => {
 
       await adapter.applyChanges([{ type: 'create', task: commonTask }]);
 
-      const written = createTask.mock.calls[0][0] as string;
       expect(written).toContain('[id:: ');
       expect(written).not.toContain('🆔');
     });
 
     it('creates new tasks using emoji when taskFormat is emoji', async () => {
-      const createTask = jest.fn().mockResolvedValue(undefined);
+      let written = '';
+      const createTask = jest.fn().mockImplementation((markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
       const wrapper = { ...dummyWrapper, createTask } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, {
         syncTag: 'sync', newTasksDestination: 'Inbox.md', taskFormat: 'emoji',
@@ -247,11 +254,15 @@ describe('ObsidianAdapter', () => {
 
       await adapter.applyChanges([{ type: 'create', task: commonTask }]);
 
-      expect(createTask.mock.calls[0][0] as string).toContain('🆔 ');
+      expect(written).toContain('🆔 ');
     });
 
     it('preserves an existing task\'s dataview format on update even when setting is emoji', async () => {
-      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      let written = '';
+      const updateTaskInVault = jest.fn().mockImplementation((_task: unknown, markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
       const existing = makeTask({
         id: 'task-001',
         originalMarkdown: '- [ ] Old [due:: 2025-01-01] [id:: task-001] #sync',
@@ -267,13 +278,16 @@ describe('ObsidianAdapter', () => {
 
       await adapter.applyChanges([{ type: 'update', task: commonTask }]);
 
-      const written = updateTaskInVault.mock.calls[0][1] as string;
       expect(written).toContain('[id:: task-001]');
       expect(written).not.toContain('🆔');
     });
 
     it('falls back to the configured format when an updated task has no detectable format', async () => {
-      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      let written = '';
+      const updateTaskInVault = jest.fn().mockImplementation((_task: unknown, markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
       const existing = makeTask({
         id: 'task-001',
         originalMarkdown: '- [ ] Bare task',
@@ -289,13 +303,17 @@ describe('ObsidianAdapter', () => {
 
       await adapter.applyChanges([{ type: 'update', task: commonTask }]);
 
-      expect(updateTaskInVault.mock.calls[0][1] as string).toContain('[id:: task-001]');
+      expect(written).toContain('[id:: task-001]');
     });
   });
 
   describe('writeBackIds — format detection', () => {
     it('preserves dataview format when writing back an id to a task that had no id, even when taskFormat is emoji', async () => {
-      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      let written = '';
+      const updateTaskInVault = jest.fn().mockImplementation((_task: unknown, markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
       // Task with dataview metadata but NO id — extractId returns null for it
       const noIdTask = makeTask({
         id: '',
@@ -319,7 +337,6 @@ describe('ObsidianAdapter', () => {
       await adapter.writeBackIds([commonTask]);
 
       expect(updateTaskInVault).toHaveBeenCalledTimes(1);
-      const written = updateTaskInVault.mock.calls[0][1] as string;
       expect(written).toContain('[id:: ');
       expect(written).not.toContain('🆔');
     });
