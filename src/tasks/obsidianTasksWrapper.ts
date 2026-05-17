@@ -428,4 +428,28 @@ export class ObsidianTasksWrapper {
         return tasksPlugin?.apiV1?.executeToggleTaskDoneCommand ?? null;
     }
 
+    /**
+     * The task format obsidian-tasks itself is configured to write.
+     * Read from its persisted settings (its in-memory settings live in a
+     * module closure and are not reliably exposed). Anything other than
+     * 'dataview' — including a missing plugin or a read error — maps to
+     * 'emoji', which is obsidian-tasks' own default.
+     */
+    async getConfiguredFormat(): Promise<'emoji' | 'dataview'> {
+        const appWithPlugins = this.app as App & {
+            plugins: { plugins: Record<string, { loadData?: () => Promise<unknown> }> };
+        };
+        const tasksPlugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'];
+        if (!tasksPlugin || typeof tasksPlugin.loadData !== 'function') {
+            return 'emoji';
+        }
+        try {
+            const data = await tasksPlugin.loadData();
+            const fmt = (data as { taskFormat?: unknown } | null)?.taskFormat;
+            return fmt === 'dataview' ? 'dataview' : 'emoji';
+        } catch {
+            return 'emoji';
+        }
+    }
+
 }
