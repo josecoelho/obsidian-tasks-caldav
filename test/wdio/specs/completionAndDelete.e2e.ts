@@ -24,6 +24,7 @@ describe('completion and delete', function () {
     await waitForTaskInCache(title);
     await syncNow();
 
+    // title precedes the plugin-appended 🆔 id and #sync tag, so this substring stays valid after write-back
     await replaceInFile('Tasks.md', `- [ ] ${title}`, `- [x] ${title}`);
     await waitForTaskInCache(title);
     await syncNow();
@@ -39,7 +40,7 @@ describe('completion and delete', function () {
         return tp.getTasks().some((x: any) => x.description.includes(t));
       }, title);
       return !present;
-    }, { timeout: 15000, interval: 500, timeoutMsg: 'task still in obsidian-tasks cache after delete' });
+    }, { timeout: 15000, interval: 500, timeoutMsg: `task "${title}" still in obsidian-tasks cache after delete` });
     await syncNow();
 
     await browser.waitUntil(async () => !(await fetchVtodos(calendarName)).includes(title),
