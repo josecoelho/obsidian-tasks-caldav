@@ -73,7 +73,7 @@ export class ObsidianAdapter {
 			if (this.settings.includeObsidianLink && this.settings.getVaultName) {
 				common.obsidianUrl = this.buildObsidianUrl(
 					this.settings.getVaultName(),
-					task.taskLocation._tasksFile._path,
+					task.taskLocation.path,
 				);
 			}
 
@@ -159,7 +159,7 @@ export class ObsidianAdapter {
 
 						const result = toggleFn(
 							existingTask.originalMarkdown,
-							existingTask.taskLocation._tasksFile._path,
+							existingTask.taskLocation.path,
 						);
 
 						await this.wrapper.updateTaskInVault(existingTask, result);

@@ -9,7 +9,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     isDone: false,
     priority: '0',
     tags: ['#sync'],
-    taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+    taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Buy groceries 🆔 20250105-a4f #sync',
     createdDate: null,
     startDate: null,

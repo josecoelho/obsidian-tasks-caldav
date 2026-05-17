@@ -9,7 +9,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     isDone: false,
     priority: '0',
     tags: ['#sync'],
-    taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+    taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Buy groceries 🆔 20250105-a4f #sync',
     createdDate: null,
     startDate: null,
@@ -132,7 +132,7 @@ describe('ObsidianAdapter', () => {
           isDone: false,
           priority: '0',
           tags: [],
-          taskLocation: { _tasksFile: { _path: 'Projects/tasks.md' }, _lineNumber: 5 },
+          taskLocation: { path: 'Projects/tasks.md', _lineNumber: 5 },
           originalMarkdown: '- [ ] Test task',
           createdDate: null,
           startDate: null,
@@ -165,7 +165,7 @@ describe('ObsidianAdapter', () => {
           isDone: false,
           priority: '0',
           tags: [],
-          taskLocation: { _tasksFile: { _path: 'Projects/tasks.md' }, _lineNumber: 5 },
+          taskLocation: { path: 'Projects/tasks.md', _lineNumber: 5 },
           originalMarkdown: '- [ ] Test task',
           createdDate: null,
           startDate: null,
@@ -198,7 +198,7 @@ describe('ObsidianAdapter', () => {
           isDone: false,
           priority: '0',
           tags: [],
-          taskLocation: { _tasksFile: { _path: 'My Folder/tasks file.md' }, _lineNumber: 1 },
+          taskLocation: { path: 'My Folder/tasks file.md', _lineNumber: 1 },
           originalMarkdown: '- [ ] Test task',
           createdDate: null,
           startDate: null,
@@ -257,7 +257,7 @@ describe('ObsidianAdapter', () => {
 
       expect(toggleFn).toHaveBeenCalledWith(
         existingTask.originalMarkdown,
-        existingTask.taskLocation._tasksFile._path,
+        existingTask.taskLocation.path,
       );
       expect(updateTaskInVault).toHaveBeenCalled();
       expect(result.completionRemappings).toHaveLength(0); // single line = no remapping

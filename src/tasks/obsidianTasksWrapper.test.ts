@@ -43,9 +43,7 @@ function createMockTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
         priority: '3',
         tags: [],
         taskLocation: {
-            _tasksFile: {
-                _path: 'test.md'
-            },
+            path: 'test.md',
             _lineNumber: 1
         },
         originalMarkdown: '- [ ] Test task',
@@ -418,7 +416,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Target task to update',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 6 // Intentionally wrong line number (simulating stale cache)
                 }
             });
@@ -452,7 +450,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Target task',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 10 // Stale line number - file has changed
                 }
             });
@@ -479,7 +477,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with spaces',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -502,7 +500,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task that does not exist',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -518,7 +516,7 @@ More text`;
         it('should throw error if file not found', async () => {
             const task = createMockTask({
                 taskLocation: {
-                    _tasksFile: { _path: 'nonexistent.md' },
+                    path: 'nonexistent.md',
                     _lineNumber: 1
                 }
             });
@@ -539,7 +537,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -566,7 +564,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -590,7 +588,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task without notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -616,7 +614,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -646,7 +644,7 @@ More content`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task without ID #sync',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 5 // Wrong line - file has changed
                 }
             });
@@ -783,7 +781,7 @@ More content`;
         it('should return tasks paired with their body text', async () => {
             const task = createMockTask({
                 originalMarkdown: '- [ ] My task',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -801,7 +799,7 @@ More content`;
         it('should return empty body when task has no indented lines', async () => {
             const task = createMockTask({
                 originalMarkdown: '- [ ] Simple task',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -817,7 +815,7 @@ More content`;
 
         it('should return empty body when file is not found', async () => {
             const task = createMockTask({
-                taskLocation: { _tasksFile: { _path: 'Missing.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Missing.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
             mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
@@ -831,11 +829,11 @@ More content`;
         it('should group tasks by file to avoid re-reading', async () => {
             const task1 = createMockTask({
                 originalMarkdown: '- [ ] Task 1',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             const task2 = createMockTask({
                 originalMarkdown: '- [ ] Task 2',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 3 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 3 },
             });
             mockPlugin.getTasks.mockReturnValue([task1, task2]);
 
@@ -851,7 +849,7 @@ More content`;
 
         it('should return empty body when file read throws', async () => {
             const task = createMockTask({
-                taskLocation: { _tasksFile: { _path: 'Error.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Error.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -863,6 +861,24 @@ More content`;
 
             expect(result).toHaveLength(1);
             expect(result[0].body).toBe('');
+        });
+
+        it('resolves body via the public taskLocation.path accessor (issue #73)', async () => {
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Nextcloud task',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Nextcloud task\n    - Body line\n');
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].body).toBe('Body line');
+            expect(mockApp.vault.getAbstractFileByPath).toHaveBeenCalledWith('Tasks.md');
         });
     });
 

@@ -14,7 +14,7 @@ function makeObsidianTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     isDone: false,
     priority: '0',
     tags: ['#sync'],
-    taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+    taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Test task [id::20250101-abc] #sync',
     createdDate: null,
     startDate: null,

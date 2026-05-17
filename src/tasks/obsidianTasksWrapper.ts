@@ -17,10 +17,9 @@ export interface ObsidianTask {
     priority: string;
     tags: string[];
     taskLocation: {
-        _tasksFile: {
-            _path: string;
-        };
-        _lineNumber: number;
+        /** Public obsidian-tasks accessor for the containing file path. */
+        path: string;
+        _lineNumber?: number;
     };
     originalMarkdown: string;
     createdDate: string | { format(fmt: string): string } | null;
@@ -186,7 +185,7 @@ export class ObsidianTasksWrapper {
      * Update a task's content in the vault
      */
     async updateTaskInVault(task: ObsidianTask, newContent: string): Promise<void> {
-        const filePath = task.taskLocation._tasksFile._path;
+        const filePath = task.taskLocation.path;
 
         // Get the file
         const file = this.app.vault.getAbstractFileByPath(filePath);
@@ -329,7 +328,7 @@ export class ObsidianTasksWrapper {
 
         const tasksByFile = new Map<string, ObsidianTask[]>();
         for (const task of tasks) {
-            const filePath = task.taskLocation._tasksFile._path;
+            const filePath = task.taskLocation.path;
             if (!tasksByFile.has(filePath)) {
                 tasksByFile.set(filePath, []);
             }
