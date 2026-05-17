@@ -271,18 +271,6 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Task format')
-			.setDesc('Format used when writing new tasks back to your vault. Existing tasks keep their current format on update. Match this to your tasks plugin format setting to avoid mixed-format tasks.')
-			.addDropdown(dropdown => dropdown
-				.addOption('emoji', 'Emoji')
-				.addOption('dataview', 'Dataview')
-				.setValue(this.plugin.settings.taskFormat)
-				.onChange(async (value) => {
-					this.plugin.settings.taskFormat = value as 'emoji' | 'dataview';
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
 			.setName('Show automatic sync notifications')
 			.setDesc('Show progress notices when sync runs automatically in the background. Manual sync and errors always notify.')
 			.addToggle(toggle => toggle

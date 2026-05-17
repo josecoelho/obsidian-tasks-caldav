@@ -16,7 +16,6 @@ export interface CalDAVSettings {
   syncCompletedTasks: boolean;
   deleteBehavior: 'ask' | 'deleteCalDAV' | 'deleteObsidian' | 'keepBoth';
   includeObsidianLink: boolean;
-  taskFormat: 'emoji' | 'dataview';
   showAutoSyncNotifications: boolean;
 }
 
@@ -30,7 +29,6 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   syncCompletedTasks: false,
   deleteBehavior: 'ask',
   includeObsidianLink: false,
-  taskFormat: 'emoji',
   showAutoSyncNotifications: false,
 };
 
