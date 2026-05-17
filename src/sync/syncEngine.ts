@@ -77,7 +77,7 @@ export class SyncEngine {
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
 
-			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true);
+			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
 			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
 			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
@@ -87,7 +87,7 @@ export class SyncEngine {
 			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false);
+			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}
@@ -251,6 +251,7 @@ export class SyncEngine {
 		caldavTasks: CommonTask[],
 		baseline: CommonTask[],
 		dryRun: boolean,
+		showProgress: boolean,
 	): SyncResult {
 		const counts = this.countChanges(changeset);
 
@@ -268,7 +269,9 @@ export class SyncEngine {
 				`To calendar: ${counts.created.toCalDAV}+${counts.updated.toCalDAV}+${counts.deleted.toCalDAV}` +
 				reconciledSuffix;
 
-		new Notice(message, dryRun ? 10000 : 5000);
+		if (showProgress) {
+			new Notice(message, dryRun ? 10000 : 5000);
+		}
 
 		return {
 			calendarName: this.calendar.calendarName,

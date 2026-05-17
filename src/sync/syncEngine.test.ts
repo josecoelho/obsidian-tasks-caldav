@@ -279,6 +279,40 @@ describe('SyncEngine', () => {
         .filter(([msg]) => typeof msg === 'string' && msg.includes('Starting sync'));
       expect(startCalls.length).toBeGreaterThan(0);
     });
+
+    it('suppresses the completion notice for background sync when the setting is off but still returns the result', async () => {
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ showAutoSyncNotifications: false }),
+      );
+      await engine.initialize();
+
+      const result = await engine.sync(false, true);
+
+      const completeCalls = (Notice as jest.Mock).mock.calls
+        .filter(([msg]) => typeof msg === 'string' && msg.includes('Sync complete'));
+      expect(completeCalls).toHaveLength(0);
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Sync complete');
+    });
+
+    it('always shows the error notice for background sync even when the setting is off', async () => {
+      mockConnect.mockRejectedValue(new Error('Connection refused'));
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ showAutoSyncNotifications: false }),
+      );
+      await engine.initialize();
+
+      const result = await engine.sync(false, true);
+
+      const errorCalls = (Notice as jest.Mock).mock.calls
+        .filter(([msg]) => typeof msg === 'string' && msg.includes('Sync failed'));
+      expect(errorCalls.length).toBeGreaterThan(0);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('dry run', () => {
