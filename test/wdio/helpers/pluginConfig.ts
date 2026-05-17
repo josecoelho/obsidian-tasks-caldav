@@ -5,6 +5,7 @@ import { RADICALE } from '../../helpers/radicaleSetup';
 export async function useCalendar(calendarName: string): Promise<void> {
   await browser.executeObsidian(async ({ app }, args) => {
     const plugin = (app as any).plugins.plugins['tasks-caldav-sync'];
+    // Replace all calendars; each test uses exactly one isolated calendar.
     plugin.settings.calendars = [{
       tag: 'sync',
       calendarName: args.calendarName,
@@ -24,14 +25,15 @@ export async function useCalendar(calendarName: string): Promise<void> {
 /** Wait until obsidian-tasks' cache reports a task whose description includes `text`. */
 export async function waitForTaskInCache(text: string): Promise<void> {
   await browser.waitUntil(async () => {
-    return browser.executeObsidian(({ app }, t) => {
+    return await browser.executeObsidian(({ app }, t) => {
       const tp = (app as any).plugins.plugins['obsidian-tasks-plugin'];
       return tp.getTasks().some((task: any) => task.description.includes(t));
     }, text);
   }, { timeout: 20000, interval: 500, timeoutMsg: `task "${text}" never appeared in obsidian-tasks cache` });
 }
 
-/** Run sync and wait for it to finish (sync-now is fire-and-forget). */
+/** Dispatch the sync-now command and pause for the async pipeline to settle.
+ *  Callers must add their own waitUntil on the observable end state. */
 export async function syncNow(): Promise<void> {
   await browser.executeObsidianCommand('tasks-caldav-sync:sync-now');
   await browser.pause(4000);
