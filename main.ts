@@ -322,7 +322,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Tag')
-			.setDesc('Tag that routes tasks to this calendar (without #)')
+			.setDesc('Only tasks with this tag are synced, both ways — the Obsidian tag when pushing, the matching server category when pulling. Leave empty to sync all tasks.')
 			.addText(text => text
 				.setPlaceholder('Work')
 				.setValue(calendar.tag)

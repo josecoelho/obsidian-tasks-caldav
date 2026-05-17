@@ -125,6 +125,17 @@ Indented bullet points below a task are synced as the VTODO DESCRIPTION field:
 
 These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
+## Troubleshooting
+
+### Sync reports success but nothing changes
+
+The **Tag** setting is a hard filter on **both** sides, not just routing:
+
+- **Obsidian → CalDAV** — only tasks carrying the Obsidian `#tag` are pushed
+- **CalDAV → Obsidian** — only server VTODOs whose `CATEGORIES` include that tag are pulled
+
+If your server tasks have no matching `CATEGORIES`, sync completes successfully but pulls nothing ("No tasks"). To sync everything regardless of category, leave the **Tag** field empty.
+
 ## Known limitations
 
 - **Priority round-trip is lossy** — obsidian-tasks uses emoji-based priorities (⏫🔼🔽) while CalDAV uses numeric PRIORITY (1-9). Obsidian→CalDAV maps correctly, but CalDAV→Obsidian does not write priority emojis back into the task markdown.
