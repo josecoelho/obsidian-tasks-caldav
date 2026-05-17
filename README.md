@@ -137,7 +137,7 @@ These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 | Radicale | Automated E2E suite |
 | Nextcloud | Automated E2E suite |
 | Vikunja | Automated E2E suite |
-| Baïkal (SabreDAV) | Manually verified (issue #71) |
+| Baïkal (SabreDAV) | Automated E2E suite |
 | Fastmail | Manually verified |
 
 Should work with any CalDAV server that supports VTODO, including iCloud and Synology.

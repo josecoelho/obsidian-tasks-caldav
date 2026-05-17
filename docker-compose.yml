@@ -51,5 +51,25 @@ services:
       retries: 30
       start_period: 120s
 
+  baikal:
+    image: ckulka/baikal:nginx
+    ports:
+      - "8081:80"
+    environment:
+      # We mount config read-only and seed the DB ourselves, so skip the
+      # image's recursive chown (it fails on the read-only config mount).
+      BAIKAL_SKIP_CHOWN: "1"
+    volumes:
+      - ./test/docker/baikal/baikal.yaml:/seed/baikal.yaml:ro
+      - ./test/docker/baikal/10-seed-db.sh:/docker-entrypoint.d/10-seed-db.sh:ro
+      - baikal-db:/var/www/baikal/Specific/db
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:80/admin/"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
 volumes:
   nextcloud-data:
+  baikal-db:

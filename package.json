@@ -13,6 +13,7 @@
 		"test:e2e:radicale": "node scripts/ensure-servers.mjs --only radicale && jest --selectProjects e2e --testPathPatterns='test/e2e/(caldavClient|caldavAdapter|syncRoundTrip)'",
 		"test:e2e:vikunja": "node scripts/ensure-servers.mjs --only vikunja && jest --selectProjects e2e --testPathPatterns='test/e2e/vikunja/'",
 		"test:e2e:nextcloud": "node scripts/ensure-servers.mjs --only nextcloud && jest --selectProjects e2e --testPathPatterns='test/e2e/nextcloud/'",
+		"test:e2e:baikal": "node scripts/ensure-servers.mjs --only baikal && jest --selectProjects e2e --testPathPatterns='test/e2e/baikal/'",
 		"test:watch": "jest --selectProjects unit --watch",
 		"lint": "eslint .",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"

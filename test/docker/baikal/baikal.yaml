@@ -1,0 +1,17 @@
+# Pre-baked Baïkal config so the container skips the web installer.
+# Used only by the E2E test suite. Admin/DAV password is "admin".
+system:
+  configured_version: 0.10.1
+  timezone: UTC
+  card_enabled: false
+  cal_enabled: true
+  dav_auth_type: Basic
+  admin_passwordhash: 142ff212f9ed2f8f8b5e7b96f6929f78
+  failed_access_message: 'user %u authentication failure for Baikal'
+  auth_realm: BaikalDAV
+  base_uri: ''
+  invite_from: noreply@example.com
+database:
+  backend: sqlite
+  sqlite_file: /var/www/baikal/Specific/db/db.sqlite
+  encryption_key: e2e-test-key
