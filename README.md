@@ -159,6 +159,7 @@ npm i            # install dependencies
 npm run dev      # watch mode
 npm run build    # production build with type checking
 npm test         # run all tests (unit + E2E, requires Docker for Radicale)
+npm run test:wdio  # run Obsidian smoke tests (requires Docker + downloads Obsidian binary on first run)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture details and testing guidelines.

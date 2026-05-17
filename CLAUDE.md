@@ -136,6 +136,19 @@ Excluded: `requestDumper.ts`, `obsidianTasksApi.ts`, `src/ui/`
 - Test the round-trip: create → fetch → verify
 - Local Radicale server via Docker (`docker-compose.yml`)
 
+### Obsidian smoke tests (wdio)
+Uses [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service) to launch a real Obsidian instance with the real obsidian-tasks plugin and our built plugin against a local Docker Radicale server.
+
+**Scope:** four happy-path scenarios only — Obsidian→CalDAV create, CalDAV→Obsidian create, bidirectional update, completion+delete. Edge cases and error paths stay in the Jest unit/E2E suites.
+
+**Run:** `npm run test:wdio` (requires Docker for Radicale; first run downloads an Obsidian binary into `.obsidian-cache/`).
+
+**CI:** separate `wdio.yml` workflow job, independent from the Jest `ci.yml` jobs.
+
+**Coverage caveat:** runs in Electron, so it does NOT contribute to the Jest coverage thresholds. It provides fidelity/regression coverage — it catches `obsidian-tasks` API drift (e.g. changes to the internal `getTasks()` path) that Jest mocks cannot catch. `jest-environment-obsidian` was evaluated and deferred; wdio is the only layer that exercises the real obsidian-tasks Cache path.
+
+**Maintenance:** `test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json` must be kept in sync with the `CalDAVSettings` shape in `src/types.ts` whenever settings fields change.
+
 ## Release
 - Artifacts: `main.js`, `manifest.json`, `styles.css`
 - Tag matches `manifest.json` version exactly (no `v` prefix)

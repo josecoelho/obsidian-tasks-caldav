@@ -1,0 +1,57 @@
+name: Wdio smoke
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  wdio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Cache Radicale image
+        id: cache-radicale
+        uses: actions/cache@v4
+        with:
+          path: /tmp/docker-cache/radicale.tar
+          key: docker-radicale-${{ hashFiles('docker-compose.yml') }}
+
+      - name: Load or pull Radicale image
+        run: |
+          mkdir -p /tmp/docker-cache
+          if [ "${{ steps.cache-radicale.outputs.cache-hit }}" = "true" ]; then
+            docker load -i /tmp/docker-cache/radicale.tar
+          else
+            docker pull tomsquest/docker-radicale
+            docker save tomsquest/docker-radicale -o /tmp/docker-cache/radicale.tar
+          fi
+
+      - name: Cache Obsidian binary
+        uses: actions/cache@v4
+        with:
+          path: .obsidian-cache
+          key: obsidian-cache-${{ runner.os }}
+
+      - name: Start Radicale
+        run: docker compose up -d radicale
+
+      - name: Wait for Radicale
+        run: node scripts/ensure-servers.mjs --only radicale
+
+      - name: Run wdio smoke suite
+        uses: coactions/setup-xvfb@v1
+        with:
+          run: npm run test:wdio:ci

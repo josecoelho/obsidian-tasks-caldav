@@ -33,3 +33,18 @@ test-caldav-requests/
 coverage/
 coverage-e2e/
 obsidian-releases/
+
+# wdio: Obsidian binary cache
+.obsidian-cache/
+
+# wdio: built plugin artifacts copied into fixture vault (rebuilt by prepare-wdio-vault.mjs)
+test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/main.js
+test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/manifest.json
+test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/styles.css
+
+# wdio: Obsidian-generated workspace state (not part of fixture)
+test/wdio/vault/.obsidian/workspace.json
+test/wdio/vault/.obsidian/workspace-mobile.json
+
+# wdio: fixture vault data.json is intentionally tracked (kept by negating the global rule above)
+!test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json
