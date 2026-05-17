@@ -12,7 +12,10 @@ const DATAVIEW_VAULT = path.resolve('test/wdio/vault-dataview');
  *  `wdio.conf.mts` capabilities (the emoji vault's plugin folder), so the
  *  installer overwrites the dataview vault's `tasks-caldav-sync/data.json` with
  *  the emoji one — making a preset data.json for our plugin ineffective. We
- *  therefore set `taskFormat` at runtime here. Call once in `before`. */
+ *  therefore set `taskFormat` at runtime here. Call once in `before`.
+ *
+ *  The `plugins` list below selects from the plugins already registered in
+ *  `wdio.conf.mts` capabilities — it does not define new plugin paths. */
 export async function openDataviewVault(): Promise<void> {
   await browser.reloadObsidian({
     vault: DATAVIEW_VAULT,
