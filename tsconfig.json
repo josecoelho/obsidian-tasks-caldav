@@ -21,6 +21,7 @@
   ],
   "exclude": [
     "node_modules",
-    "eslint-plugin"
+    "eslint-plugin",
+    "test/wdio"
   ]
 }

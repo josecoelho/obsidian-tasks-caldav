@@ -1,0 +1,10 @@
+{
+  "calendars": [],
+  "syncInterval": 5,
+  "newTasksDestination": "Inbox.md",
+  "requireManualConflictResolution": false,
+  "autoResolveObsidianWins": false,
+  "syncCompletedTasks": true,
+  "deleteBehavior": "deleteCalDAV",
+  "includeObsidianLink": false
+}

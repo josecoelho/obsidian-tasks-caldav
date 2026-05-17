@@ -15,7 +15,10 @@
 		"test:e2e:nextcloud": "node scripts/ensure-servers.mjs --only nextcloud && jest --selectProjects e2e --testPathPatterns='test/e2e/nextcloud/'",
 		"test:watch": "jest --selectProjects unit --watch",
 		"lint": "eslint .",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
+		"version": "node version-bump.mjs && git add manifest.json versions.json",
+		"test:wdio": "node scripts/ensure-servers.mjs --only radicale && node scripts/prepare-wdio-vault.mjs && wdio run wdio.conf.mts",
+		"test:wdio:ci": "node scripts/prepare-wdio-vault.mjs && wdio run wdio.conf.mts"
+
 	},
 	"keywords": [],
 	"author": "",
@@ -26,6 +29,10 @@
 		"@types/jest": "^30.0.0",
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/utils": "^8.58.0",
+		"@wdio/cli": "^9.27.1",
+		"@wdio/local-runner": "^9.27.1",
+		"@wdio/mocha-framework": "^9.27.1",
+		"@wdio/spec-reporter": "^9.27.1",
 		"esbuild": "0.17.3",
 		"eslint": "^9.39.2",
 		"eslint-plugin-obsidianmd": "^0.1.9",
@@ -33,10 +40,14 @@
 		"jest": "^30.2.0",
 		"jiti": "^2.6.1",
 		"obsidian": "latest",
+		"obsidian-launcher": "^3.0.3",
 		"ts-jest": "^29.4.5",
 		"tslib": "2.4.0",
+		"tsx": "^4.22.1",
 		"typescript": "^6.0.2",
-		"typescript-eslint": "^8.35.1"
+		"typescript-eslint": "^8.35.1",
+		"wdio-obsidian-reporter": "^3.0.3",
+		"wdio-obsidian-service": "^3.0.3"
 	},
 	"dependencies": {
 		"rrule": "^2.8.1"
