@@ -293,6 +293,38 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('writeBackIds — format detection', () => {
+    it('preserves dataview format when writing back an id to a task that had no id, even when taskFormat is emoji', async () => {
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      // Task with dataview metadata but NO id — extractId returns null for it
+      const noIdTask = makeTask({
+        id: '',
+        originalMarkdown: '- [ ] New task [due:: 2025-06-01] #sync',
+      });
+      const wrapper = {
+        ...dummyWrapper,
+        extractId: jest.fn().mockReturnValue(null),
+        updateTaskInVault,
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, {
+        syncTag: 'sync', newTasksDestination: 'Inbox.md', taskFormat: 'emoji',
+      });
+
+      // normalize populates tasksById and generates an in-memory id
+      const [commonTask] = adapter.normalize(
+        [withBody(noIdTask)],
+        () => null, // extractId returns null → id will be generated
+      );
+
+      await adapter.writeBackIds([commonTask]);
+
+      expect(updateTaskInVault).toHaveBeenCalledTimes(1);
+      const written = updateTaskInVault.mock.calls[0][1] as string;
+      expect(written).toContain('[id:: ');
+      expect(written).not.toContain('🆔');
+    });
+  });
+
   describe('applyChanges — complete', () => {
     it('calls executeToggleTaskDoneCommand for complete changes', async () => {
       const toggleFn = jest.fn().mockReturnValue(
