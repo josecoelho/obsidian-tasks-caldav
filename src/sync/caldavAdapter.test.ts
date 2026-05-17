@@ -240,6 +240,55 @@ describe('CalDAVAdapter', () => {
     });
   });
 
+  // The suite is pinned to America/New_York (EST = UTC-5 in January) via
+  // jest.config.cjs. January dates avoid DST ambiguity.
+  describe('completedDate timezone handling (#43)', () => {
+    function icalUtcToDate(ical: string): Date {
+      // YYYYMMDDTHHMMSSZ -> Date
+      const iso = `${ical.slice(0, 4)}-${ical.slice(4, 6)}-${ical.slice(6, 8)}T${ical.slice(9, 11)}:${ical.slice(11, 13)}:${ical.slice(13, 15)}Z`;
+      return new Date(iso);
+    }
+
+    function localDateOf(d: Date): string {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    const doneTask = {
+      uid: 'tz-task',
+      title: 'TZ task',
+      status: 'DONE' as const,
+      dueDate: null,
+      startDate: null,
+      scheduledDate: null,
+      completedDate: '2025-01-15',
+      priority: 'none' as const,
+      tags: [],
+      recurrenceRule: '',
+      body: '',
+    };
+
+    it('reads an externally-completed UTC timestamp as the local date, not the UTC date', () => {
+      // Phone completes the task at 22:00 local on Jan 15; server stores it
+      // in UTC as Jan 16 03:00. The completion happened on Jan 15 locally.
+      const vtodo = makeCalObj('c-ext', 'Done on phone', ['COMPLETED:20250116T030000Z']);
+      expect(adapter.toCommonTask(vtodo, 'id').completedDate).toBe('2025-01-15');
+    });
+
+    it('writes COMPLETED anchored to the local completion date, not UTC midnight', () => {
+      const ics = adapter.fromCommonTask(doneTask, 'uid-1');
+      const match = ics.match(/COMPLETED:(\d{8}T\d{6}Z)/);
+      expect(match).not.toBeNull();
+      // Interpreted back in the user's zone, it must land on Jan 15.
+      expect(localDateOf(icalUtcToDate(match![1]))).toBe('2025-01-15');
+    });
+
+    it('round-trips a date-only completion without shifting the day', () => {
+      const ics = adapter.fromCommonTask(doneTask, 'uid-1');
+      const calObj: CalendarObject = { data: ics, url: 'http://x/uid-1.ics', etag: 'e' };
+      expect(adapter.toCommonTask(calObj, 'uid-1').completedDate).toBe('2025-01-15');
+    });
+  });
+
   describe('applyChanges', () => {
     it('should call create for create changes', async () => {
       const mockCreateVTODO = jest.fn();
