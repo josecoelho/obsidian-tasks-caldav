@@ -19,7 +19,6 @@ export interface ObsidianSyncSettings {
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
-	taskFormat?: 'emoji' | 'dataview';
 	// Called at normalize time so vault renames are picked up without reconstructing the adapter.
 	getVaultName?: () => string;
 }
@@ -103,6 +102,7 @@ export class ObsidianAdapter {
 			newTaskId: string;
 		}> = [];
 
+		const format = await this.wrapper.getConfiguredFormat();
 		for (const change of changes) {
 			try {
 				switch (change.type) {
@@ -115,7 +115,7 @@ export class ObsidianAdapter {
 						const markdown = this.mapper.toMarkdown(
 							taskWithId,
 							this.settings.syncTag,
-							this.settings.taskFormat ?? 'emoji',
+							format,
 						);
 
 						await this.wrapper.createTask(
@@ -137,10 +137,6 @@ export class ObsidianAdapter {
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
 
-						const format =
-							this.mapper.detectFormat(existingTask.originalMarkdown) ??
-							this.settings.taskFormat ??
-							'emoji';
 						const markdown = this.mapper.toMarkdown(
 							change.task,
 							this.settings.syncTag,
@@ -211,6 +207,7 @@ export class ObsidianAdapter {
 	 * Only called after sync succeeds, so IDs are only persisted when sync completes.
 	 */
 	async writeBackIds(obsidianTasks: CommonTask[]): Promise<void> {
+		const format = await this.wrapper.getConfiguredFormat();
 		for (const task of obsidianTasks) {
 			const original = this.tasksById.get(task.uid);
 			if (!original) continue;
@@ -218,10 +215,6 @@ export class ObsidianAdapter {
 			if (this.wrapper.extractId(original)) continue;
 
 			try {
-				const format =
-					this.mapper.detectFormat(original.originalMarkdown) ??
-					this.settings.taskFormat ??
-					'emoji';
 				const markdown = this.mapper.toMarkdown(
 					task,
 					this.settings.syncTag,

@@ -55,7 +55,6 @@ export class SyncEngine {
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 			includeObsidianLink: settings.includeObsidianLink,
-			taskFormat: settings.taskFormat,
 			getVaultName: () => app.vault.getName(),
 		});
 	}
