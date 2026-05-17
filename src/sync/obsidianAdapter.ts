@@ -102,6 +102,7 @@ export class ObsidianAdapter {
 			newTaskId: string;
 		}> = [];
 
+		// used by the create and update cases; the complete case delegates serialisation to obsidian-tasks
 		const format = await this.wrapper.getConfiguredFormat();
 		for (const change of changes) {
 			try {

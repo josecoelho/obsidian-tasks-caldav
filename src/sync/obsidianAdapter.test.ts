@@ -271,6 +271,7 @@ describe('ObsidianAdapter', () => {
 
       expect(written).toContain('[id:: task-001]');
       expect(written).not.toContain('🆔');
+      expect(written).not.toContain('📅');
     });
 
     it('writes back a generated id in the configured format', async () => {
