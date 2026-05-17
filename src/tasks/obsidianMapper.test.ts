@@ -221,6 +221,11 @@ describe('ObsidianMapper', () => {
         .toBe('- [x] Test task [id:: test-id] #sync');
     });
 
+    it('works without a sync tag', () => {
+      expect(mapper.toMarkdown(baseTask, '', 'dataview'))
+        .toBe('- [ ] Test task [id:: test-id]');
+    });
+
     it('emits all dates with dataview keys in start/scheduled/due/completion order', () => {
       const task: CommonTask = {
         ...baseTask, status: 'DONE',
