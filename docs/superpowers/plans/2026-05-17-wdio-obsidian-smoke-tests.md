@@ -28,7 +28,9 @@ During Task 3 it was found that `PROPFIND Depth:1` returns only DAV metadata, ne
 
 `test/wdio/helpers/calendarQuery.ts` exports `fetchVtodos(calendarName: string): Promise<string>` — issues a CalDAV `REPORT` calendar-query (reusing production `REPORT_VTODOS` from `src/caldav/templates.ts`), throws on non-207, and returns the VTODO iCal text. Wherever Tasks 5/6 call `calendarText(calendarName)`, call `fetchVtodos(calendarName)` instead and delete the local PROPFIND `calendarText` definition.
 
-Also authoritative for all specs: use `function`-style mocha callbacks (NOT arrow); do NOT `import { describe, it } from 'mocha'` (they are globals); declare `let cleanup: (() => Promise<void>) | undefined;` and call `await cleanup?.();` in `afterEach`.
+Server-VTODO writes also use a shared helper created in Task 4's review: `test/wdio/helpers/serverVtodo.ts` exports `buildVtodoIcs(uid, summary, overrides?)` (RFC-5545 VCALENDAR/VTODO, includes `CATEGORIES:sync` by default — required by `CalDAVAdapter.filterByTag` — plus trailing CRLF) and `putVtodo(calendarName, uid, ics): Promise<number>` (PUT to Radicale, throws on non-2xx). Tasks 5/6 MUST build/PUT server VTODOs via these instead of inline `.ics` arrays/`http.request`; to mutate an existing VTODO, parse its `UID:` from `fetchVtodos(calendarName)` then `putVtodo(calendarName, uid, buildVtodoIcs(uid, summary, { STATUS: 'COMPLETED', 'PERCENT-COMPLETE': '100' }))`.
+
+Also authoritative for all specs: use `function`-style mocha callbacks (NOT arrow); do NOT `import { describe, it } from 'mocha'` (they are globals); import only what is used from `@wdio/globals` (no unused `expect`); declare `let cleanup: (() => Promise<void>) | undefined;` and call `await cleanup?.();` in `afterEach`; assert observable end state via `browser.waitUntil` (timeout 15000, interval 500) — never a fixed sleep + `expect`; never weaken an assertion to make a test pass.
 
 ## File structure
 
