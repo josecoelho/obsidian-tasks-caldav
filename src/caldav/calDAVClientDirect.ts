@@ -120,13 +120,12 @@ export class CalDAVClientDirect implements CalDAVClient {
    * Discover calendar home from principal URL
    */
   private async discoverFromPrincipal(propfindResponse: string, contextUrl: string): Promise<string> {
-    // Extract current-user-principal (handle any namespace prefix or none)
-    const principalMatch = propfindResponse.match(/<(?:\w+:)?current-user-principal>\s*<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
-    if (!principalMatch) {
+    const principalHref = CalDAVClientDirect.parseHrefForProperty(propfindResponse, 'current-user-principal');
+    if (!principalHref) {
       throw new Error('Could not find current-user-principal in response');
     }
 
-    let principalUrl = principalMatch[1];
+    let principalUrl = principalHref;
 
     // Make absolute URL if relative
     if (!principalUrl.startsWith('http')) {
@@ -151,13 +150,12 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`Failed to get calendar-home-set: ${calendarHomeResponse.status}`);
     }
 
-    // Extract calendar-home-set (handle any namespace prefix or none)
-    const homeMatch = calendarHomeResponse.text.match(/<(?:\w+:)?calendar-home-set>\s*<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
-    if (!homeMatch) {
+    const homeHref = CalDAVClientDirect.parseHrefForProperty(calendarHomeResponse.text, 'calendar-home-set');
+    if (!homeHref) {
       throw new Error('Could not find calendar-home-set in principal response');
     }
 
-    let homeUrl = homeMatch[1];
+    let homeUrl = homeHref;
 
     // Make absolute URL if relative
     if (!homeUrl.startsWith('http')) {
@@ -166,6 +164,24 @@ export class CalDAVClientDirect implements CalDAVClient {
     }
 
     return homeUrl;
+  }
+
+  /**
+   * Extract the href of a DAV/CalDAV property from a PROPFIND response.
+   *
+   * Tolerates any namespace prefix and inline `xmlns` declarations on both the
+   * property element and its `href` child. SabreDAV-based servers (Baïkal)
+   * declare the CalDAV namespace inline on `calendar-home-set` rather than at
+   * the document root, which a prefix-only matcher misses (issue #71).
+   *
+   * Returns the raw href string, or null if the property is absent.
+   */
+  static parseHrefForProperty(xmlText: string, property: string): string | null {
+    const tag = `(?:\\w+:)?${property}(?:\\s[^>]*)?`;
+    const href = '(?:\\w+:)?href(?:\\s[^>]*)?';
+    const regex = new RegExp(`<${tag}>\\s*<${href}>([^<]+)<\\/(?:\\w+:)?href>`);
+    const match = xmlText.match(regex);
+    return match ? match[1] : null;
   }
 
   /**
