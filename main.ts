@@ -164,14 +164,14 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	private async syncAll(): Promise<void> {
 		for (const engine of this.syncEngines) {
-			await engine.sync();
+			await engine.sync(false, true);
 		}
 	}
 
 	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
 		const results: SyncResult[] = [];
 		for (const engine of this.syncEngines) {
-			results.push(await engine.sync(dryRun));
+			results.push(await engine.sync(dryRun, false));
 		}
 		return results;
 	}
@@ -248,6 +248,16 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.includeObsidianLink)
 				.onChange(async (value) => {
 					this.plugin.settings.includeObsidianLink = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show automatic sync notifications')
+			.setDesc('Show progress notices when sync runs automatically in the background. Manual sync and errors always notify.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showAutoSyncNotifications)
+				.onChange(async (value) => {
+					this.plugin.settings.showAutoSyncNotifications = value;
 					await this.plugin.saveSettings();
 				}));
 
