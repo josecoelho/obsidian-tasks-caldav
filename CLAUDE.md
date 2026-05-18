@@ -155,18 +155,34 @@ Releases are built and signed in CI — never from a local machine. The
 released `main.js` must be reproducible by Obsidian's verifier, so the
 binary always comes from `.github/workflows/release.yml`.
 
+`master` is branch-protected (PR required, signed commits, Copilot
+review) with no bypass actors. The release flow works **with** those
+rules — it never pushes to master.
+
 Process — one command:
-1. `npm run release <version>` on master — bumps `manifest.json`,
-   `package.json`, `versions.json`, runs preflight (lint/typecheck/unit),
-   commits, pushes master, and creates the GitHub release as a
-   **pre-release** (requires the authenticated `gh` CLI).
-2. The `release` workflow (trigger: `release: published`) checks out the
-   tag, verifies tag == `manifest.json` version, builds, generates a
-   build-provenance attestation, uploads `main.js`/`manifest.json`/
-   `styles.css`, then promotes the pre-release to the latest stable
-   release.
+1. `npm run release <version>` on master — creates a `release/<version>`
+   branch, bumps `manifest.json`/`package.json`/`versions.json`, runs
+   preflight (lint/typecheck/unit), commits, pushes the branch, opens a
+   PR, and enables auto-merge (squash). Requires the authenticated `gh`
+   CLI. It pushes **nothing** to master and builds nothing locally.
+2. The PR merges to master once required checks/review pass. GitHub
+   signs the squash commit (satisfies `required_signatures`).
+3. `release-tag.yml` (trigger: push to master touching `manifest.json`)
+   reads the new version, and if no release exists for it, creates the
+   GitHub release as a **pre-release**, then calls `release.yml`.
+4. `release.yml` (reusable; also kept on `release: published` for manual
+   UI releases) checks out the tag, verifies tag == `manifest.json`
+   version, builds, generates a build-provenance attestation, uploads
+   `main.js`/`manifest.json`/`styles.css`, then promotes the pre-release
+   to the latest stable release.
 
 Notes:
+- `release-tag.yml` calls `release.yml` via `workflow_call`, not via the
+  `release: published` event — a release created with `GITHUB_TOKEN`
+  does not trigger further workflow runs.
+- Merge the release PR with **squash** (auto-merge uses squash). A
+  rebase merge would replay unsigned local commits onto master and fail
+  `required_signatures`.
 - Tag matches `manifest.json` version exactly (no `v` prefix).
 - It ships as a pre-release until CI finishes, so there is never a
   public window with missing assets (Obsidian ignores pre-releases).

@@ -1,12 +1,22 @@
 name: Release
 
-# Publish a release in the GitHub UI (tag = version, target = master).
-# This workflow then builds from that tag, attaches a build-provenance
-# attestation, and uploads the assets. The released main.js is therefore
-# always CI-built and reproducible — never a local build.
+# Builds from the release tag (tag = version, target = master), attaches a
+# build-provenance attestation, uploads the assets, and promotes the
+# pre-release to latest. The released main.js is therefore always CI-built
+# and reproducible — never a local build.
+#
+# Triggered two ways:
+#   - workflow_call from release-tag.yml (the normal PR-based flow)
+#   - release: published, for a release created manually in the GitHub UI
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -16,10 +26,12 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -29,13 +41,11 @@ jobs:
       - run: npm ci
 
       - name: Verify tag matches manifest version
-        env:
-          TAG: ${{ github.event.release.tag_name }}
         run: |
           MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
           if [ "$MANIFEST_VERSION" != "$TAG" ]; then
             echo "Release tag $TAG does not match manifest.json version $MANIFEST_VERSION." >&2
-            echo "Run 'npm run release $TAG' on master before publishing the release." >&2
+            echo "The release/<version> PR must be merged to master before the release is created." >&2
             exit 1
           fi
 
@@ -53,11 +63,9 @@ jobs:
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" --clobber main.js manifest.json styles.css
 
       - name: Promote to latest stable release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name }}
         run: gh release edit "$TAG" --prerelease=false --latest

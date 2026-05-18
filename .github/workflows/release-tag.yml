@@ -1,0 +1,62 @@
+name: Tag release on version bump
+
+# When a release/<version> PR merges to master, manifest.json's version
+# changes. This workflow turns that into a GitHub release: it creates the
+# tag/release as a pre-release, then calls release.yml to build, attest,
+# upload, and promote.
+#
+# It calls release.yml directly (workflow_call) rather than relying on
+# release.yml's `release: published` trigger, because a release created
+# with GITHUB_TOKEN does not trigger further workflow runs.
+on:
+  push:
+    branches: [master]
+    paths:
+      - manifest.json
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.create.outputs.created }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - id: version
+        run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
+
+      - id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists; nothing to do."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            gh release create "$VERSION" \
+              --target master \
+              --title "$VERSION" \
+              --generate-notes \
+              --prerelease
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: create-release
+    if: needs.create-release.outputs.created == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.create-release.outputs.version }}
