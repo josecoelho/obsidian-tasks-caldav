@@ -1,9 +1,12 @@
 name: Release
 
+# Publish a release in the GitHub UI (tag = version, target = master).
+# This workflow then builds from that tag, attaches a build-provenance
+# attestation, and uploads the assets. The released main.js is therefore
+# always CI-built and reproducible — never a local build.
 on:
-  push:
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -15,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -24,10 +29,13 @@ jobs:
       - run: npm ci
 
       - name: Verify tag matches manifest version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
-          if [ "$MANIFEST_VERSION" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match manifest.json version ${MANIFEST_VERSION}" >&2
+          if [ "$MANIFEST_VERSION" != "$TAG" ]; then
+            echo "Release tag $TAG does not match manifest.json version $MANIFEST_VERSION." >&2
+            echo "Run 'npm run release $TAG' on master before publishing the release." >&2
             exit 1
           fi
 
@@ -42,15 +50,8 @@ jobs:
             manifest.json
             styles.css
 
-      - name: Create release
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" --clobber main.js manifest.json styles.css
-          else
-            gh release create "${GITHUB_REF_NAME}" \
-              --title "${GITHUB_REF_NAME}" \
-              --generate-notes \
-              main.js manifest.json styles.css
-          fi
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" --clobber main.js manifest.json styles.css

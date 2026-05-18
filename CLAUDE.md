@@ -150,6 +150,25 @@ Uses [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-se
 **Maintenance:** `test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json` must be kept in sync with the `CalDAVSettings` shape in `src/types.ts` whenever settings fields change.
 
 ## Release
-- Artifacts: `main.js`, `manifest.json`, `styles.css`
-- Tag matches `manifest.json` version exactly (no `v` prefix)
-- Update `versions.json` with version → minAppVersion mapping
+
+Releases are built and signed in CI — never from a local machine. The
+released `main.js` must be reproducible by Obsidian's verifier, so the
+binary always comes from `.github/workflows/release.yml`.
+
+Process:
+1. `npm run release <version>` on master — bumps `manifest.json`,
+   `package.json`, `versions.json`, runs preflight (lint/typecheck/unit),
+   commits, and pushes master. Prints the prefilled release URL.
+2. In the GitHub UI, create the release with tag = `<version>`,
+   target = `master`, and **Publish** it.
+3. The `release` workflow (trigger: `release: published`) checks out the
+   tag, verifies tag == `manifest.json` version, builds, generates a
+   build-provenance attestation, and uploads `main.js`, `manifest.json`,
+   `styles.css` to the release.
+
+Notes:
+- Tag matches `manifest.json` version exactly (no `v` prefix).
+- There is a brief window between publishing and CI finishing where the
+  release has no assets. To avoid a public window, publish as a
+  pre-release and unmark it once assets land.
+- Never upload a locally-built `main.js`.
