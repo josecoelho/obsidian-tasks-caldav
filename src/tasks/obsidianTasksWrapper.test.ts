@@ -960,6 +960,56 @@ More content`;
                 '- [ ] Parent 🆔 p1 #sync\n    - parent body\n    - [ ] Child 🆔 c1'
             );
         });
+
+        it('inserts after existing subtasks', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync\n    - body\n    - [ ] Existing child 🆔 e1';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] New child 🆔 n1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - body',
+                '    - [ ] Existing child 🆔 e1',
+                '    - [ ] New child 🆔 n1',
+            ]);
+        });
+
+        it('parent on the last line of the file', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+            ]);
+        });
+
+        it('throws when the parent line is not found in the file', async () => {
+            const fileContent = '- [ ] Different task';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await expect(wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1')).rejects.toThrow();
+        });
     });
 
     describe('extractId', () => {

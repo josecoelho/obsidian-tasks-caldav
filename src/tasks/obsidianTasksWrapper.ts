@@ -255,6 +255,7 @@ export class ObsidianTasksWrapper {
         const childIndent = parentIndent + '    ';
 
         let insertAt = parentIndex + 1;
+        // Blank lines break the scan early; consistent with updateTaskInVault's loop strategy.
         for (let i = parentIndex + 1; i < lines.length; i++) {
             const indent = lines[i].match(/^\s*/)?.[0] ?? '';
             if (indent.length > parentIndent.length && lines[i].trim() !== '') {

@@ -125,6 +125,14 @@ export class ObsidianAdapter {
 							this.settings.syncTag,
 						);
 
+						// findTaskById reads the live obsidian-tasks cache, which is
+						// NOT refreshed mid-sync. A parent created earlier in this
+						// same batch usually won't be found here, so insertSubtask
+						// falls back to flat createTask placement. The parent/child
+						// link is still carried by parentUid -> CalDAV RELATED-TO and
+						// re-nests on a later sync once the cache is warm. This applies
+						// transitively: grandchildren also land flat until the cache
+						// catches up.
 						const parentEntry = change.task.parentUid
 							? createdIdByUid.get(change.task.parentUid)
 							: undefined;
