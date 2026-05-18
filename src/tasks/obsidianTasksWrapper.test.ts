@@ -1,4 +1,4 @@
-import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from './obsidianTasksWrapper';
+import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody, isTaskLine } from './obsidianTasksWrapper';
 import { App, TFile } from 'obsidian';
 
 // Mock TFile class
@@ -784,6 +784,48 @@ More content`;
         it('should return null when task.id is empty', () => {
             const task = createMockTask({ id: '' });
             expect(wrapper.extractId(task)).toBeNull();
+        });
+    });
+
+    describe('isTaskLine', () => {
+        it('returns true for "- [ ] x"', () => {
+            expect(isTaskLine('- [ ] x')).toBe(true);
+        });
+
+        it('returns true for "- [x] done"', () => {
+            expect(isTaskLine('- [x] done')).toBe(true);
+        });
+
+        it('returns true for "* [ ] x"', () => {
+            expect(isTaskLine('* [ ] x')).toBe(true);
+        });
+
+        it('returns true for "+ [ ] x"', () => {
+            expect(isTaskLine('+ [ ] x')).toBe(true);
+        });
+
+        it('returns true for "1. [ ] x"', () => {
+            expect(isTaskLine('1. [ ] x')).toBe(true);
+        });
+
+        it('returns true for "    - [ ] indented"', () => {
+            expect(isTaskLine('    - [ ] indented')).toBe(true);
+        });
+
+        it('returns true for "\\t- [ ] tab"', () => {
+            expect(isTaskLine('\t- [ ] tab')).toBe(true);
+        });
+
+        it('returns true for "- [ ]" (bare, no description)', () => {
+            expect(isTaskLine('- [ ]')).toBe(true);
+        });
+
+        it('returns false for "- plain bullet"', () => {
+            expect(isTaskLine('- plain bullet')).toBe(false);
+        });
+
+        it('returns false for "not a task"', () => {
+            expect(isTaskLine('not a task')).toBe(false);
         });
     });
 

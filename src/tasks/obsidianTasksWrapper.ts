@@ -1,8 +1,8 @@
 import { App, TFile } from 'obsidian';
 
-/** True when a line is a list checkbox task (any indent), e.g. "- [ ] x" or "1. [x] y". */
+/** True when a line is a list checkbox task (any indent), e.g. "- [ ] x", "1. [x] y", or a bare "- [ ]". */
 export function isTaskLine(line: string): boolean {
-    return /^\s*(?:[-*+]|\d+\.)\s+\[.\]\s/.test(line);
+    return /^\s*(?:[-*+]|\d+\.)\s+\[.\]\s?/.test(line);
 }
 
 /**
