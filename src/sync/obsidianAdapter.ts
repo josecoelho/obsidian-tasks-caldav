@@ -62,12 +62,14 @@ export class ObsidianAdapter {
 		inputs: TaskWithBody[],
 		extractId: (task: ObsidianTask) => string | null,
 	): CommonTask[] {
-		const tasks: CommonTask[] = [];
 		this.tasksById = new Map();
+		const idByTask = new Map<ObsidianTask, string>();
+		const pending: Array<{ common: CommonTask; parentTask: ObsidianTask | null }> = [];
 
-		for (const { task, body } of inputs) {
+		for (const { task, body, parentTask } of inputs) {
 			const taskId = extractId(task) ?? generateTaskId();
 			this.tasksById.set(taskId, task);
+			idByTask.set(task, taskId);
 			const common = this.mapper.toCommonTask(task, taskId, body);
 
 			if (this.settings.includeObsidianLink && this.settings.getVaultName) {
@@ -77,10 +79,14 @@ export class ObsidianAdapter {
 				);
 			}
 
-			tasks.push(common);
+			pending.push({ common, parentTask });
 		}
 
-		return tasks;
+		for (const { common, parentTask } of pending) {
+			common.parentUid = parentTask ? (idByTask.get(parentTask) ?? null) : null;
+		}
+
+		return pending.map(p => p.common);
 	}
 
 	private buildObsidianUrl(vaultName: string, filePath: string): string {

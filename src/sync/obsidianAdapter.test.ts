@@ -220,6 +220,32 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('normalize parentUid', () => {
+    it('sets parentUid to the assigned id of the structural parent', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
+      const parent = { id: 'p1', description: 'Parent', tags: ['#sync'],
+        status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+        isDone: false, priority: '0', recurrence: null,
+        taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 },
+        originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+        createdDate: null, startDate: null, scheduledDate: null,
+        dueDate: null, doneDate: null, cancelledDate: null } as unknown as ObsidianTask;
+      const child = { ...parent, id: 'c1', description: 'Child',
+        originalMarkdown: '    - [ ] Child 🆔 c1' } as unknown as ObsidianTask;
+
+      const tasks = adapter.normalize(
+        [
+          { task: parent, body: '', parentTask: null },
+          { task: child, body: '', parentTask: parent },
+        ],
+        (t) => (t.id && t.id.length > 0 ? t.id : null),
+      );
+      const byUid = new Map(tasks.map(t => [t.uid, t]));
+      expect(byUid.get('p1')!.parentUid ?? null).toBeNull();
+      expect(byUid.get('c1')!.parentUid).toBe('p1');
+    });
+  });
+
   describe('applyChanges — complete', () => {
     it('calls executeToggleTaskDoneCommand for complete changes', async () => {
       const toggleFn = jest.fn().mockReturnValue(
