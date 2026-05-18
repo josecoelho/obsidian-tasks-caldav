@@ -62,7 +62,7 @@ export class VTODOMapper {
 
     // Completed date
     if (task.completedDate) {
-      lines.push(`COMPLETED:${this.formatDateTimeUTC(new Date(task.completedDate))}`);
+      lines.push(`COMPLETED:${this.formatDateTimeUTC(this.toCompletedInstant(task.completedDate))}`);
       lines.push('PERCENT-COMPLETE:100');
     }
 
@@ -337,6 +337,21 @@ export class VTODOMapper {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}${month}${day}`;
+  }
+
+  /**
+   * Resolve a CommonTask completedDate to the instant written as COMPLETED.
+   * Obsidian completion is date-only (✅ YYYY-MM-DD) with no time; anchor it
+   * at local noon so the UTC timestamp maps back to the same local calendar
+   * day in any timezone (round-trip safe). A full datetime is already an
+   * instant and is preserved as-is. See issue #43.
+   */
+  private toCompletedInstant(completedDate: string): Date {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(completedDate)) {
+      const [year, month, day] = completedDate.split('-').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0);
+    }
+    return new Date(completedDate);
   }
 
   /**

@@ -1,5 +1,11 @@
 import path from 'node:path';
 
+// Pin a non-UTC zone so completion-date timezone behavior (issue #43) is
+// exercised deterministically in the real Obsidian/Electron process. Auckland
+// is UTC+13 in January, far from UTC, so a UTC COMPLETED on the previous day
+// must still render as today's local date. Overridable via the TZ env var.
+process.env.TZ = process.env.TZ || 'Pacific/Auckland';
+
 export const config: WebdriverIO.Config = {
   runner: 'local',
   framework: 'mocha',
