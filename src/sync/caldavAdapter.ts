@@ -35,7 +35,11 @@ export class CalDAVAdapter {
       if (!caldavUid) continue;
 
       const uid = idMapping.caldavUidToTaskId[caldavUid] ?? caldavUid;
-      tasks.push(this.toCommonTask(vtodo, uid));
+      const parsedParent = this.mapper.vtodoToTask(vtodo).parentUid ?? null;
+      const parentUid = parsedParent
+        ? (idMapping.caldavUidToTaskId[parsedParent] ?? parsedParent)
+        : null;
+      tasks.push(this.toCommonTask(vtodo, uid, parentUid));
     }
 
     return tasks;
@@ -44,13 +48,13 @@ export class CalDAVAdapter {
   /**
    * Convert a single VTODO CalendarObject to a CommonTask.
    */
-  toCommonTask(vtodo: CalendarObject, uid: string): CommonTask {
+  toCommonTask(vtodo: CalendarObject, uid: string, parentUid: string | null): CommonTask {
     const parsed = this.mapper.vtodoToTask(vtodo);
 
     return {
       ...parsed,
       uid,
-      // Truncate completedDate to date-only (vtodo returns full datetime)
+      parentUid,
       completedDate: parsed.completedDate ? parsed.completedDate.split('T')[0] : null,
     };
   }
@@ -58,8 +62,8 @@ export class CalDAVAdapter {
   /**
    * Convert a CommonTask back to a VTODO iCal string.
    */
-  fromCommonTask(task: CommonTask, caldavUID: string): string {
-    return this.mapper.taskToVTODO(task, caldavUID);
+  fromCommonTask(task: CommonTask, caldavUID: string, parentCaldavUid: string | null): string {
+    return this.mapper.taskToVTODO(task, caldavUID, parentCaldavUid);
   }
 
   /**
@@ -68,10 +72,13 @@ export class CalDAVAdapter {
   async applyChanges(changes: SyncChange[], idMapping: IdMapping): Promise<void> {
     for (const change of changes) {
       const caldavUID = this.resolveCaldavUid(change.task.uid, idMapping);
+      const parentCaldavUid = change.task.parentUid
+        ? (idMapping.taskIdToCaldavUid[change.task.parentUid] ?? change.task.parentUid)
+        : null;
 
       switch (change.type) {
         case 'create': {
-          const vtodoData = this.fromCommonTask(change.task, caldavUID);
+          const vtodoData = this.fromCommonTask(change.task, caldavUID, parentCaldavUid);
           await this.client.createVTODO(vtodoData, caldavUID);
           break;
         }
@@ -81,7 +88,7 @@ export class CalDAVAdapter {
             console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
             continue;
           }
-          const newData = this.fromCommonTask(change.task, caldavUID);
+          const newData = this.fromCommonTask(change.task, caldavUID, parentCaldavUid);
           await this.client.updateVTODO(existing, newData);
           break;
         }
@@ -95,7 +102,7 @@ export class CalDAVAdapter {
             ...change.task,
             recurrenceRule: '',
           };
-          const newData = this.fromCommonTask(completedTask, caldavUID);
+          const newData = this.fromCommonTask(completedTask, caldavUID, parentCaldavUid);
           await this.client.updateVTODO(existing, newData);
           break;
         }
