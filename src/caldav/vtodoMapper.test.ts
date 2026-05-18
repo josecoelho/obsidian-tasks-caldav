@@ -1235,6 +1235,30 @@ END:VTODO`;
     });
   });
 
+  describe('taskToVTODO RELATED-TO', () => {
+    const mapper = new VTODOMapper();
+    const base = {
+      title: 'Child', status: 'TODO' as const, dueDate: null, startDate: null,
+      scheduledDate: null, completedDate: null, priority: 'none' as const,
+      tags: [], recurrenceRule: '', body: '',
+    };
+
+    it('emits RELATED-TO;RELTYPE=PARENT when a parent CalDAV UID is given', () => {
+      const ical = mapper.taskToVTODO(base, 'child-uid', 'parent-uid');
+      expect(ical).toContain('RELATED-TO;RELTYPE=PARENT:parent-uid');
+    });
+
+    it('omits RELATED-TO when no parent is given', () => {
+      const ical = mapper.taskToVTODO(base, 'child-uid');
+      expect(ical).not.toContain('RELATED-TO');
+    });
+
+    it('omits RELATED-TO when parent is null', () => {
+      const ical = mapper.taskToVTODO(base, 'child-uid', null);
+      expect(ical).not.toContain('RELATED-TO');
+    });
+  });
+
   describe('obsidian link round-trip', () => {
     it('should survive round-trip: body with link outbound, stripped inbound', () => {
       const originalBody = 'Meeting notes from standup';

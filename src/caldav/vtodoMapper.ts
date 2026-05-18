@@ -22,7 +22,7 @@ export class VTODOMapper {
    * @param uid The CalDAV UID (use for updates, generate new for creates)
    * @returns VTODO iCalendar string
    */
-  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
+  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string, parentCaldavUid?: string | null): string {
     const lines: string[] = [];
 
     lines.push('BEGIN:VCALENDAR');
@@ -77,6 +77,10 @@ export class VTODOMapper {
     // Tags as categories
     if (task.tags.length > 0) {
       lines.push(`CATEGORIES:${task.tags.map(t => this.escapeText(t)).join(',')}`);
+    }
+
+    if (parentCaldavUid) {
+      lines.push(`RELATED-TO;RELTYPE=PARENT:${parentCaldavUid}`);
     }
 
     lines.push('END:VTODO');
