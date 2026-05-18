@@ -382,6 +382,85 @@ describe('CalDAVAdapter', () => {
       expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
     });
 
+    it('passes resolved parent CalDAV UID to create when parent is mapped', async () => {
+      const mockCreateVTODO = jest.fn();
+      const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: mockCreateVTODO,
+        updateVTODO: jest.fn(),
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+      const testAdapter = new CalDAVAdapter(mockClient);
+
+      const task = {
+        uid: 'child-task',
+        title: 'Child task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+        parentUid: 'obs-parent-id',
+      };
+
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'obs-parent-id': 'caldav-parent-uid' },
+        caldavUidToTaskId: { 'caldav-parent-uid': 'obs-parent-id' },
+      };
+
+      await testAdapter.applyChanges(
+        [{ type: 'create', task }],
+        idMapping,
+      );
+
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const vtodoData = (mockCreateVTODO.mock.calls[0] as [string, string])[0];
+      expect(vtodoData).toContain('RELATED-TO;RELTYPE=PARENT:caldav-parent-uid');
+    });
+
+    it('falls back to raw parentUid when parent is unmapped', async () => {
+      const mockCreateVTODO = jest.fn();
+      const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: mockCreateVTODO,
+        updateVTODO: jest.fn(),
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+      const testAdapter = new CalDAVAdapter(mockClient);
+
+      const task = {
+        uid: 'child-task-2',
+        title: 'Child task 2',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+        parentUid: 'raw-parent-uid',
+      };
+
+      await testAdapter.applyChanges(
+        [{ type: 'create', task }],
+        emptyIdMapping,
+      );
+
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const vtodoData = (mockCreateVTODO.mock.calls[0] as [string, string])[0];
+      expect(vtodoData).toContain('RELATED-TO;RELTYPE=PARENT:raw-parent-uid');
+    });
+
     describe('complete change type', () => {
       it('marks VTODO as COMPLETED and strips RRULE', async () => {
         const existingCalObj = makeCalObj('caldav-comp', 'Recurring task', [
