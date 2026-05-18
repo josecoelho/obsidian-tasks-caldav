@@ -758,6 +758,23 @@ More content`;
         });
     });
 
+    describe('extractBodyFromFile with subtasks', () => {
+        it('treats indented checkbox lines as subtasks, not body', () => {
+            const content = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - this is body',
+                '    - [ ] Child task',
+                '    - more body after child',
+            ].join('\n');
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('this is body');
+        });
+
+        it('returns empty body when the first indented line is a subtask', () => {
+            const content = ['- [ ] Parent 🆔 p1 #sync', '    - [ ] Child'].join('\n');
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('');
+        });
+    });
+
     describe('extractId', () => {
         it('should return task.id when present', () => {
             const task = createMockTask({ id: 'from-field' });

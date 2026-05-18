@@ -1,5 +1,10 @@
 import { App, TFile } from 'obsidian';
 
+/** True when a line is a list checkbox task (any indent), e.g. "- [ ] x" or "1. [x] y". */
+export function isTaskLine(line: string): boolean {
+    return /^\s*(?:[-*+]|\d+\.)\s+\[.\]\s/.test(line);
+}
+
 /**
  * Represents a task from obsidian-tasks plugin
  * Based on actual Task structure from obsidian-tasks
@@ -398,6 +403,7 @@ export class ObsidianTasksWrapper {
         const noteLines: string[] = [];
 
         for (let i = taskLineIndex + 1; i < lines.length; i++) {
+            if (isTaskLine(lines[i])) break;
             const match = lines[i].match(/^(?:\s{2,}|\t)- (.*)$/);
             if (!match) break;
             noteLines.push(match[1]);
