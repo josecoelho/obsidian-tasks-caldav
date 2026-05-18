@@ -1283,6 +1283,11 @@ END:VTODO`;
       const t = mapper.vtodoToTask(wrap(''));
       expect(t.parentUid ?? null).toBeNull();
     });
+
+    it('finds PARENT when a non-parent RELATED-TO precedes it', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=CHILD:c9\r\nRELATED-TO;RELTYPE=PARENT:p1\r\n'));
+      expect(t.parentUid).toBe('p1');
+    });
   });
 
   describe('obsidian link round-trip', () => {
