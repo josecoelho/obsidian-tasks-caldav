@@ -714,6 +714,73 @@ More content`;
             const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
             expect(written).toContain('    - [ ] Child 🆔 c1');
         });
+
+        it('parent update preserves the body line and child', async () => {
+            // File: parent with a body line then a child task
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - body line\n    - [ ] Child 🆔 c1'
+            );
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Parent line replaced, old body line consumed (newContent has no body),
+            // child task line preserved untouched (loop stops at isTaskLine)
+            expect(written.split('\n')).toEqual([
+                '- [x] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+            ]);
+        });
+
+        it('child with its own body: indent preserved on rewrite', async () => {
+            // File: parent, then indented child with its own body
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - [ ] Child 🆔 c1\n        - child body'
+            );
+
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 1 },
+            });
+
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Parent preserved
+            expect(written).toContain('- [ ] Parent 🆔 p1 #sync');
+            // Child updated with original 4-space indent preserved
+            expect(written).toContain('    - [x] Child 🆔 c1');
+            // Old child body line was consumed (newContent has no body)
+            expect(written).not.toContain('- child body');
+        });
+
+        it('recurrence toggle 2-line result on an indented child keeps both lines indented', async () => {
+            // File: parent, then indented child (no body)
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - [ ] Child 🆔 c1'
+            );
+
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 1 },
+            });
+
+            // Recurrence toggle produces 2 lines: completed + new occurrence
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1\n- [ ] Child 🆔 c2');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Both result lines must receive the child's 4-space indent; parent untouched
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [x] Child 🆔 c1',
+                '    - [ ] Child 🆔 c2',
+            ]);
+        });
     });
 
     describe('filterByTag', () => {
