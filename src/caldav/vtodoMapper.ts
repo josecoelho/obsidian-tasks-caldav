@@ -20,6 +20,7 @@ export class VTODOMapper {
    * Convert a CommonTask to VTODO iCalendar string.
    * @param task The common task
    * @param uid The CalDAV UID (use for updates, generate new for creates)
+   * @param parentCaldavUid Resolved parent CalDAV UID for subtask hierarchy; emits RELATED-TO;RELTYPE=PARENT when set
    * @returns VTODO iCalendar string
    */
   taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string, parentCaldavUid?: string | null): string {
