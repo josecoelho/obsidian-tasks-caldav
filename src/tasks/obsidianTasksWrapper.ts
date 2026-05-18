@@ -402,9 +402,9 @@ export class ObsidianTasksWrapper {
     }
 
     /**
-     * Filter task inputs by sync tag.
-     * Keeps only tasks whose tags include the given sync tag (case-insensitive).
-     * Returns all inputs when syncTag is empty or undefined.
+     * Keeps tasks that carry the sync tag, or whose nearest ancestor chain (via parentTask, within `inputs`) carries it — so untagged subtasks of a tagged parent are synced.
+     * If a task's parentTask is not present in `inputs`, ancestry is truncated there: the task is kept only if it carries the tag itself.
+     * Returns all inputs unchanged when syncTag is empty/undefined.
      */
     filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
         if (!syncTag || syncTag.trim() === '') return inputs;
@@ -419,6 +419,10 @@ export class ObsidianTasksWrapper {
         const isEligible = (input: TaskWithBody): boolean => {
             const cached = eligible.get(input.task);
             if (cached !== undefined) return cached;
+            // parentTask cycles cannot arise from loadBodies (parents resolve
+            // within one file in line order); this guard only prevents infinite
+            // recursion if inputs are ever built differently. A cycle member is
+            // treated as ineligible.
             eligible.set(input.task, false); // cycle guard
             const parentInput = input.parentTask ? byTask.get(input.parentTask) : undefined;
             const result = hasOwnTag(input.task) || (parentInput ? isEligible(parentInput) : false);

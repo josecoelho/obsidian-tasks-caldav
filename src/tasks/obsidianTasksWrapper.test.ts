@@ -754,6 +754,24 @@ More content`;
             ];
             expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(0);
         });
+
+        it('treats a child as ineligible when its parent is not in inputs', () => {
+            const outsideParent = tagged({ id: 'outside' });
+            const child = plain({ id: 'orphan' });
+            const inputs = [
+                { task: child, body: '', parentTask: outsideParent },
+            ];
+            expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(0);
+        });
+
+        it('does not infinitely recurse on a parentTask cycle', () => {
+            const a = plain({ id: 'a' });
+            const b = plain({ id: 'b' });
+            const inputA = { task: a, body: '', parentTask: b };
+            const inputB = { task: b, body: '', parentTask: a };
+            expect(() => wrapper.filterByTag([inputA, inputB], '#sync')).not.toThrow();
+            expect(wrapper.filterByTag([inputA, inputB], '#sync')).toHaveLength(0);
+        });
     });
 
     describe('extractBodyFromFile', () => {
