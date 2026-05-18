@@ -672,6 +672,50 @@ More content`;
         });
     });
 
+    describe('updateTaskInVault preserves indentation', () => {
+        let mockFile: MockTFile;
+
+        const fileContent = [
+            '- [ ] Parent 🆔 p1 #sync',
+            '    - body line',
+            '    - [ ] Child 🆔 c1',
+        ].join('\n');
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+        });
+
+        it('preserves indentation when updating a child task', async () => {
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 2 },
+            });
+
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toContain('    - [x] Child 🆔 c1');
+            expect(written).toContain('- [ ] Parent 🆔 p1 #sync');
+            expect(written).toContain('    - body line');
+        });
+
+        it('does not consume child task lines when updating a parent', async () => {
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toContain('    - [ ] Child 🆔 c1');
+        });
+    });
+
     describe('filterByTag', () => {
         function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
             return { task, body, parentTask: null };

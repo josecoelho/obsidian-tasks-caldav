@@ -212,9 +212,11 @@ export class ObsidianTasksWrapper {
             throw new Error(`Could not find task in file: ${originalMarkdown}`);
         }
 
-        // Count indented note lines below the task
+        const originalIndent = lines[taskIndex].match(/^\s*/)?.[0] ?? '';
+
         let noteLineCount = 0;
         for (let i = taskIndex + 1; i < lines.length; i++) {
+            if (isTaskLine(lines[i])) break;
             if (/^(?:\s{2,}|\t)- /.test(lines[i])) {
                 noteLineCount++;
             } else {
@@ -222,8 +224,7 @@ export class ObsidianTasksWrapper {
             }
         }
 
-        // Replace the task line + any note lines with new content
-        const newLines = newContent.split('\n');
+        const newLines = newContent.split('\n').map(l => originalIndent + l);
         lines.splice(taskIndex, 1 + noteLineCount, ...newLines);
 
         // Write back to file
