@@ -24,7 +24,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
 }
 
 function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
-  return { task, body };
+  return { task, body, parentTask: null };
 }
 
 const dummyWrapper = {
@@ -75,7 +75,7 @@ describe('ObsidianAdapter', () => {
     it('should include body from task inputs', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
-        { task: makeTask({ id: 'task-1' }), body: 'Some body' },
+        { task: makeTask({ id: 'task-1' }), body: 'Some body', parentTask: null },
       ];
       const tasks = adapter.normalize(inputs, extractId);
       expect(tasks[0].body).toBe('Some body');
@@ -95,7 +95,7 @@ describe('ObsidianAdapter', () => {
     it('should return the original ObsidianTask after normalize', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const task = makeTask({ description: 'Test', id: 'my-id' });
-      adapter.normalize([{ task, body: '' }], extractId);
+      adapter.normalize([{ task, body: '', parentTask: null }], extractId);
 
       expect(adapter.findOriginalTask('my-id')).toBe(task);
     });
@@ -144,6 +144,7 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-1',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);
@@ -177,6 +178,7 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-2',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);
@@ -210,6 +212,7 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-3',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);

@@ -674,7 +674,7 @@ More content`;
 
     describe('filterByTag', () => {
         function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
-            return { task, body };
+            return { task, body, parentTask: null };
         }
 
         it('should filter tasks by sync tag', () => {
@@ -922,6 +922,53 @@ More content`;
 
             expect(result).toHaveLength(1);
             expect(result[0].body).toBe('');
+        });
+    });
+
+    describe('parent map', () => {
+        let mockPlugin: MockTasksPlugin;
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            mockPlugin = { getTasks: jest.fn().mockReturnValue([]) };
+            (mockApp.plugins.plugins as Record<string, unknown>)['obsidian-tasks-plugin'] = mockPlugin;
+            wrapper.initialize();
+        });
+
+        it('should compute structural parent for nested tasks', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+                '        - [ ] Grandchild 🆔 g1',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+            });
+            const childTask = createMockTask({
+                id: 'c1',
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            const grandchildTask = createMockTask({
+                id: 'g1',
+                originalMarkdown: '- [ ] Grandchild 🆔 g1',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childTask, grandchildTask]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('p1')!.parentTask).toBeNull();
+            expect(byId.get('c1')!.parentTask!.id).toBe('p1');
+            expect(byId.get('g1')!.parentTask!.id).toBe('c1');
         });
     });
 

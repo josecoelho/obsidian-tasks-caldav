@@ -45,6 +45,7 @@ export interface ObsidianTask {
 export interface TaskWithBody {
     task: ObsidianTask;
     body: string;
+    parentTask: ObsidianTask | null;
 }
 
 /**
@@ -346,29 +347,46 @@ export class ObsidianTasksWrapper {
                 const file = this.app.vault.getAbstractFileByPath(filePath);
                 if (!file || !(file instanceof TFile)) {
                     for (const task of fileTasks) {
-                        result.push({ task, body: '' });
+                        result.push({ task, body: '', parentTask: null });
                     }
                     continue;
                 }
                 const content = await this.app.vault.read(file);
                 const lines = content.split('\n');
 
-                for (const task of fileTasks) {
-                    const lineIndex = lines.findIndex(
-                        line => line.trim() === task.originalMarkdown.trim()
-                    );
-                    if (lineIndex === -1) {
-                        result.push({ task, body: '' });
+                const lineOf = (t: ObsidianTask) =>
+                    lines.findIndex(l => l.trim() === t.originalMarkdown.trim());
+                const indentOf = (idx: number) =>
+                    idx < 0 ? -1 : (lines[idx].match(/^\s*/)?.[0].length ?? 0);
+
+                const located = fileTasks
+                    .map(task => ({ task, line: lineOf(task) }))
+                    .sort((a, b) => a.line - b.line);
+
+                for (let i = 0; i < located.length; i++) {
+                    const { task, line } = located[i];
+                    if (line === -1) {
+                        result.push({ task, body: '', parentTask: null });
                         continue;
                     }
-
-                    const body = this.extractBodyFromFile(content, lineIndex);
-                    result.push({ task, body });
+                    const myIndent = indentOf(line);
+                    let parentTask: ObsidianTask | null = null;
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (located[j].line !== -1 && indentOf(located[j].line) < myIndent) {
+                            parentTask = located[j].task;
+                            break;
+                        }
+                    }
+                    result.push({
+                        task,
+                        body: this.extractBodyFromFile(content, line),
+                        parentTask,
+                    });
                 }
             } catch (error) {
                 console.error(`[ObsidianTasksWrapper] Failed to read file for body: ${filePath}`, error);
                 for (const task of fileTasks) {
-                    result.push({ task, body: '' });
+                    result.push({ task, body: '', parentTask: null });
                 }
             }
         }
