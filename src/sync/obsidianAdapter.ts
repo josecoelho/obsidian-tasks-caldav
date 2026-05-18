@@ -83,6 +83,9 @@ export class ObsidianAdapter {
 		}
 
 		for (const { common, parentTask } of pending) {
+			// parentTask is absent from this batch only when filterByTag excluded
+			// the parent; null (top-level) is the correct fallback then, since
+			// there is no resolvable ancestor sync UID.
 			common.parentUid = parentTask ? (idByTask.get(parentTask) ?? null) : null;
 		}
 

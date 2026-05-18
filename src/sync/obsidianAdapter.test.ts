@@ -244,6 +244,25 @@ describe('ObsidianAdapter', () => {
       expect(byUid.get('p1')!.parentUid ?? null).toBeNull();
       expect(byUid.get('c1')!.parentUid).toBe('p1');
     });
+
+    it('falls back to null parentUid when the structural parent is not in the batch', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
+      const orphanParent = { id: 'p9', description: 'Filtered parent', tags: [],
+        status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+        isDone: false, priority: '0', recurrence: null,
+        taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 },
+        originalMarkdown: '- [ ] Filtered parent 🆔 p9',
+        createdDate: null, startDate: null, scheduledDate: null,
+        dueDate: null, doneDate: null, cancelledDate: null } as unknown as ObsidianTask;
+      const child = { ...orphanParent, id: 'c9', description: 'Child',
+        originalMarkdown: '    - [ ] Child 🆔 c9' } as unknown as ObsidianTask;
+
+      const tasks = adapter.normalize(
+        [{ task: child, body: '', parentTask: orphanParent }],
+        (t) => (t.id && t.id.length > 0 ? t.id : null),
+      );
+      expect(tasks[0].parentUid ?? null).toBeNull();
+    });
   });
 
   describe('applyChanges — complete', () => {
