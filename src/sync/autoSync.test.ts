@@ -148,6 +148,27 @@ describe('AutoSyncScheduler', () => {
 		expect(clearIntervalFn).toHaveBeenCalledWith(42);
 	});
 
+	it('defaults to activeWindow timers when none are injected', () => {
+		const setIntervalFn = jest.fn().mockReturnValue(7);
+		const clearIntervalFn = jest.fn();
+		const globalScope = globalThis as unknown as { activeWindow?: unknown };
+		globalScope.activeWindow = { setInterval: setIntervalFn, clearInterval: clearIntervalFn };
+		try {
+			const scheduler = new AutoSyncScheduler(
+				jest.fn().mockResolvedValue(undefined),
+				jest.fn(),
+			);
+
+			scheduler.start(5);
+			expect(setIntervalFn).toHaveBeenCalledTimes(1);
+
+			scheduler.stop();
+			expect(clearIntervalFn).toHaveBeenCalledWith(7);
+		} finally {
+			delete globalScope.activeWindow;
+		}
+	});
+
 	it('stop is a no-op when not running', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
