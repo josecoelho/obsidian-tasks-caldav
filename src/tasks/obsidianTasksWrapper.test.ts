@@ -934,6 +934,34 @@ More content`;
         });
     });
 
+    describe('insertSubtask', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+        });
+
+        it('inserts child line indented after parent body', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync\n    - parent body';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toBe(
+                '- [ ] Parent 🆔 p1 #sync\n    - parent body\n    - [ ] Child 🆔 c1'
+            );
+        });
+    });
+
     describe('extractId', () => {
         it('should return task.id when present', () => {
             const task = createMockTask({ id: 'from-field' });

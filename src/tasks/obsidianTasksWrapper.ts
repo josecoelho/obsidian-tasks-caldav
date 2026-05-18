@@ -232,6 +232,44 @@ export class ObsidianTasksWrapper {
     }
 
     /**
+     * Insert a child task line indented one level under `parentTask`,
+     * placed after the parent's body lines and any existing subtasks.
+     */
+    async insertSubtask(parentTask: ObsidianTask, childMarkdown: string): Promise<void> {
+        const filePath = parentTask.taskLocation._tasksFile._path;
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file || !(file instanceof TFile)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+        const parentIndex = lines.findIndex(
+            l => l.trim() === parentTask.originalMarkdown.trim(),
+        );
+        if (parentIndex === -1) {
+            throw new Error(`Could not find parent in file: ${parentTask.originalMarkdown}`);
+        }
+
+        const parentIndent = lines[parentIndex].match(/^\s*/)?.[0] ?? '';
+        const childIndent = parentIndent + '    ';
+
+        let insertAt = parentIndex + 1;
+        for (let i = parentIndex + 1; i < lines.length; i++) {
+            const indent = lines[i].match(/^\s*/)?.[0] ?? '';
+            if (indent.length > parentIndent.length && lines[i].trim() !== '') {
+                insertAt = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        const childLines = childMarkdown.split('\n').map(l => childIndent + l);
+        lines.splice(insertAt, 0, ...childLines);
+        await this.app.vault.modify(file, lines.join('\n'));
+    }
+
+    /**
      * Create a new task in the destination file
      * @param taskContent The task markdown (e.g., "- [ ] New task")
      * @param destinationPath Path to the file where task should be added
