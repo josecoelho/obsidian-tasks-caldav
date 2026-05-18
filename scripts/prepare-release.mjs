@@ -2,13 +2,17 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
-// Prepares a release without building or publishing anything locally.
-// It bumps the version files, commits, and pushes master. The GitHub
-// Actions `release` workflow builds, attests, and uploads the assets
-// once you publish the release in the GitHub UI.
+// One-command release. Bumps the version files, commits, pushes master,
+// and creates the GitHub release as a pre-release. It builds and uploads
+// NOTHING locally — the `release` workflow (trigger: release: published)
+// builds, attests, uploads the assets, and then promotes the pre-release
+// to the latest stable release. Obsidian ignores pre-releases, so there
+// is never a public window with missing assets.
 //
-//   npm run release 1.1.8                 bump -> commit -> push master
+//   npm run release 1.1.8                 bump -> push -> create release
 //   npm run release 1.1.8 -- --skip-checks   skip the local preflight
+//
+// Requires the `gh` CLI, authenticated.
 
 const args = process.argv.slice(2);
 const skipChecks = args.includes('--skip-checks');
@@ -28,6 +32,14 @@ if (git('branch', '--show-current') !== 'master') {
 if (git('status', '--porcelain', '--ignore-submodules')) {
 	console.error('Error: working tree is not clean. Commit or stash first.');
 	process.exit(1);
+}
+
+try {
+	execFileSync('gh', ['release', 'view', version], { stdio: 'ignore' });
+	console.error(`Error: release ${version} already exists. Bump to a new version.`);
+	process.exit(1);
+} catch {
+	// No existing release — expected.
 }
 
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
@@ -57,12 +69,14 @@ git('add', 'manifest.json', 'package.json', 'versions.json');
 git('commit', '-m', `chore: bump version to ${version}`);
 git('push', 'origin', 'master');
 
-const slug = git('remote', 'get-url', 'origin')
-	.replace(/^git@github\.com:/, '')
-	.replace(/^https:\/\/github\.com\//, '')
-	.replace(/\.git$/, '');
+execFileSync('gh', [
+	'release', 'create', version,
+	'--target', 'master',
+	'--title', version,
+	'--generate-notes',
+	'--prerelease',
+], { stdio: 'inherit' });
 
-console.log(`\nVersion ${version} committed and pushed to master.\n`);
-console.log('Next: publish the release in GitHub (tag = version, target = master):');
-console.log(`  https://github.com/${slug}/releases/new?tag=${version}&target=master\n`);
-console.log('The release workflow will build, attest, and upload the assets.');
+console.log(`\nRelease ${version} created as a pre-release.`);
+console.log('The release workflow is now building, attesting, and uploading');
+console.log('assets, then promoting it to the latest stable release.');

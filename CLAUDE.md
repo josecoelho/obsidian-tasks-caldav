@@ -155,20 +155,19 @@ Releases are built and signed in CI — never from a local machine. The
 released `main.js` must be reproducible by Obsidian's verifier, so the
 binary always comes from `.github/workflows/release.yml`.
 
-Process:
+Process — one command:
 1. `npm run release <version>` on master — bumps `manifest.json`,
    `package.json`, `versions.json`, runs preflight (lint/typecheck/unit),
-   commits, and pushes master. Prints the prefilled release URL.
-2. In the GitHub UI, create the release with tag = `<version>`,
-   target = `master`, and **Publish** it.
-3. The `release` workflow (trigger: `release: published`) checks out the
+   commits, pushes master, and creates the GitHub release as a
+   **pre-release** (requires the authenticated `gh` CLI).
+2. The `release` workflow (trigger: `release: published`) checks out the
    tag, verifies tag == `manifest.json` version, builds, generates a
-   build-provenance attestation, and uploads `main.js`, `manifest.json`,
-   `styles.css` to the release.
+   build-provenance attestation, uploads `main.js`/`manifest.json`/
+   `styles.css`, then promotes the pre-release to the latest stable
+   release.
 
 Notes:
 - Tag matches `manifest.json` version exactly (no `v` prefix).
-- There is a brief window between publishing and CI finishing where the
-  release has no assets. To avoid a public window, publish as a
-  pre-release and unmark it once assets land.
+- It ships as a pre-release until CI finishes, so there is never a
+  public window with missing assets (Obsidian ignores pre-releases).
 - Never upload a locally-built `main.js`.
