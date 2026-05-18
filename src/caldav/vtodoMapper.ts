@@ -111,6 +111,7 @@ export class VTODOMapper {
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
       tags: this.extractCategories(data),
       body: this.stripObsidianLinks(this.extractRawProperty(data, 'DESCRIPTION') || ''),
+      parentUid: this.extractRelatedParent(data),
     };
   }
 
@@ -121,6 +122,25 @@ export class VTODOMapper {
     const unfolded = this.unfold(data);
     const match = unfolded.match(/^UID:(.+)$/m);
     return match ? match[1].trim() : '';
+  }
+
+  /**
+   * Extract the parent UID from a RELATED-TO property.
+   * RELTYPE=PARENT or an absent RELTYPE (RFC 5545 default) is treated as the
+   * parent link. RELTYPE=CHILD / RELTYPE=SIBLING are ignored.
+   */
+  private extractRelatedParent(data: string): string | null {
+    const regex = /^RELATED-TO(;[^:]*)?:(.+)$/gm;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(data)) !== null) {
+      const params = (match[1] ?? '').toUpperCase();
+      const reltypeMatch = params.match(/RELTYPE=([A-Z]+)/);
+      const reltype = reltypeMatch ? reltypeMatch[1] : 'PARENT';
+      if (reltype === 'PARENT') {
+        return match[2].trim();
+      }
+    }
+    return null;
   }
 
   /**

@@ -1259,6 +1259,32 @@ END:VTODO`;
     });
   });
 
+  describe('vtodoToTask RELATED-TO', () => {
+    const mapper = new VTODOMapper();
+    const wrap = (props: string) =>
+      ({ data: `BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:c1\r\nSUMMARY:Child\r\n${props}END:VTODO\r\nEND:VCALENDAR`, url: '' });
+
+    it('parses RELATED-TO;RELTYPE=PARENT', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=PARENT:p1\r\n'));
+      expect(t.parentUid).toBe('p1');
+    });
+
+    it('parses bare RELATED-TO as PARENT (RFC default)', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO:p2\r\n'));
+      expect(t.parentUid).toBe('p2');
+    });
+
+    it('ignores RELTYPE=CHILD and RELTYPE=SIBLING', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=CHILD:c9\r\nRELATED-TO;RELTYPE=SIBLING:s9\r\n'));
+      expect(t.parentUid ?? null).toBeNull();
+    });
+
+    it('is null when no RELATED-TO present', () => {
+      const t = mapper.vtodoToTask(wrap(''));
+      expect(t.parentUid ?? null).toBeNull();
+    });
+  });
+
   describe('obsidian link round-trip', () => {
     it('should survive round-trip: body with link outbound, stripped inbound', () => {
       const originalBody = 'Meeting notes from standup';
