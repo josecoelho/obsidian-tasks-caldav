@@ -726,6 +726,36 @@ More content`;
         });
     });
 
+    describe('filterByTag inheritance', () => {
+        const tagged = (over: Partial<ObsidianTask>) =>
+            ({ tags: ['#sync'], id: '', originalMarkdown: '', taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+        const plain = (over: Partial<ObsidianTask>) =>
+            ({ tags: [], id: '', originalMarkdown: '', taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+
+        it('keeps an untagged child when an ancestor carries the sync tag', () => {
+            const parent = tagged({ id: 'p1' });
+            const child = plain({ id: 'c1' });
+            const grandchild = plain({ id: 'g1' });
+            const inputs = [
+                { task: parent, body: '', parentTask: null },
+                { task: child, body: '', parentTask: parent },
+                { task: grandchild, body: '', parentTask: child },
+            ];
+            const kept = wrapper.filterByTag(inputs, '#sync').map(i => i.task.id);
+            expect(kept.sort()).toEqual(['c1', 'g1', 'p1']);
+        });
+
+        it('drops an untagged task whose ancestors are also untagged', () => {
+            const parent = plain({ id: 'p1' });
+            const child = plain({ id: 'c1' });
+            const inputs = [
+                { task: parent, body: '', parentTask: null },
+                { task: child, body: '', parentTask: parent },
+            ];
+            expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(0);
+        });
+    });
+
     describe('extractBodyFromFile', () => {
         it('should extract indented bullet lines below a task (4-space indent)', () => {
             const content = '- [ ] Task\n    - Note one\n    - Note two\nNext line';

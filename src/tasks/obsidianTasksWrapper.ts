@@ -410,12 +410,23 @@ export class ObsidianTasksWrapper {
         if (!syncTag || syncTag.trim() === '') return inputs;
 
         const tagLower = syncTag.toLowerCase().replace(/^#/, '');
-        return inputs.filter(({ task }) => {
-            if (!task.tags || task.tags.length === 0) return false;
-            return task.tags.some((tag: string) =>
-                tag.toLowerCase().replace(/^#/, '') === tagLower
-            );
-        });
+        const hasOwnTag = (task: ObsidianTask) =>
+            !!task.tags && task.tags.some(t => t.toLowerCase().replace(/^#/, '') === tagLower);
+
+        const byTask = new Map<ObsidianTask, TaskWithBody>(inputs.map(i => [i.task, i]));
+
+        const eligible = new Map<ObsidianTask, boolean>();
+        const isEligible = (input: TaskWithBody): boolean => {
+            const cached = eligible.get(input.task);
+            if (cached !== undefined) return cached;
+            eligible.set(input.task, false); // cycle guard
+            const parentInput = input.parentTask ? byTask.get(input.parentTask) : undefined;
+            const result = hasOwnTag(input.task) || (parentInput ? isEligible(parentInput) : false);
+            eligible.set(input.task, result);
+            return result;
+        };
+
+        return inputs.filter(isEligible);
     }
 
     /**
