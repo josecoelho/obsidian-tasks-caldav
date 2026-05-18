@@ -111,26 +111,42 @@ export class ObsidianAdapter {
 			newTaskId: string;
 		}> = [];
 
-		for (const change of changes) {
+		const orderedChanges = this.orderCreatesParentFirst(changes);
+		const createdIdByUid = new Map<string, { taskId: string; created: ObsidianTask | null }>();
+
+		for (const change of orderedChanges) {
 			try {
 				switch (change.type) {
 					case "create": {
 						const taskId = generateTaskId();
-						const taskWithId: CommonTask = {
-							...change.task,
-							uid: taskId,
-						};
+						const taskWithId: CommonTask = { ...change.task, uid: taskId, parentUid: null };
 						const markdown = this.mapper.toMarkdown(
 							taskWithId,
 							this.settings.syncTag,
 						);
 
-						await this.wrapper.createTask(
-							markdown,
-							this.settings.newTasksDestination,
-							this.settings.newTasksSection,
-						);
+						const parentEntry = change.task.parentUid
+							? createdIdByUid.get(change.task.parentUid)
+							: undefined;
+						const existingParent = change.task.parentUid
+							? this.wrapper.findTaskById(
+								createdIdByUid.get(change.task.parentUid)?.taskId
+								?? change.task.parentUid)
+							: null;
+						const parentTask = parentEntry?.created ?? existingParent;
 
+						if (parentTask) {
+							await this.wrapper.insertSubtask(parentTask, markdown);
+						} else {
+							await this.wrapper.createTask(
+								markdown,
+								this.settings.newTasksDestination,
+								this.settings.newTasksSection,
+							);
+						}
+
+						const created = this.wrapper.findTaskById(taskId);
+						createdIdByUid.set(change.task.uid, { taskId, created });
 						createdMappings.push({
 							taskId,
 							caldavUID: change.task.uid,
@@ -238,5 +254,26 @@ export class ObsidianAdapter {
 	 */
 	findOriginalTask(uid: string): ObsidianTask | undefined {
 		return this.tasksById.get(uid);
+	}
+
+	/**
+	 * Stable-order changes so that a create whose parent is also being created
+	 * appears after its parent. Non-create changes keep their relative order.
+	 */
+	private orderCreatesParentFirst(changes: SyncChange[]): SyncChange[] {
+		const creates = changes.filter(c => c.type === "create");
+		const others = changes.filter(c => c.type !== "create");
+		const byUid = new Map(creates.map(c => [c.task.uid, c]));
+		const ordered: SyncChange[] = [];
+		const visited = new Set<string>();
+		const visit = (c: SyncChange) => {
+			if (visited.has(c.task.uid)) return;
+			visited.add(c.task.uid);
+			const parentUid = c.task.parentUid;
+			if (parentUid && byUid.has(parentUid)) visit(byUid.get(parentUid)!);
+			ordered.push(c);
+		};
+		for (const c of creates) visit(c);
+		return [...ordered, ...others];
 	}
 }

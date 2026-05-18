@@ -1,5 +1,6 @@
 import { ObsidianAdapter, ObsidianSyncSettings, TaskWithBody } from './obsidianAdapter';
 import { ObsidianTask, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
+import { SyncChange } from './types';
 // CommonTask used indirectly via adapter types
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
@@ -34,6 +35,7 @@ const dummyWrapper = {
   findTaskById: jest.fn().mockReturnValue(null),
   createTask: jest.fn().mockResolvedValue(undefined),
   updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+  insertSubtask: jest.fn().mockResolvedValue(undefined),
   initialize: jest.fn().mockReturnValue(true),
   getTaskId: jest.fn(),
   getToggleCommand: jest.fn().mockReturnValue(null),
@@ -378,6 +380,77 @@ describe('ObsidianAdapter', () => {
           body: '',
         },
       }])).rejects.toThrow('obsidian-tasks API not available');
+    });
+  });
+
+  describe('applyChanges subtask creates', () => {
+    const baseCommonTask = {
+      title: 'Task',
+      status: 'TODO' as const,
+      dueDate: null,
+      startDate: null,
+      scheduledDate: null,
+      completedDate: null,
+      priority: 'none' as const,
+      tags: [],
+      recurrenceRule: '',
+      body: '',
+      parentUid: null,
+    };
+
+    it('creates parent before child and calls insertSubtask for the child', async () => {
+      const createTask = jest.fn().mockResolvedValue(undefined);
+      const insertSubtask = jest.fn().mockResolvedValue(undefined);
+
+      // The parent ObsidianTask returned by findTaskById after the parent is created.
+      // Return it for any call — the first call stores it in createdIdByUid.created,
+      // the second lookup resolves the child's parentTask from that stored entry.
+      const mockParentObsidianTask = makeTask({ id: 'generated-parent-id', description: 'Parent' });
+      const findTaskById = jest.fn().mockReturnValue(mockParentObsidianTask);
+
+      const wrapper = {
+        ...dummyWrapper,
+        createTask,
+        insertSubtask,
+        findTaskById,
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const changes = [
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-child', parentUid: 'cal-parent' } },
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-parent', parentUid: null } },
+      ] as SyncChange[];
+
+      await adapter.applyChanges(changes);
+
+      expect(createTask).toHaveBeenCalledTimes(1);    // only the parent (top-level)
+      expect(insertSubtask).toHaveBeenCalledTimes(1); // the child nested
+    });
+
+    it('returns createdMappings for both parent and child', async () => {
+      const mockParentObsidianTask = makeTask({ id: 'p-id', description: 'Parent' });
+      const findTaskById = jest.fn().mockReturnValue(mockParentObsidianTask);
+
+      const wrapper = {
+        ...dummyWrapper,
+        createTask: jest.fn().mockResolvedValue(undefined),
+        insertSubtask: jest.fn().mockResolvedValue(undefined),
+        findTaskById,
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const changes = [
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-child', parentUid: 'cal-parent' } },
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-parent', parentUid: null } },
+      ] as SyncChange[];
+
+      const result = await adapter.applyChanges(changes);
+
+      expect(result.createdMappings).toHaveLength(2);
+      const caldavUIDs = result.createdMappings.map(m => m.caldavUID).sort();
+      expect(caldavUIDs).toEqual(['cal-child', 'cal-parent']);
     });
   });
 });
