@@ -354,6 +354,13 @@ export class ObsidianTasksWrapper {
                 const content = await this.app.vault.read(file);
                 const lines = content.split('\n');
 
+                // Structural parent = nearest earlier task line with a smaller
+                // indent. Indent is leading-whitespace character count, so this
+                // assumes consistent space-only indentation (a tab counts as 1).
+                // Lines are located by trimmed-markdown match (consistent with the
+                // rest of this file; cache line numbers are intentionally not
+                // trusted). Two tasks with byte-identical trimmed text resolve to
+                // the same line — a known, pre-existing limitation.
                 const lineOf = (t: ObsidianTask) =>
                     lines.findIndex(l => l.trim() === t.originalMarkdown.trim());
                 const indentOf = (idx: number) =>

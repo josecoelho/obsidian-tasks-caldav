@@ -970,6 +970,86 @@ More content`;
             expect(byId.get('c1')!.parentTask!.id).toBe('p1');
             expect(byId.get('g1')!.parentTask!.id).toBe('c1');
         });
+
+        it('siblings share a parent and are not parents of each other', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child A 🆔 ca',
+                '    - [ ] Child B 🆔 cb',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+            });
+            const childA = createMockTask({
+                id: 'ca',
+                originalMarkdown: '- [ ] Child A 🆔 ca',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            const childB = createMockTask({
+                id: 'cb',
+                originalMarkdown: '- [ ] Child B 🆔 cb',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childA, childB]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('ca')!.parentTask!.id).toBe('p1');
+            expect(byId.get('cb')!.parentTask!.id).toBe('p1');
+            expect(byId.get('ca')!.parentTask!.id).not.toBe('cb');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('ca');
+        });
+
+        it('a child after a deeper grandchild re-ascends to the root', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child A 🆔 ca',
+                '        - [ ] Grandchild 🆔 g1',
+                '    - [ ] Child B 🆔 cb',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+            });
+            const childA = createMockTask({
+                id: 'ca',
+                originalMarkdown: '- [ ] Child A 🆔 ca',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+            });
+            const grandchild = createMockTask({
+                id: 'g1',
+                originalMarkdown: '- [ ] Grandchild 🆔 g1',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+            });
+            const childB = createMockTask({
+                id: 'cb',
+                originalMarkdown: '- [ ] Child B 🆔 cb',
+                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 3 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childA, grandchild, childB]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('g1')!.parentTask!.id).toBe('ca');
+            expect(byId.get('cb')!.parentTask!.id).toBe('p1');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('g1');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('ca');
+        });
     });
 
 });
