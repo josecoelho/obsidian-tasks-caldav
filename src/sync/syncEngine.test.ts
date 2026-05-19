@@ -798,6 +798,58 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(2);
     });
+
+    it('pulls CalDAV tasks with no categories when filterByServerCategory is false (issue #94)', async () => {
+      const vtodoTagged = makeCalObj('caldav-tagged', 'Tagged task', ['CATEGORIES:sync']);
+      const vtodoBare = makeCalObj('caldav-ios', 'iOS task with no CATEGORIES');
+
+      mockFetchVTODOs.mockResolvedValue([vtodoTagged, vtodoBare]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ tag: 'sync', filterByServerCategory: false }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.details.caldavTasks!.length).toBe(2);
+      expect(result.created.toObsidian).toBe(2);
+    });
+
+    it('still filters Obsidian tasks by tag when filterByServerCategory is false', async () => {
+      const tagged = makeObsidianTask({
+        description: 'Tagged task',
+        id: '20250101-tag',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Tagged task [id::20250101-tag] #sync',
+      });
+      const untagged = makeObsidianTask({
+        description: 'Untagged task',
+        id: '20250101-no',
+        tags: [],
+        originalMarkdown: '- [ ] Untagged task [id::20250101-no]',
+      });
+
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(tagged, untagged));
+      mockGetBaseline.mockReturnValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ tag: 'sync', filterByServerCategory: false }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.created.toCalDAV).toBe(1);
+      expect(result.details.toCalDAV[0].task.title).toBe('Tagged task');
+    });
   });
 
   describe('sync result', () => {
