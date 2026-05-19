@@ -4,6 +4,7 @@ export interface CalendarMapping {
   serverUrl: string;
   username: string;
   password: string;
+  filterByServerCategory?: boolean;
 }
 
 export interface CalDAVSettings {

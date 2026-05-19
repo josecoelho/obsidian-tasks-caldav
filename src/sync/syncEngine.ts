@@ -78,7 +78,11 @@ export class SyncEngine {
 			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();
 
-			const caldavTasks = await this.caldavAdapter.fetchTasks(syncTag, idMapping);
+			const caldavTasks = await this.caldavAdapter.fetchTasks(
+				syncTag,
+				idMapping,
+				this.calendar.filterByServerCategory ?? true,
+			);
 			const obsidianTasks = await this.obsidianAdapter.fetchTasks(syncTag);
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
