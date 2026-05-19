@@ -322,12 +322,22 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Tag')
-			.setDesc('Only tasks with this tag are synced, both ways — the Obsidian tag when pushing, the matching server category when pulling. Leave empty to sync all tasks.')
+			.setDesc('Used to filter pushed tasks (Obsidian → server) and, when the toggle below is on, also pulled tasks (server → Obsidian). Leave empty to sync all tasks.')
 			.addText(text => text
 				.setPlaceholder('Work')
 				.setValue(calendar.tag)
 				.onChange(async (value) => {
 					calendar.tag = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Filter pulled tasks by server category')
+			.setDesc("When on, only tasks whose server category matches the tag above are pulled. Turn off if some clients (such as the iOS reminders app) can't set categories — every task in this calendar will be pulled. Push direction is unaffected.")
+			.addToggle(toggle => toggle
+				.setValue(calendar.filterByServerCategory ?? true)
+				.onChange(async (value) => {
+					calendar.filterByServerCategory = value;
 					await this.plugin.saveSettings();
 				}));
 
