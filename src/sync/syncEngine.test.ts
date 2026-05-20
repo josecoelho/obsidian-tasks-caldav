@@ -115,8 +115,7 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
     filterByTag: mockFilterByTag,
     extractId: mockExtractId,
     getToggleCommand: mockGetToggleCommand,
-    getConfiguredFormat: jest.fn().mockResolvedValue('emoji'),
-    getGlobalFilter: jest.fn().mockResolvedValue(''),
+    getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'emoji', globalFilter: '' }),
   })),
 }));
 

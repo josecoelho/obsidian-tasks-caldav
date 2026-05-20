@@ -103,10 +103,7 @@ export class ObsidianAdapter {
 		}> = [];
 
 		// used by the create and update cases; the complete case delegates serialisation to obsidian-tasks
-		const [format, globalFilter] = await Promise.all([
-			this.wrapper.getConfiguredFormat(),
-			this.wrapper.getGlobalFilter(),
-		]);
+		const { format, globalFilter } = await this.wrapper.getTasksPluginConfig();
 		for (const change of changes) {
 			try {
 				switch (change.type) {
@@ -213,10 +210,7 @@ export class ObsidianAdapter {
 	 * Only called after sync succeeds, so IDs are only persisted when sync completes.
 	 */
 	async writeBackIds(obsidianTasks: CommonTask[]): Promise<void> {
-		const [format, globalFilter] = await Promise.all([
-			this.wrapper.getConfiguredFormat(),
-			this.wrapper.getGlobalFilter(),
-		]);
+		const { format, globalFilter } = await this.wrapper.getTasksPluginConfig();
 		for (const task of obsidianTasks) {
 			const original = this.tasksById.get(task.uid);
 			if (!original) continue;
