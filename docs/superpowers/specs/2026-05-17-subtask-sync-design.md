@@ -31,7 +31,7 @@ silently swallowed into the parent's body.
 | Nesting depth | Arbitrary. |
 | Completion behavior | Independent — structure only, **no** completion cascade. |
 | Sync trigger | Children **inherit** sync eligibility from any synced ancestor; `🆔` auto-assigned, no per-subtask tag. |
-| Parent deletion | **Cascade**: deleting a parent deletes its whole subtree on both sides. Honors existing `deleteBehavior`. |
+| Parent deletion | **No explicit cascade.** On Obsidian, a subtask is a body fragment whose parent is determined by indentation; deleting the parent line leaves indented children with no structural parent → they re-normalize to `parentUid=null` and naturally become top-level on CalDAV via the per-UID diff. CalDAV clients (Tasks.org, Nextcloud) typically delete children when their parent is deleted; the per-UID diff propagates each of those deletes to Obsidian. (Note: Obsidian-side vault deletion is a separate pre-existing gap — see issue link below.) |
 | `dependsOn` / cross-note | **Out of scope** — deferred to a future issue. |
 | New settings | None. |
 
@@ -119,25 +119,36 @@ mapping is persisted.
 - Parent lookup falls back to `IdMapping` / `findTaskById` for a parent synced in
   an earlier run.
 
-### 5. Cascade delete
+### 5. Deletion / re-parenting
 
-Not expressible in the per-UID pure diff, so a dedicated, unit-testable pure
-function runs in `SyncEngine` immediately after `diff()`:
+No dedicated cascade. The per-UID diff handles every gesture correctly given the
+asymmetric model: an Obsidian subtask is a body fragment whose parent is purely
+structural (indentation), while a CalDAV subtask is a first-class VTODO.
 
-```
-expandSubtreeDeletes(changeset, tasksByUid, baseline) -> changeset
-```
+- **Re-indent / un-indent in Obsidian** → child's `parentUid` recomputed by
+  `ObsidianAdapter.normalize` → diff emits an `update` → `CalDAVAdapter` rewrites
+  `RELATED-TO`.
+- **CalDAV parent deletion** → Tasks.org / Nextcloud Tasks delete the child VTODOs
+  as part of that gesture, so the server emits per-UID deletes for parent + every
+  child. Per-UID diff propagates each to Obsidian independently.
+- **Obsidian parent line deleted, indented children remain** → children re-normalize
+  with `parentUid=null` (no shallower ancestor in the file) → per-UID diff emits
+  `delete` for the parent and `update` (removing `RELATED-TO`) for each child.
+  Children become top-level on CalDAV.
+- **Obsidian parent + all child lines deleted** → per-UID `delete` for each.
 
-For every `delete` change, walk the parent→child adjacency (from the side that
-still has the tasks, falling back to baseline) and append `delete` changes for all
-descendants on the same side. Honors the existing `deleteBehavior` setting for the
-triggering parent delete (children follow the parent's resolution).
+**Pre-existing gap (out of scope for this issue):** `ObsidianAdapter.delete` is a
+no-op — a task deleted on CalDAV is not removed from the Obsidian vault, only from
+the ID mapping/baseline. The `deleteBehavior` setting in `src/types.ts` is declared
+but read nowhere. Both are tracked in
+[#99](https://github.com/josecoelho/obsidian-tasks-caldav/issues/99) and apply to
+*all* deletes, not just subtasks.
 
 ## Files touched
 
 - `src/sync/types.ts` — `parentUid` on `CommonTask`.
-- `src/sync/diff.ts` — `parentUid` in `tasksEqual`; `expandSubtreeDeletes`.
-- `src/sync/syncEngine.ts` — call `expandSubtreeDeletes`; parent-before-child create ordering.
+- `src/sync/diff.ts` — `parentUid` in `tasksEqual`.
+- `src/sync/syncEngine.ts` — unchanged (per-UID diff handles all cases).
 - `src/caldav/vtodoMapper.ts` — emit/parse `RELATED-TO;RELTYPE=PARENT`.
 - `src/sync/caldavAdapter.ts` — resolve `parentUid` ↔ parent CalDAV UID via `IdMapping`.
 - `src/tasks/obsidianTasksWrapper.ts` — `isTaskLine`; indentation-aware parent map; refined body extraction; sync-tag inheritance; indent-preserving update; nested insert for CalDAV-origin children.
@@ -147,13 +158,13 @@ triggering parent delete (children follow the parent's resolution).
 ## Testing
 
 - **Unit:** `isTaskLine`; body-vs-subtask split in `extractBodyFromFile`; parent-map
-  construction (multi-level, mixed body+subtask, dedent); `tasksEqual` with
-  `parentUid`; `expandSubtreeDeletes` (multi-level subtree, partial baseline);
-  VTODO `RELATED-TO` emit/parse incl. absent RELTYPE and CHILD/SIBLING ignored;
-  adapter parentUid ↔ CalDAV UID resolution both directions; sync-tag inheritance
-  via ancestor.
+  construction (multi-level, mixed body+subtask, dedent, sibling, re-ascent);
+  `tasksEqual` with `parentUid`; VTODO `RELATED-TO` emit/parse incl. absent RELTYPE
+  and CHILD/SIBLING ignored; adapter parentUid ↔ CalDAV UID resolution both
+  directions; sync-tag inheritance via ancestor; `insertSubtask` placement edges;
+  indent-preserving `updateTaskInVault`.
 - **E2E (real Radicale):** round-trip a parent + nested child — create in Obsidian
-  shape, push, fetch, assert `RELATED-TO;RELTYPE=PARENT`; reparent; cascade delete.
+  shape, push, fetch, assert `RELATED-TO;RELTYPE=PARENT`; reparent (re-indent).
 - **wdio smoke:** extend within the existing happy-path scope — create a parent
   with one indented subtask, sync, assert nested subtask on CalDAV. No new
   settings, so `test/wdio/.../data.json` is unchanged.
