@@ -1,5 +1,5 @@
-import { diff, expandSubtreeDeletes, tasksEqual } from './diff';
-import { Changeset, CommonTask } from './types';
+import { diff, tasksEqual } from './diff';
+import { CommonTask } from './types';
 
 function makeCommonTask(overrides: Partial<CommonTask> = {}): CommonTask {
   return {
@@ -498,34 +498,5 @@ describe('diff', () => {
       expect(result.toObsidian).toHaveLength(1);
       expect(result.toObsidian[0].type).toBe('update');
     });
-  });
-});
-
-describe('expandSubtreeDeletes', () => {
-  it('expands a parent delete into deletes for the whole subtree', () => {
-    const parent = makeCommonTask({ uid: 'p1' });
-    const child = makeCommonTask({ uid: 'c1', parentUid: 'p1' });
-    const grand = makeCommonTask({ uid: 'g1', parentUid: 'c1' });
-    const sibling = makeCommonTask({ uid: 's1' });
-
-    const changeset = { toObsidian: [], toCalDAV: [{ type: 'delete', task: parent }], conflicts: [] } as Changeset;
-    const tasksByUid = new Map([['p1', parent], ['c1', child], ['g1', grand], ['s1', sibling]]);
-
-    const out = expandSubtreeDeletes(changeset, tasksByUid);
-
-    const deletedUids = out.toCalDAV.filter(c => c.type === 'delete').map(c => c.task.uid).sort();
-    expect(deletedUids).toEqual(['c1', 'g1', 'p1']);
-  });
-
-  it('does not duplicate an already-present child delete', () => {
-    const parent = makeCommonTask({ uid: 'p1' });
-    const child = makeCommonTask({ uid: 'c1', parentUid: 'p1' });
-    const changeset = {
-      toObsidian: [],
-      toCalDAV: [{ type: 'delete', task: parent }, { type: 'delete', task: child }],
-      conflicts: [],
-    } as Changeset;
-    const out = expandSubtreeDeletes(changeset, new Map([['p1', parent], ['c1', child]]));
-    expect(out.toCalDAV.filter(c => c.task.uid === 'c1')).toHaveLength(1);
   });
 });

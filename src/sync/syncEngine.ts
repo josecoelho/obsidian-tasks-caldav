@@ -5,7 +5,7 @@ import { SyncStorage } from "../storage/syncStorage";
 import { CalDAVSettings, CalendarMapping, IdMapping } from "../types";
 import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
-import { diff, expandSubtreeDeletes } from "./diff";
+import { diff } from "./diff";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
 import { calendarStorageId } from "../utils/calendarStorageId";
 
@@ -83,21 +83,18 @@ export class SyncEngine {
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
-			const tasksByUid = new Map<string, CommonTask>();
-			for (const t of [...baseline, ...caldavTasks, ...obsidianTasks]) tasksByUid.set(t.uid, t);
-			const expandedChangeset = expandSubtreeDeletes(changeset, tasksByUid);
 
-			if (dryRun) return this.buildResult(expandedChangeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
+			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(expandedChangeset.toObsidian);
-			await this.caldavAdapter.applyChanges(expandedChangeset.toCalDAV, idMapping);
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
+			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
-			this.updateIdMapping(idMapping, createdMappings, completionRemappings, expandedChangeset);
-			this.persistState(obsidianTasks, caldavTasks, expandedChangeset, idMapping);
+			this.updateIdMapping(idMapping, createdMappings, completionRemappings, changeset);
+			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(expandedChangeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
+			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}

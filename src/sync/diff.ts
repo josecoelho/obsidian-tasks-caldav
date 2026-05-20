@@ -133,46 +133,6 @@ export function diff(
   return { toObsidian, toCalDAV, conflicts };
 }
 
-/**
- * Expand every `delete` change into deletes for its entire descendant subtree,
- * on the same side. `tasksByUid` is the union of currently-known tasks
- * (current side + baseline) used to resolve parent->child adjacency.
- */
-export function expandSubtreeDeletes(
-  changeset: Changeset,
-  tasksByUid: Map<string, CommonTask>,
-): Changeset {
-  const childrenOf = new Map<string, CommonTask[]>();
-  for (const task of tasksByUid.values()) {
-    const p = task.parentUid ?? null;
-    if (!p) continue;
-    if (!childrenOf.has(p)) childrenOf.set(p, []);
-    childrenOf.get(p)!.push(task);
-  }
-
-  const expand = (changes: SyncChange[]): SyncChange[] => {
-    const present = new Set(changes.filter(c => c.type === 'delete').map(c => c.task.uid));
-    const extra: SyncChange[] = [];
-    const queue = [...present];
-    while (queue.length > 0) {
-      const uid = queue.shift()!;
-      for (const child of childrenOf.get(uid) ?? []) {
-        if (present.has(child.uid)) continue;
-        present.add(child.uid);
-        extra.push({ type: 'delete', task: child });
-        queue.push(child.uid);
-      }
-    }
-    return [...changes, ...extra];
-  };
-
-  return {
-    toObsidian: expand(changeset.toObsidian),
-    toCalDAV: expand(changeset.toCalDAV),
-    conflicts: changeset.conflicts,
-  };
-}
-
 function reconcileOrphans(
   obsidianByUid: Map<string, CommonTask>,
   caldavByUid: Map<string, CommonTask>,
