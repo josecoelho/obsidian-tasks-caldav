@@ -18,8 +18,9 @@ describe('subtask sync', function () {
   afterEach(async function () { await cleanup?.(); });
 
   it('parent with indented subtask syncs as nested CalDAV subtask', async function () {
-    const parentTitle = `Parent task ${Date.now()}`;
-    const childTitle = `Child task ${Date.now()}`;
+    const ts = Date.now();
+    const parentTitle = `Parent task ${ts}`;
+    const childTitle = `Child task ${ts}`;
 
     // Write parent (carries sync tag) then indented child (inherits eligibility)
     await appendTaskLine('Tasks.md', `- [ ] ${parentTitle} #sync`);
@@ -53,11 +54,9 @@ describe('subtask sync', function () {
       ?.find((block) => block.includes(childTitle));
     if (!childVtodoMatch) throw new Error(`could not find child VTODO block in:\n${ical}`);
 
-    const relatedToPattern = new RegExp(`RELATED-TO;RELTYPE=PARENT:${parentUid}`);
-    if (!relatedToPattern.test(childVtodoMatch)) {
-      throw new Error(
-        `child VTODO does not contain RELATED-TO;RELTYPE=PARENT:${parentUid}\nChild VTODO:\n${childVtodoMatch}`,
-      );
+    const relatedToLine = `RELATED-TO;RELTYPE=PARENT:${parentUid}`;
+    if (!childVtodoMatch.includes(relatedToLine)) {
+      throw new Error(`child VTODO does not contain ${relatedToLine}\nChild VTODO:\n${childVtodoMatch}`);
     }
   });
 });
