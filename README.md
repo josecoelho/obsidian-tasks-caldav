@@ -142,6 +142,11 @@ Out of scope (future work):
 - Removing a task from the Obsidian vault when it is deleted on the CalDAV side
   (see [#99](https://github.com/josecoelho/obsidian-tasks-caldav/issues/99) —
   pre-existing limitation, applies to all deletes, not just subtasks).
+- New subtasks written back from CalDAV currently use 4-space indentation
+  regardless of the vault's existing indent style.
+- Sync-tag inheritance through ancestors applies to subtasks created in
+  Obsidian. A subtask created directly on the CalDAV server without the
+  sync tag will still be filtered out, even if its parent carries the tag.
 
 ## Troubleshooting
 

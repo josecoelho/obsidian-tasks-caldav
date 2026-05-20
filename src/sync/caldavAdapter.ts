@@ -34,12 +34,19 @@ export class CalDAVAdapter {
       const caldavUid = this.mapper.extractUID(vtodo.data);
       if (!caldavUid) continue;
 
+      const parsed = this.mapper.vtodoToTask(vtodo);
       const uid = idMapping.caldavUidToTaskId[caldavUid] ?? caldavUid;
-      const parsedParent = this.mapper.vtodoToTask(vtodo).parentUid ?? null;
-      const parentUid = parsedParent
-        ? (idMapping.caldavUidToTaskId[parsedParent] ?? parsedParent)
+      const rawParent = parsed.parentUid ?? null;
+      const parentUid = rawParent
+        ? (idMapping.caldavUidToTaskId[rawParent] ?? rawParent)
         : null;
-      tasks.push(this.toCommonTask(vtodo, uid, parentUid));
+
+      tasks.push({
+        ...parsed,
+        uid,
+        parentUid,
+        completedDate: parsed.completedDate ? parsed.completedDate.split('T')[0] : null,
+      });
     }
 
     return tasks;

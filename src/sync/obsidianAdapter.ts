@@ -119,6 +119,10 @@ export class ObsidianAdapter {
 				switch (change.type) {
 					case "create": {
 						const taskId = generateTaskId();
+						// parentUid is zeroed for the markdown payload because
+						// nesting on the Obsidian side is expressed by where
+						// insertSubtask places the line, NOT by line content.
+						// toMarkdown does not (and must not) read parentUid.
 						const taskWithId: CommonTask = { ...change.task, uid: taskId, parentUid: null };
 						const markdown = this.mapper.toMarkdown(
 							taskWithId,
