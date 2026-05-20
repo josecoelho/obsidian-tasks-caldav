@@ -7,7 +7,8 @@ export async function useCalendar(calendarName: string): Promise<void> {
     const plugin = (app as any).plugins.plugins['tasks-caldav-sync'];
     // Replace all calendars; each test uses exactly one isolated calendar.
     plugin.settings.calendars = [{
-      tag: 'sync',
+      obsidianTag: 'sync',
+      caldavCategory: 'sync',
       calendarName: args.calendarName,
       serverUrl: args.serverUrl,
       username: args.username,

@@ -152,7 +152,7 @@ describe('CalDAVAdapter', () => {
     });
   });
 
-  describe('fetchTasks filterByServerCategory flag', () => {
+  describe('fetchTasks category filter', () => {
     function makeClientReturning(vtodos: CalendarObject[]): CalDAVClient {
       return {
         connect: jest.fn(),
@@ -167,28 +167,21 @@ describe('CalDAVAdapter', () => {
     const tagged = makeCalObj('c-tagged', 'Tagged task', ['CATEGORIES:work']);
     const untagged = makeCalObj('c-untagged', 'iOS task with no CATEGORIES');
 
-    it('drops tasks without the sync tag when flag is true (regression)', async () => {
+    it('keeps only tasks whose CATEGORIES match when a category is set', async () => {
       const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]));
-      const tasks = await localAdapter.fetchTasks('work', emptyIdMapping, true);
+      const tasks = await localAdapter.fetchTasks('work', emptyIdMapping);
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Tagged task');
     });
 
-    it('returns all tasks regardless of CATEGORIES when flag is false', async () => {
+    it('returns every task when the category is empty (iOS Reminders case)', async () => {
       const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]));
-      const tasks = await localAdapter.fetchTasks('work', emptyIdMapping, false);
+      const tasks = await localAdapter.fetchTasks('', emptyIdMapping);
       expect(tasks).toHaveLength(2);
       expect(tasks.map(t => t.title).sort()).toEqual([
         'Tagged task',
         'iOS task with no CATEGORIES',
       ]);
-    });
-
-    it('defaults to filtering when flag is omitted (backward compatibility)', async () => {
-      const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]));
-      const tasks = await localAdapter.fetchTasks('work', emptyIdMapping);
-      expect(tasks).toHaveLength(1);
-      expect(tasks[0].title).toBe('Tagged task');
     });
   });
 

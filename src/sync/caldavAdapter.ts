@@ -16,15 +16,11 @@ export class CalDAVAdapter {
    * Full pipeline: connect → fetch → normalize → filter.
    * SyncEngine calls this and gets back CommonTask[].
    */
-  async fetchTasks(
-    syncTag: string | undefined,
-    idMapping: IdMapping,
-    filterByServerCategory = true,
-  ): Promise<CommonTask[]> {
+  async fetchTasks(syncTag: string | undefined, idMapping: IdMapping): Promise<CommonTask[]> {
     await this.client.connect();
     const vtodos = await this.client.fetchVTODOs();
     const allTasks = this.normalize(vtodos, idMapping);
-    return filterByServerCategory ? this.filterByTag(allTasks, syncTag) : allTasks;
+    return this.filterByTag(allTasks, syncTag);
   }
 
   /**

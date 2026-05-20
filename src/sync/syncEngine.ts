@@ -51,7 +51,7 @@ export class SyncEngine {
 			new CalDAVClientDirect(calendar),
 		);
 		this.obsidianAdapter = new ObsidianAdapter(wrapper, {
-			syncTag: calendar.tag,
+			syncTag: calendar.obsidianTag,
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 			includeObsidianLink: settings.includeObsidianLink,
@@ -75,15 +75,13 @@ export class SyncEngine {
 				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
 			}
 
-			const syncTag = this.calendar.tag;
 			const idMapping = this.storage.getIdMapping();
 
 			const caldavTasks = await this.caldavAdapter.fetchTasks(
-				syncTag,
+				this.calendar.caldavCategory,
 				idMapping,
-				this.calendar.filterByServerCategory ?? true,
 			);
-			const obsidianTasks = await this.obsidianAdapter.fetchTasks(syncTag);
+			const obsidianTasks = await this.obsidianAdapter.fetchTasks(this.calendar.obsidianTag);
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());

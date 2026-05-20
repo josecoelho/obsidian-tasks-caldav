@@ -1,10 +1,10 @@
 export interface CalendarMapping {
-  tag: string;
+  obsidianTag: string;
+  caldavCategory: string;
   calendarName: string;
   serverUrl: string;
   username: string;
   password: string;
-  filterByServerCategory?: boolean;
 }
 
 export interface CalDAVSettings {
