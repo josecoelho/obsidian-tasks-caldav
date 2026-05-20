@@ -943,6 +943,48 @@ More content`;
         });
     });
 
+    describe('getGlobalFilter', () => {
+        function wrapperWith(tasksPlugin: unknown): ObsidianTasksWrapper {
+            const app = { vault: {}, plugins: { plugins: tasksPlugin ? { 'obsidian-tasks-plugin': tasksPlugin } : {} } };
+            return new ObsidianTasksWrapper(app as unknown as App);
+        }
+
+        it('returns the configured global filter', async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ globalFilter: '#task' }) });
+            await expect(w.getGlobalFilter()).resolves.toBe('#task');
+        });
+
+        it('returns the configured global filter without # prefix', async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ globalFilter: 'todo' }) });
+            await expect(w.getGlobalFilter()).resolves.toBe('todo');
+        });
+
+        it("returns '' when globalFilter is missing", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({}) });
+            await expect(w.getGlobalFilter()).resolves.toBe('');
+        });
+
+        it("returns '' when globalFilter is empty string", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ globalFilter: '' }) });
+            await expect(w.getGlobalFilter()).resolves.toBe('');
+        });
+
+        it("returns '' when loadData returns null", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue(null) });
+            await expect(w.getGlobalFilter()).resolves.toBe('');
+        });
+
+        it("returns '' when the obsidian-tasks plugin is absent", async () => {
+            const w = wrapperWith(null);
+            await expect(w.getGlobalFilter()).resolves.toBe('');
+        });
+
+        it("returns '' when loadData throws", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockRejectedValue(new Error('boom')) });
+            await expect(w.getGlobalFilter()).resolves.toBe('');
+        });
+    });
+
 });
 
 

@@ -269,4 +269,61 @@ describe('ObsidianMapper', () => {
     });
   });
 
+  describe('toMarkdown — global filter', () => {
+    const baseTask: CommonTask = {
+      uid: 'test-id', title: 'Test task', status: 'TODO',
+      dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+      priority: 'none', tags: [], recurrenceRule: '', body: '',
+    };
+
+    it('appends the global filter tag in emoji output', () => {
+      const md = mapper.toMarkdown(baseTask, 'sync', 'emoji', 'task');
+      expect(md).toBe('- [ ] Test task 🆔 test-id #task #sync');
+    });
+
+    it('appends the global filter tag in dataview output', () => {
+      const md = mapper.toMarkdown(baseTask, 'sync', 'dataview', 'task');
+      expect(md).toBe('- [ ] Test task [id:: test-id] #task #sync');
+    });
+
+    it('accepts a global filter that already has a # prefix', () => {
+      const md = mapper.toMarkdown(baseTask, 'sync', 'emoji', '#task');
+      expect(md).toBe('- [ ] Test task 🆔 test-id #task #sync');
+    });
+
+    it('omits the global filter when empty', () => {
+      const md = mapper.toMarkdown(baseTask, 'sync', 'emoji', '');
+      expect(md).toBe('- [ ] Test task 🆔 test-id #sync');
+    });
+
+    it('appends the global filter when there is no sync tag', () => {
+      const md = mapper.toMarkdown(baseTask, '', 'emoji', 'task');
+      expect(md).toBe('- [ ] Test task 🆔 test-id #task');
+    });
+
+    it('does not duplicate the global filter when it equals the sync tag', () => {
+      const md = mapper.toMarkdown(baseTask, 'task', 'emoji', '#task');
+      expect((md.match(/#task/g) || []).length).toBe(1);
+    });
+
+    it('does not duplicate the global filter when present in task tags', () => {
+      const task = { ...baseTask, tags: ['task', 'shopping'] };
+      const md = mapper.toMarkdown(task, 'sync', 'emoji', '#task');
+      expect((md.match(/#task/g) || []).length).toBe(1);
+      expect(md).toContain('#shopping');
+    });
+
+    it('dedupes case-insensitively when task tags differ in case', () => {
+      const task = { ...baseTask, tags: ['Task', 'shopping'] };
+      const md = mapper.toMarkdown(task, 'sync', 'emoji', '#task');
+      expect((md.match(/#[Tt]ask/g) || []).length).toBe(1);
+      expect(md).toContain('#shopping');
+    });
+
+    it('dedupes case-insensitively when global filter equals sync tag', () => {
+      const md = mapper.toMarkdown(baseTask, 'Task', 'emoji', '#task');
+      expect((md.match(/#[Tt]ask/g) || []).length).toBe(1);
+    });
+  });
+
 });

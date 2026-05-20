@@ -470,4 +470,27 @@ export class ObsidianTasksWrapper {
         }
     }
 
+    /**
+     * The obsidian-tasks "global filter" tag. When set, obsidian-tasks only
+     * parses lines containing this tag and strips it from `task.tags`, so we
+     * must re-add it when writing tasks back to keep them recognised.
+     * Returns '' when unset, absent, or unreadable.
+     */
+    async getGlobalFilter(): Promise<string> {
+        const appWithPlugins = this.app as App & {
+            plugins: { plugins: Record<string, { loadData?: () => Promise<unknown> }> };
+        };
+        const tasksPlugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'];
+        if (!tasksPlugin || typeof tasksPlugin.loadData !== 'function') {
+            return '';
+        }
+        try {
+            const data = await tasksPlugin.loadData();
+            const filter = (data as { globalFilter?: unknown } | null)?.globalFilter;
+            return typeof filter === 'string' ? filter : '';
+        } catch {
+            return '';
+        }
+    }
+
 }

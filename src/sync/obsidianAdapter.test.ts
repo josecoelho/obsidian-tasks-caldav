@@ -38,6 +38,7 @@ const dummyWrapper = {
   getTaskId: jest.fn(),
   getToggleCommand: jest.fn().mockReturnValue(null),
   getConfiguredFormat: jest.fn().mockResolvedValue('emoji'),
+  getGlobalFilter: jest.fn().mockResolvedValue(''),
 } as unknown as ObsidianTasksWrapper;
 
 const defaultSettings: ObsidianSyncSettings = {

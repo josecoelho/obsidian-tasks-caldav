@@ -14,6 +14,12 @@ export class ObsidianMapper {
   /**
    * Parse: ObsidianTask → CommonTask.
    */
+  /**
+   * Note: the obsidian-tasks global filter is intentionally not re-added here.
+   * obsidian-tasks strips it from `task.tags` (and `cleanDescription` drops
+   * any stray text form). `toMarkdown` re-emits it on writeback so the
+   * rewritten line stays recognised under the filter — issue #93.
+   */
   toCommonTask(task: ObsidianTask, taskId: string, body: string = ''): CommonTask {
     return {
       uid: taskId,
@@ -35,20 +41,25 @@ export class ObsidianMapper {
    * Uses task.uid for the id field. `format` defaults to 'emoji' so
    * existing callers are unaffected.
    */
-  toMarkdown(task: CommonTask, syncTag?: string, format: 'emoji' | 'dataview' = 'emoji'): string {
+  toMarkdown(
+    task: CommonTask,
+    syncTag?: string,
+    format: 'emoji' | 'dataview' = 'emoji',
+    globalFilter?: string,
+  ): string {
     return format === 'dataview'
-      ? this.toDataviewMarkdown(task, syncTag)
-      : this.toEmojiMarkdown(task, syncTag);
+      ? this.toDataviewMarkdown(task, syncTag, globalFilter)
+      : this.toEmojiMarkdown(task, syncTag, globalFilter);
   }
 
-  private toEmojiMarkdown(task: CommonTask, syncTag?: string): string {
+  private toEmojiMarkdown(task: CommonTask, syncTag?: string, globalFilter?: string): string {
     let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
 
     line += task.title;
 
-    const syncTagName = syncTag?.replace(/^#/, '').trim();
-    const nonSyncTags = task.tags.filter(t => t !== syncTagName);
-    for (const tag of nonSyncTags) {
+    const syncTagName = this.bareTagName(syncTag);
+    const globalFilterName = this.bareTagName(globalFilter);
+    for (const tag of this.nonReservedTags(task.tags, syncTagName, globalFilterName)) {
       line += ` #${tag}`;
     }
 
@@ -74,22 +85,19 @@ export class ObsidianMapper {
 
     line += ` 🆔 ${task.uid}`;
 
-    if (syncTag && syncTag.trim() !== '') {
-      const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-      line += ` ${tag}`;
-    }
+    line += this.trailingTagSuffix(syncTagName, globalFilterName);
 
     return this.appendBody(line, task.body);
   }
 
-  private toDataviewMarkdown(task: CommonTask, syncTag?: string): string {
+  private toDataviewMarkdown(task: CommonTask, syncTag?: string, globalFilter?: string): string {
     let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
 
     line += task.title;
 
-    const syncTagName = syncTag?.replace(/^#/, '').trim();
-    const nonSyncTags = task.tags.filter(t => t !== syncTagName);
-    for (const tag of nonSyncTags) {
+    const syncTagName = this.bareTagName(syncTag);
+    const globalFilterName = this.bareTagName(globalFilter);
+    for (const tag of this.nonReservedTags(task.tags, syncTagName, globalFilterName)) {
       line += ` #${tag}`;
     }
 
@@ -116,12 +124,42 @@ export class ObsidianMapper {
 
     line += ` [id:: ${task.uid}]`;
 
-    if (syncTag && syncTag.trim() !== '') {
-      const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
-      line += ` ${tag}`;
-    }
+    line += this.trailingTagSuffix(syncTagName, globalFilterName);
 
     return this.appendBody(line, task.body);
+  }
+
+  private bareTagName(tag: string | undefined): string {
+    return tag?.replace(/^#/, '').trim() ?? '';
+  }
+
+  /**
+   * Drop tags that we re-emit explicitly (sync tag + global filter) so the
+   * suffix renders them exactly once. Comparisons are case-insensitive — both
+   * obsidian-tasks and Obsidian itself treat tags case-insensitively.
+   */
+  private nonReservedTags(tags: string[], syncTagName: string, globalFilterName: string): string[] {
+    const reserved = new Set(
+      [syncTagName, globalFilterName].filter(Boolean).map(t => t.toLowerCase()),
+    );
+    return tags.filter(t => !reserved.has(t.toLowerCase()));
+  }
+
+  /**
+   * Trailing global filter + sync tag suffix. Global filter goes first so
+   * obsidian-tasks recognises the line; sync tag last (existing convention).
+   * Skips the global filter if it equals the sync tag (case-insensitive) to
+   * avoid duplication.
+   */
+  private trailingTagSuffix(syncTagName: string, globalFilterName: string): string {
+    let out = '';
+    if (globalFilterName && globalFilterName.toLowerCase() !== syncTagName.toLowerCase()) {
+      out += ` #${globalFilterName}`;
+    }
+    if (syncTagName) {
+      out += ` #${syncTagName}`;
+    }
+    return out;
   }
 
   /** Append the task body as indented bullet lines, if any. */
