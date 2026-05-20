@@ -21,8 +21,13 @@ export function generateTaskId(): string {
   const day = String(now.getDate()).padStart(2, '0');
   const datePart = `${year}${month}${day}`;
 
-  // Generate 3-character random hex string
-  const randomPart = Math.floor(Math.random() * 4096).toString(16).padStart(3, '0');
+  // Generate 3-character random hex string using crypto-grade RNG.
+  // Task IDs are not secrets, but using getRandomValues avoids CodeQL's
+  // js/insecure-randomness alert and removes any modulo-bias edge case
+  // (65536 is an exact multiple of 4096 so the masking is uniform).
+  const buf = new Uint16Array(1);
+  crypto.getRandomValues(buf);
+  const randomPart = (buf[0] % 4096).toString(16).padStart(3, '0');
 
   return `${datePart}-${randomPart}`;
 }
