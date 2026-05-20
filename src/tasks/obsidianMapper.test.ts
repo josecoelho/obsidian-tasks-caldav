@@ -9,7 +9,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     isDone: false,
     priority: '0',
     tags: ['#sync'],
-    taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+    taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Buy groceries 🆔 20250105-a4f #sync',
     createdDate: null,
     startDate: null,
@@ -200,6 +200,72 @@ describe('ObsidianMapper', () => {
       const task = { ...baseTask, tags: ['sync', 'shopping'], dueDate: '2025-01-15' };
       const md = mapper.toMarkdown(task, 'sync');
       expect(md.indexOf('#shopping')).toBeLessThan(md.indexOf('📅'));
+    });
+  });
+
+  describe('toMarkdown — dataview format', () => {
+    const baseTask: CommonTask = {
+      uid: 'test-id', title: 'Test task', status: 'TODO',
+      dueDate: null, startDate: null, scheduledDate: null, completedDate: null,
+      priority: 'none', tags: [], recurrenceRule: '', body: '',
+    };
+
+    it('serializes a TODO with id', () => {
+      expect(mapper.toMarkdown(baseTask, 'sync', 'dataview'))
+        .toBe('- [ ] Test task [id:: test-id] #sync');
+    });
+
+    it('serializes a DONE task', () => {
+      const task = { ...baseTask, status: 'DONE' as const };
+      expect(mapper.toMarkdown(task, 'sync', 'dataview'))
+        .toBe('- [x] Test task [id:: test-id] #sync');
+    });
+
+    it('works without a sync tag', () => {
+      expect(mapper.toMarkdown(baseTask, '', 'dataview'))
+        .toBe('- [ ] Test task [id:: test-id]');
+    });
+
+    it('emits all dates with dataview keys in start/scheduled/due/completion order', () => {
+      const task: CommonTask = {
+        ...baseTask, status: 'DONE',
+        dueDate: '2025-01-15', startDate: '2025-01-08',
+        scheduledDate: '2025-01-10', completedDate: '2025-01-12',
+      };
+      const md = mapper.toMarkdown(task, 'sync', 'dataview');
+      expect(md).toContain('[start:: 2025-01-08]');
+      expect(md).toContain('[scheduled:: 2025-01-10]');
+      expect(md).toContain('[due:: 2025-01-15]');
+      expect(md).toContain('[completion:: 2025-01-12]');
+      expect(md.indexOf('[start::')).toBeLessThan(md.indexOf('[scheduled::'));
+      expect(md.indexOf('[scheduled::')).toBeLessThan(md.indexOf('[due::'));
+      expect(md.indexOf('[due::')).toBeLessThan(md.indexOf('[completion::'));
+    });
+
+    it('emits recurrence as repeat with human-readable text', () => {
+      const task = { ...baseTask, recurrenceRule: 'FREQ=DAILY', dueDate: '2026-02-15' };
+      const md = mapper.toMarkdown(task, 'sync', 'dataview');
+      expect(md).toContain('[repeat:: every day]');
+      expect(md).not.toContain('FREQ=DAILY');
+    });
+
+    it('places non-sync tags before dataview fields and sync tag last', () => {
+      const task = { ...baseTask, tags: ['sync', 'shopping'], dueDate: '2025-01-15' };
+      const md = mapper.toMarkdown(task, 'sync', 'dataview');
+      expect(md.indexOf('#shopping')).toBeLessThan(md.indexOf('[due::'));
+      expect(md.indexOf('[id:: test-id]')).toBeLessThan(md.indexOf('#sync'));
+      expect((md.match(/#sync/g) || []).length).toBe(1);
+    });
+
+    it('appends body as indented bullets', () => {
+      const task = { ...baseTask, uid: 'id', title: 'Task with body', body: 'First note\nSecond note' };
+      expect(mapper.toMarkdown(task, 'sync', 'dataview'))
+        .toBe('- [ ] Task with body [id:: id] #sync\n    - First note\n    - Second note');
+    });
+
+    it('defaults to emoji when no format argument is given', () => {
+      expect(mapper.toMarkdown(baseTask, 'sync'))
+        .toBe('- [ ] Test task 🆔 test-id #sync');
     });
   });
 

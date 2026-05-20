@@ -32,9 +32,16 @@ export class ObsidianMapper {
 
   /**
    * Serialize: CommonTask → obsidian-tasks markdown string.
-   * Uses task.uid for the 🆔 field.
+   * Uses task.uid for the id field. `format` defaults to 'emoji' so
+   * existing callers are unaffected.
    */
-  toMarkdown(task: CommonTask, syncTag?: string): string {
+  toMarkdown(task: CommonTask, syncTag?: string, format: 'emoji' | 'dataview' = 'emoji'): string {
+    return format === 'dataview'
+      ? this.toDataviewMarkdown(task, syncTag)
+      : this.toEmojiMarkdown(task, syncTag);
+  }
+
+  private toEmojiMarkdown(task: CommonTask, syncTag?: string): string {
     let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
 
     line += task.title;
@@ -45,7 +52,6 @@ export class ObsidianMapper {
       line += ` #${tag}`;
     }
 
-    // Dates in obsidian-tasks order: start, scheduled, due, completed
     if (task.startDate) {
       line += ` 🛫 ${task.startDate}`;
     }
@@ -59,7 +65,6 @@ export class ObsidianMapper {
       line += ` ✅ ${task.completedDate}`;
     }
 
-    // Recurrence rule in obsidian-tasks format
     if (task.recurrenceRule) {
       const text = this.rruleToText(task.recurrenceRule);
       if (text) {
@@ -67,22 +72,63 @@ export class ObsidianMapper {
       }
     }
 
-    // Task ID in obsidian-tasks emoji format
     line += ` 🆔 ${task.uid}`;
 
-    // Sync tag after ID
     if (syncTag && syncTag.trim() !== '') {
       const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
       line += ` ${tag}`;
     }
 
-    // Body as indented bullet lines
-    if (task.body) {
-      const bodyLines = task.body.split('\n').map(l => `    - ${l}`);
-      line += '\n' + bodyLines.join('\n');
+    return this.appendBody(line, task.body);
+  }
+
+  private toDataviewMarkdown(task: CommonTask, syncTag?: string): string {
+    let line = task.status === 'DONE' ? '- [x] ' : '- [ ] ';
+
+    line += task.title;
+
+    const syncTagName = syncTag?.replace(/^#/, '').trim();
+    const nonSyncTags = task.tags.filter(t => t !== syncTagName);
+    for (const tag of nonSyncTags) {
+      line += ` #${tag}`;
     }
 
-    return line;
+    // Dates in obsidian-tasks order: start, scheduled, due, completed
+    if (task.startDate) {
+      line += ` [start:: ${task.startDate}]`;
+    }
+    if (task.scheduledDate) {
+      line += ` [scheduled:: ${task.scheduledDate}]`;
+    }
+    if (task.dueDate) {
+      line += ` [due:: ${task.dueDate}]`;
+    }
+    if (task.completedDate) {
+      line += ` [completion:: ${task.completedDate}]`;
+    }
+
+    if (task.recurrenceRule) {
+      const text = this.rruleToText(task.recurrenceRule);
+      if (text) {
+        line += ` [repeat:: ${text}]`;
+      }
+    }
+
+    line += ` [id:: ${task.uid}]`;
+
+    if (syncTag && syncTag.trim() !== '') {
+      const tag = syncTag.startsWith('#') ? syncTag : `#${syncTag}`;
+      line += ` ${tag}`;
+    }
+
+    return this.appendBody(line, task.body);
+  }
+
+  /** Append the task body as indented bullet lines, if any. */
+  private appendBody(line: string, body: string): string {
+    if (!body) return line;
+    const bodyLines = body.split('\n').map(l => `    - ${l}`);
+    return line + '\n' + bodyLines.join('\n');
   }
 
   /**

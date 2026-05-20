@@ -48,3 +48,12 @@ test/wdio/vault/.obsidian/workspace-mobile.json
 
 # wdio: fixture vault data.json is intentionally tracked (kept by negating the global rule above)
 !test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json
+
+# wdio: dataview fixture vault — track obsidian-tasks data.json; our plugin's
+# data.json is overwritten at runtime by the installer so it is not tracked.
+!test/wdio/vault-dataview/.obsidian/plugins/obsidian-tasks-plugin/data.json
+test/wdio/vault-dataview/.obsidian/plugins/tasks-caldav-sync/main.js
+test/wdio/vault-dataview/.obsidian/plugins/tasks-caldav-sync/manifest.json
+test/wdio/vault-dataview/.obsidian/plugins/tasks-caldav-sync/styles.css
+test/wdio/vault-dataview/.obsidian/workspace.json
+test/wdio/vault-dataview/.obsidian/workspace-mobile.json

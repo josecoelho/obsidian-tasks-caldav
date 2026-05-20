@@ -45,7 +45,7 @@ export class CalDAVAdapter {
         ...parsed,
         uid,
         parentUid,
-        completedDate: parsed.completedDate ? parsed.completedDate.split('T')[0] : null,
+        completedDate: parsed.completedDate ? this.toLocalDate(parsed.completedDate) : null,
       });
     }
 
@@ -62,8 +62,19 @@ export class CalDAVAdapter {
       ...parsed,
       uid,
       parentUid,
-      completedDate: parsed.completedDate ? parsed.completedDate.split('T')[0] : null,
+      completedDate: parsed.completedDate ? this.toLocalDate(parsed.completedDate) : null,
     };
+  }
+
+  /**
+   * COMPLETED is stored as a UTC datetime, but Obsidian completion is a
+   * date-only value in the user's local zone. Convert the instant to the
+   * user's local calendar date so a task completed just after local midnight
+   * is not recorded as the previous day. See issue #43.
+   */
+  private toLocalDate(isoDateTime: string): string {
+    const d = new Date(isoDateTime);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
   /**

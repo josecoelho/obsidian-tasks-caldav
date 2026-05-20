@@ -43,9 +43,7 @@ function createMockTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
         priority: '3',
         tags: [],
         taskLocation: {
-            _tasksFile: {
-                _path: 'test.md'
-            },
+            path: 'test.md',
             _lineNumber: 1
         },
         originalMarkdown: '- [ ] Test task',
@@ -418,7 +416,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Target task to update',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 6 // Intentionally wrong line number (simulating stale cache)
                 }
             });
@@ -452,7 +450,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Target task',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 10 // Stale line number - file has changed
                 }
             });
@@ -479,7 +477,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with spaces',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -502,7 +500,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task that does not exist',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -518,7 +516,7 @@ More text`;
         it('should throw error if file not found', async () => {
             const task = createMockTask({
                 taskLocation: {
-                    _tasksFile: { _path: 'nonexistent.md' },
+                    path: 'nonexistent.md',
                     _lineNumber: 1
                 }
             });
@@ -539,7 +537,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -566,7 +564,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task with notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -590,7 +588,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task without notes',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -616,7 +614,7 @@ More text`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 1
                 }
             });
@@ -646,7 +644,7 @@ More content`;
             const task = createMockTask({
                 originalMarkdown: '- [ ] Task without ID #sync',
                 taskLocation: {
-                    _tasksFile: { _path: 'test.md' },
+                    path: 'test.md',
                     _lineNumber: 5 // Wrong line - file has changed
                 }
             });
@@ -692,7 +690,7 @@ More content`;
         it('preserves indentation when updating a child task', async () => {
             const childTask = createMockTask({
                 originalMarkdown: '- [ ] Child 🆔 c1',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 2 },
+                taskLocation: { path: 'test.md', _lineNumber: 2 },
             });
 
             await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
@@ -706,7 +704,7 @@ More content`;
         it('does not consume child task lines when updating a parent', async () => {
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
@@ -723,7 +721,7 @@ More content`;
 
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
@@ -745,7 +743,7 @@ More content`;
 
             const childTask = createMockTask({
                 originalMarkdown: '- [ ] Child 🆔 c1',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'test.md', _lineNumber: 1 },
             });
 
             await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
@@ -767,7 +765,7 @@ More content`;
 
             const childTask = createMockTask({
                 originalMarkdown: '- [ ] Child 🆔 c1',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'test.md', _lineNumber: 1 },
             });
 
             // Recurrence toggle produces 2 lines: completed + new occurrence
@@ -839,9 +837,9 @@ More content`;
 
     describe('filterByTag inheritance', () => {
         const tagged = (over: Partial<ObsidianTask>) =>
-            ({ tags: ['#sync'], id: '', originalMarkdown: '', taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+            ({ tags: ['#sync'], id: '', originalMarkdown: '', taskLocation: { path: 'a.md', _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
         const plain = (over: Partial<ObsidianTask>) =>
-            ({ tags: [], id: '', originalMarkdown: '', taskLocation: { _tasksFile: { _path: 'a.md' }, _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+            ({ tags: [], id: '', originalMarkdown: '', taskLocation: { path: 'a.md', _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
 
         it('keeps an untagged child when an ancestor carries the sync tag', () => {
             const parent = tagged({ id: 'p1' });
@@ -950,7 +948,7 @@ More content`;
 
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
@@ -967,7 +965,7 @@ More content`;
 
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await wrapper.insertSubtask(parentTask, '- [ ] New child 🆔 n1');
@@ -987,7 +985,7 @@ More content`;
 
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
@@ -1005,7 +1003,7 @@ More content`;
 
             const parentTask = createMockTask({
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'test.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
             });
 
             await expect(wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1')).rejects.toThrow();
@@ -1079,7 +1077,7 @@ More content`;
         it('should return tasks paired with their body text', async () => {
             const task = createMockTask({
                 originalMarkdown: '- [ ] My task',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -1097,7 +1095,7 @@ More content`;
         it('should return empty body when task has no indented lines', async () => {
             const task = createMockTask({
                 originalMarkdown: '- [ ] Simple task',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -1113,7 +1111,7 @@ More content`;
 
         it('should return empty body when file is not found', async () => {
             const task = createMockTask({
-                taskLocation: { _tasksFile: { _path: 'Missing.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Missing.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
             mockApp.vault.getAbstractFileByPath.mockReturnValue(null);
@@ -1127,11 +1125,11 @@ More content`;
         it('should group tasks by file to avoid re-reading', async () => {
             const task1 = createMockTask({
                 originalMarkdown: '- [ ] Task 1',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             const task2 = createMockTask({
                 originalMarkdown: '- [ ] Task 2',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 3 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 3 },
             });
             mockPlugin.getTasks.mockReturnValue([task1, task2]);
 
@@ -1147,7 +1145,7 @@ More content`;
 
         it('should return empty body when file read throws', async () => {
             const task = createMockTask({
-                taskLocation: { _tasksFile: { _path: 'Error.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Error.md', _lineNumber: 1 },
             });
             mockPlugin.getTasks.mockReturnValue([task]);
 
@@ -1159,6 +1157,85 @@ More content`;
 
             expect(result).toHaveLength(1);
             expect(result[0].body).toBe('');
+        });
+
+        it('skips a task with no resolvable path instead of aborting the whole sync', async () => {
+            const goodTask = createMockTask({
+                originalMarkdown: '- [ ] Good task',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            const brokenTask = createMockTask({
+                originalMarkdown: '- [ ] Broken task',
+                taskLocation: {} as ObsidianTask['taskLocation'],
+            });
+            mockPlugin.getTasks.mockReturnValue([goodTask, brokenTask]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Good task\n    - Body\n');
+            const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].task).toBe(goodTask);
+            expect(warnSpy).toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+
+        it('resolves body via the public taskLocation.path accessor (issue #73)', async () => {
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Nextcloud task',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            mockPlugin.getTasks.mockReturnValue([task]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue('- [ ] Nextcloud task\n    - Body line\n');
+
+            const result = await wrapper.getAllTasksWithBody();
+
+            expect(result).toHaveLength(1);
+            expect(result[0].body).toBe('Body line');
+            expect(mockApp.vault.getAbstractFileByPath).toHaveBeenCalledWith('Tasks.md');
+        });
+    });
+
+    describe('getConfiguredFormat', () => {
+        function wrapperWith(tasksPlugin: unknown): ObsidianTasksWrapper {
+            const app = { vault: {}, plugins: { plugins: tasksPlugin ? { 'obsidian-tasks-plugin': tasksPlugin } : {} } };
+            return new ObsidianTasksWrapper(app as unknown as App);
+        }
+
+        it("returns 'dataview' when obsidian-tasks is configured for dataview", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ taskFormat: 'dataview' }) });
+            await expect(w.getConfiguredFormat()).resolves.toBe('dataview');
+        });
+
+        it("returns 'emoji' when obsidian-tasks is configured for tasksPluginEmoji", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ taskFormat: 'tasksPluginEmoji' }) });
+            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+        });
+
+        it("returns 'emoji' when taskFormat key is missing", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({}) });
+            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+        });
+
+        it("returns 'emoji' when loadData returns null", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue(null) });
+            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+        });
+
+        it("returns 'emoji' when the obsidian-tasks plugin is absent", async () => {
+            const w = wrapperWith(null);
+            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+        });
+
+        it("returns 'emoji' when loadData throws", async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockRejectedValue(new Error('boom')) });
+            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
         });
     });
 
@@ -1182,17 +1259,17 @@ More content`;
             const parentTask = createMockTask({
                 id: 'p1',
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
             });
             const childTask = createMockTask({
                 id: 'c1',
                 originalMarkdown: '- [ ] Child 🆔 c1',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             const grandchildTask = createMockTask({
                 id: 'g1',
                 originalMarkdown: '- [ ] Grandchild 🆔 g1',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
             });
 
             mockPlugin.getTasks.mockReturnValue([parentTask, childTask, grandchildTask]);
@@ -1218,17 +1295,17 @@ More content`;
             const parentTask = createMockTask({
                 id: 'p1',
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
             });
             const childA = createMockTask({
                 id: 'ca',
                 originalMarkdown: '- [ ] Child A 🆔 ca',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             const childB = createMockTask({
                 id: 'cb',
                 originalMarkdown: '- [ ] Child B 🆔 cb',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
             });
 
             mockPlugin.getTasks.mockReturnValue([parentTask, childA, childB]);
@@ -1256,22 +1333,22 @@ More content`;
             const parentTask = createMockTask({
                 id: 'p1',
                 originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 0 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
             });
             const childA = createMockTask({
                 id: 'ca',
                 originalMarkdown: '- [ ] Child A 🆔 ca',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 1 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
             });
             const grandchild = createMockTask({
                 id: 'g1',
                 originalMarkdown: '- [ ] Grandchild 🆔 g1',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 2 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
             });
             const childB = createMockTask({
                 id: 'cb',
                 originalMarkdown: '- [ ] Child B 🆔 cb',
-                taskLocation: { _tasksFile: { _path: 'Tasks.md' }, _lineNumber: 3 },
+                taskLocation: { path: 'Tasks.md', _lineNumber: 3 },
             });
 
             mockPlugin.getTasks.mockReturnValue([parentTask, childA, grandchild, childB]);

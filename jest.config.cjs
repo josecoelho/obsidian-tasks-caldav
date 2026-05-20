@@ -1,3 +1,9 @@
+// Pin a deterministic timezone for the whole suite. Set here (jest main
+// process, before worker processes are spawned) so workers inherit it at
+// startup and V8 reads it before any Date is constructed. setupFiles runs
+// too late — the worker's timezone is already cached by then.
+process.env.TZ = 'America/New_York';
+
 const shared = {
   preset: 'ts-jest',
   testEnvironment: 'node',

@@ -8,6 +8,7 @@ export default tseslint.config(
 		languageOptions: {
 			globals: {
 				...globals.browser,
+				activeWindow: "readonly",
 			},
 			parserOptions: {
 				projectService: {
@@ -61,8 +62,9 @@ export default tseslint.config(
 		"coverage/",
 		"coverage-e2e/",
 		"coverage-unit/",
-		".worktrees/",
 		".obsidian-cache/",
+		".worktrees/",
+		".claude/",
 		"obsidian-releases/",
 		"docs/",
 		"eslint-plugin/",

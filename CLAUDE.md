@@ -139,7 +139,7 @@ Excluded: `requestDumper.ts`, `obsidianTasksApi.ts`, `src/ui/`
 ### Obsidian smoke tests (wdio)
 Uses [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service) to launch a real Obsidian instance with the real obsidian-tasks plugin and our built plugin against a local Docker Radicale server.
 
-**Scope:** four happy-path scenarios only — Obsidian→CalDAV create, CalDAV→Obsidian create, bidirectional update, completion+delete. Edge cases and error paths stay in the Jest unit/E2E suites.
+**Scope:** four emoji happy-path scenarios (Obsidian→CalDAV create, CalDAV→Obsidian create, bidirectional update, completion+delete) plus one dataview full round-trip. The dataview spec uses a dedicated fixture vault (`test/wdio/vault-dataview/`) whose obsidian-tasks settings are preset to dataview (`obsidian-tasks-plugin/data.json` → `taskFormat: dataview`); our plugin has no task-format setting and automatically follows obsidian-tasks' configured format (via `ObsidianTasksWrapper.getConfiguredFormat()`), so the dataview spec needs no runtime override. Edge cases and error paths stay in the Jest unit/E2E suites.
 
 **Run:** `npm run test:wdio` (requires Docker for Radicale; first run downloads an Obsidian binary into `.obsidian-cache/`).
 
@@ -147,9 +147,43 @@ Uses [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-se
 
 **Coverage caveat:** runs in Electron, so it does NOT contribute to the Jest coverage thresholds. It provides fidelity/regression coverage — it catches `obsidian-tasks` API drift (e.g. changes to the internal `getTasks()` path) that Jest mocks cannot catch. `jest-environment-obsidian` was evaluated and deferred; wdio is the only layer that exercises the real obsidian-tasks Cache path.
 
-**Maintenance:** `test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json` must be kept in sync with the `CalDAVSettings` shape in `src/types.ts` whenever settings fields change.
+**Maintenance:** `test/wdio/vault/.obsidian/plugins/tasks-caldav-sync/data.json` (emoji vault) must be kept in sync with the `CalDAVSettings` shape in `src/types.ts` whenever settings fields change. The dataview vault does not contain our plugin's `data.json`; since our plugin automatically follows obsidian-tasks' configured format, no format override is needed there.
 
 ## Release
-- Artifacts: `main.js`, `manifest.json`, `styles.css`
-- Tag matches `manifest.json` version exactly (no `v` prefix)
-- Update `versions.json` with version → minAppVersion mapping
+
+Releases are built and signed in CI — never from a local machine. The
+released `main.js` must be reproducible by Obsidian's verifier, so the
+binary always comes from `.github/workflows/release.yml`.
+
+`master` is branch-protected (PR required, signed commits, Copilot
+review) with no bypass actors. The release flow works **with** those
+rules — it never pushes to master.
+
+Process — one command:
+1. `npm run release <version>` on master — creates a `release/<version>`
+   branch, bumps `manifest.json`/`package.json`/`versions.json`, runs
+   preflight (lint/typecheck/unit), commits, pushes the branch, opens a
+   PR, and enables auto-merge (squash). Requires the authenticated `gh`
+   CLI. It pushes **nothing** to master and builds nothing locally.
+2. The PR merges to master once required checks/review pass. GitHub
+   signs the squash commit (satisfies `required_signatures`).
+3. `release-tag.yml` (trigger: push to master touching `manifest.json`)
+   reads the new version, and if no release exists for it, creates the
+   GitHub release as a **pre-release**, then calls `release.yml`.
+4. `release.yml` (reusable; also kept on `release: published` for manual
+   UI releases) checks out the tag, verifies tag == `manifest.json`
+   version, builds, generates a build-provenance attestation, uploads
+   `main.js`/`manifest.json`/`styles.css`, then promotes the pre-release
+   to the latest stable release.
+
+Notes:
+- `release-tag.yml` calls `release.yml` via `workflow_call`, not via the
+  `release: published` event — a release created with `GITHUB_TOKEN`
+  does not trigger further workflow runs.
+- Merge the release PR with **squash** (auto-merge uses squash). A
+  rebase merge would replay unsigned local commits onto master and fail
+  `required_signatures`.
+- Tag matches `manifest.json` version exactly (no `v` prefix).
+- It ships as a pre-release until CI finishes, so there is never a
+  public window with missing assets (Obsidian ignores pre-releases).
+- Never upload a locally-built `main.js`.

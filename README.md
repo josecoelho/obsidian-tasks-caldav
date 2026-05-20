@@ -26,11 +26,15 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 
 ## Installation
 
-### From Community Plugins
+### From Community Plugins (recommended)
 
-Not yet available — [waiting for review](https://github.com/obsidianmd/obsidian-releases/pull/10183).
+Available in the [Obsidian community plugin directory](https://community.obsidian.md/plugins/tasks-caldav-sync):
 
-### Using BRAT (recommended)
+1. Open Settings → Community plugins → **Browse**
+2. Search for "Tasks CalDAV Sync"
+3. Click **Install**, then **Enable**
+
+### Using BRAT (for beta releases)
 
 1. Install the [BRAT plugin](https://tfthacker.com/brat-quick-guide)
 2. Open BRAT settings → **Add Beta Plugin**

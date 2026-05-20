@@ -1,6 +1,13 @@
 import { AutoSyncScheduler } from './autoSync';
 
 describe('AutoSyncScheduler', () => {
+	const realTimers = {
+		setInterval: ((handler: () => void, timeout?: number) =>
+			globalThis.setInterval(handler, timeout)) as unknown as typeof setInterval,
+		clearInterval: ((id?: number) =>
+			globalThis.clearInterval(id)) as unknown as typeof clearInterval,
+	};
+
 	beforeEach(() => {
 		jest.useFakeTimers();
 	});
@@ -12,7 +19,7 @@ describe('AutoSyncScheduler', () => {
 	it('sets up interval and calls registerInterval when started with interval > 0', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		scheduler.start(5);
 
@@ -26,7 +33,7 @@ describe('AutoSyncScheduler', () => {
 	it('does not set up interval when started with interval <= 0', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		scheduler.start(0);
 		expect(registerInterval).not.toHaveBeenCalled();
@@ -40,7 +47,7 @@ describe('AutoSyncScheduler', () => {
 	it('clears interval on stop', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		scheduler.start(5);
 		expect(scheduler.isRunning()).toBe(true);
@@ -52,7 +59,7 @@ describe('AutoSyncScheduler', () => {
 	it('stops previous interval before starting new one', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 		const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval');
 
 		scheduler.start(5);
@@ -69,7 +76,7 @@ describe('AutoSyncScheduler', () => {
 	it('returns correct isRunning state', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		expect(scheduler.isRunning()).toBe(false);
 
@@ -83,7 +90,7 @@ describe('AutoSyncScheduler', () => {
 	it('calls syncFn when interval fires', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		scheduler.start(1); // 1 minute
 
@@ -105,7 +112,7 @@ describe('AutoSyncScheduler', () => {
 			.mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
 		const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		scheduler.start(1);
 
@@ -123,10 +130,49 @@ describe('AutoSyncScheduler', () => {
 		consoleErrorSpy.mockRestore();
 	});
 
+	it('uses injected timer functions instead of global setInterval/clearInterval', () => {
+		const syncFn = jest.fn().mockResolvedValue(undefined);
+		const registerInterval = jest.fn();
+		const setIntervalFn = jest.fn().mockReturnValue(42);
+		const clearIntervalFn = jest.fn();
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, {
+			setInterval: setIntervalFn as unknown as typeof setInterval,
+			clearInterval: clearIntervalFn as unknown as typeof clearInterval,
+		});
+
+		scheduler.start(5);
+		expect(setIntervalFn).toHaveBeenCalledTimes(1);
+		expect(registerInterval).toHaveBeenCalledWith(42);
+
+		scheduler.stop();
+		expect(clearIntervalFn).toHaveBeenCalledWith(42);
+	});
+
+	it('defaults to activeWindow timers when none are injected', () => {
+		const setIntervalFn = jest.fn().mockReturnValue(7);
+		const clearIntervalFn = jest.fn();
+		const globalScope = globalThis as unknown as { activeWindow?: unknown };
+		globalScope.activeWindow = { setInterval: setIntervalFn, clearInterval: clearIntervalFn };
+		try {
+			const scheduler = new AutoSyncScheduler(
+				jest.fn().mockResolvedValue(undefined),
+				jest.fn(),
+			);
+
+			scheduler.start(5);
+			expect(setIntervalFn).toHaveBeenCalledTimes(1);
+
+			scheduler.stop();
+			expect(clearIntervalFn).toHaveBeenCalledWith(7);
+		} finally {
+			delete globalScope.activeWindow;
+		}
+	});
+
 	it('stop is a no-op when not running', () => {
 		const syncFn = jest.fn().mockResolvedValue(undefined);
 		const registerInterval = jest.fn();
-		const scheduler = new AutoSyncScheduler(syncFn, registerInterval);
+		const scheduler = new AutoSyncScheduler(syncFn, registerInterval, realTimers);
 
 		// Should not throw
 		scheduler.stop();
