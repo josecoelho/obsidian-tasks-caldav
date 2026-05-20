@@ -52,5 +52,8 @@
 	},
 	"dependencies": {
 		"rrule": "^2.8.1"
+	},
+	"overrides": {
+		"serialize-javascript": "^7.0.5"
 	}
 }
