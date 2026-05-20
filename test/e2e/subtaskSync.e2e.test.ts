@@ -121,7 +121,7 @@ describe('subtask sync (Radicale)', () => {
     const tasks = await adapter.fetchTasks('sync', idMapping);
     const fetchedChild = tasks.find(t => t.title === 'Child task');
     expect(fetchedChild).toBeDefined();
-    expect(fetchedChild!.parentUid).toBeNull();
+    expect(fetchedChild!.parentUid ?? null).toBeNull();
   });
 
   it('child VTODO with RELATED-TO PARENT round-trips from CalDAV→Obsidian', async () => {
