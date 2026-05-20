@@ -125,6 +125,24 @@ Indented bullet points below a task are synced as the VTODO DESCRIPTION field:
 
 These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
+### Subtasks
+
+Indented checkbox tasks under a synced task are synced as subtasks on the CalDAV
+side. Nesting is by markdown indentation (Todoist-style); the parent–child link is
+emitted as standard `RELATED-TO;RELTYPE=PARENT` on the child VTODO, so clients like
+Tasks.org, Nextcloud Tasks, and Apple Reminders render them as nested subtasks.
+Arbitrary depth is supported. Subtasks inherit the sync tag from their parent (no
+per-subtask tag needed) and get a `🆔` auto-assigned on first sync. Re-indenting a
+subtask in Obsidian (moving it under a different parent, or un-indenting to
+top-level) propagates as a `RELATED-TO` update on CalDAV.
+
+Out of scope (future work):
+
+- `⛔ dependsOn` (cross-note subtasks via obsidian-tasks task dependencies).
+- Removing a task from the Obsidian vault when it is deleted on the CalDAV side
+  (see [#99](https://github.com/josecoelho/obsidian-tasks-caldav/issues/99) —
+  pre-existing limitation, applies to all deletes, not just subtasks).
+
 ## Troubleshooting
 
 ### Sync reports success but nothing changes
