@@ -17,6 +17,12 @@ export interface CalDAVSettings {
   deleteBehavior: 'ask' | 'deleteCalDAV' | 'deleteObsidian' | 'keepBoth';
   includeObsidianLink: boolean;
   showAutoSyncNotifications: boolean;
+  /**
+   * Names of migrations that have already been applied to this vault. Used by
+   * {@link runMigrations} to gate each migration to a single successful run,
+   * independent of the migration's own pre-state idempotency checks.
+   */
+  appliedMigrations?: string[];
 }
 
 export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
