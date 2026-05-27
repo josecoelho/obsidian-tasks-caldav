@@ -248,6 +248,55 @@ describe('diff', () => {
     });
   });
 
+  describe('convergent edits', () => {
+    it('should not conflict when both sides edit title to the same value', () => {
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Buy bread' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'Buy bread' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(0);
+      expect(result.toCalDAV).toHaveLength(0);
+      expect(result.conflicts).toHaveLength(0);
+    });
+
+    it('should not conflict when both sides add the same tag', () => {
+      const baseline = makeCommonTask({ uid: 't1', tags: [] });
+      const obsidian = makeCommonTask({ uid: 't1', tags: ['urgent'] });
+      const caldav = makeCommonTask({ uid: 't1', tags: ['urgent'] });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(0);
+      expect(result.toCalDAV).toHaveLength(0);
+      expect(result.conflicts).toHaveLength(0);
+    });
+
+    it('should not conflict when both sides mark the task DONE', () => {
+      const baseline = makeCommonTask({ uid: 't1', status: 'TODO' });
+      const obsidian = makeCommonTask({ uid: 't1', status: 'DONE', completedDate: '2025-01-15' });
+      const caldav = makeCommonTask({ uid: 't1', status: 'DONE', completedDate: '2025-01-15' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.toObsidian).toHaveLength(0);
+      expect(result.toCalDAV).toHaveLength(0);
+      expect(result.conflicts).toHaveLength(0);
+    });
+
+    it('should still conflict when both sides edit but to different values', () => {
+      const baseline = makeCommonTask({ uid: 't1', title: 'Original' });
+      const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian version' });
+      const caldav = makeCommonTask({ uid: 't1', title: 'CalDAV version' });
+
+      const result = diff([obsidian], [caldav], [baseline], 'caldav-wins');
+
+      expect(result.conflicts).toHaveLength(1);
+      expect(result.conflicts[0].uid).toBe('t1');
+    });
+  });
+
   describe('first sync (both sides present, no baseline)', () => {
     it('should use caldav-wins strategy when no baseline exists', () => {
       const obsidian = makeCommonTask({ uid: 't1', title: 'Obsidian' });

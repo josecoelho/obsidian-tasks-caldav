@@ -80,6 +80,11 @@ export function diff(
       const calChanged = !tasksEqual(cal, base);
 
       if (obsChanged && calChanged) {
+        if (tasksEqual(obs, cal)) {
+          // Convergent edit: both sides arrived at the same value, nothing to do.
+          // Baseline catches up on the next successful sync.
+          continue;
+        }
         // Conflict: both sides modified
         if (strategy === 'obsidian-wins') {
           toCalDAV.push({ type: resolveChangeType(obs, base), task: obs, previousVersion: base });
