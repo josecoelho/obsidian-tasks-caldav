@@ -386,7 +386,21 @@ describe('CalDAVAdapter E2E', () => {
       // "local state lost / server still has the task" condition that produced
       // the 412 Precondition Failed in the wild.
       const collidingUID = `e2e-collision-${Date.now()}`;
-      await client.createVTODO(buildVTODO(collidingUID, 'Stale server copy'), collidingUID);
+      const seed = await client.createVTODO(buildVTODO(collidingUID, 'Stale server copy'), collidingUID);
+      expect(seed.alreadyExists).toBe(false);
+
+      // Verify the server actually returns 412 for the second create — this
+      // is what triggers the recovery path. If a server silently overwrote
+      // instead of returning 412, the recovery code wouldn't be exercised.
+      // (The 412 doesn't mutate the resource, so the seeded VTODO survives.)
+      const collideResult = await client.createVTODO(
+        buildVTODO(collidingUID, 'Direct collision probe'),
+        collidingUID,
+      );
+      expect(collideResult.alreadyExists).toBe(true);
+      if (collideResult.alreadyExists) {
+        expect(collideResult.url).toContain(collidingUID);
+      }
 
       const fresh: CommonTask = {
         uid: collidingUID,

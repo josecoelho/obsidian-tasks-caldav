@@ -124,6 +124,50 @@ describe('Nextcloud: ETag handling (issue #64)', () => {
   });
 });
 
+describe('Nextcloud: 412 recovery on colliding create (issue #105)', () => {
+  it('returns alreadyExists for a colliding create and recovers via update', async () => {
+    const client = makeClient();
+    const adapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const collidingUID = `nc-collision-${Date.now()}`;
+    const seed = await client.createVTODO(buildVTODO(collidingUID, 'Stale server copy'), collidingUID);
+    expect(seed.alreadyExists).toBe(false);
+
+    const collideResult = await client.createVTODO(
+      buildVTODO(collidingUID, 'Direct collision probe'),
+      collidingUID,
+    );
+    expect(collideResult.alreadyExists).toBe(true);
+    if (collideResult.alreadyExists) {
+      expect(collideResult.url).toContain(collidingUID);
+    }
+
+    const fresh: CommonTask = {
+      uid: collidingUID,
+      title: 'Fresh local copy',
+      status: 'TODO',
+      dueDate: '2025-09-01',
+      startDate: null,
+      scheduledDate: null,
+      completedDate: null,
+      priority: 'high',
+      tags: ['sync'],
+      recurrenceRule: '',
+      body: '',
+    };
+
+    await expect(
+      adapter.applyChanges([{ type: 'create', task: fresh }], emptyIdMapping),
+    ).resolves.not.toThrow();
+
+    const vtodos = await client.fetchVTODOs();
+    const tasks = adapter.normalize(vtodos, emptyIdMapping);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].title).toBe('Fresh local copy');
+  });
+});
+
 describe('Nextcloud sync: full adapter cycle (issue #64)', () => {
   it('should complete a fetch-diff-apply cycle without 412', async () => {
     const client = makeClient();
