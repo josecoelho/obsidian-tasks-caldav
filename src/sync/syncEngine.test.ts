@@ -121,7 +121,7 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
 
 const mockConnect = jest.fn().mockResolvedValue(undefined);
 const mockFetchVTODOs = jest.fn().mockResolvedValue([]);
-const mockCreateVTODO = jest.fn().mockResolvedValue(undefined);
+const mockCreateVTODO = jest.fn().mockResolvedValue({ alreadyExists: false });
 const mockUpdateVTODO = jest.fn().mockResolvedValue(undefined);
 const mockDeleteVTODOByUID = jest.fn().mockResolvedValue(undefined);
 const mockFetchVTODOByUID = jest.fn().mockResolvedValue(null);
@@ -183,7 +183,7 @@ describe('SyncEngine', () => {
     mockExtractId.mockImplementation((task: ObsidianTask) => task.id || null);
     mockConnect.mockResolvedValue(undefined);
     mockFetchVTODOs.mockResolvedValue([]);
-    mockCreateVTODO.mockResolvedValue(undefined);
+    mockCreateVTODO.mockResolvedValue({ alreadyExists: false });
     mockUpdateVTODO.mockResolvedValue(undefined);
     mockDeleteVTODOByUID.mockResolvedValue(undefined);
     mockFetchVTODOByUID.mockResolvedValue(null);
@@ -1023,7 +1023,7 @@ describe('SyncEngine', () => {
       mockConnect.mockResolvedValue(undefined);
       mockStorageInitialize.mockResolvedValue(undefined);
       mockSave.mockResolvedValue(undefined);
-      mockCreateVTODO.mockResolvedValue(undefined);
+      mockCreateVTODO.mockResolvedValue({ alreadyExists: false });
       mockUpdateVTODO.mockResolvedValue(undefined);
       mockDeleteVTODOByUID.mockResolvedValue(undefined);
       mockCreateTask.mockResolvedValue(undefined);

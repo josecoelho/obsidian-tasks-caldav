@@ -291,7 +291,7 @@ describe('CalDAVAdapter', () => {
 
   describe('applyChanges', () => {
     it('should call create for create changes', async () => {
-      const mockCreateVTODO = jest.fn();
+      const mockCreateVTODO = jest.fn().mockResolvedValue({ alreadyExists: false });
       const mockClient: CalDAVClient = {
         connect: jest.fn(),
         fetchVTODOs: jest.fn(),
@@ -323,6 +323,53 @@ describe('CalDAVAdapter', () => {
 
       expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
       expect((mockCreateVTODO.mock.calls[0] as [string, string])[1]).toBe('new-task');
+    });
+
+    it('falls back to update when create reports the VTODO already exists', async () => {
+      const existingUrl = 'http://example.com/caldav/already-here.ics';
+      const mockCreateVTODO = jest
+        .fn()
+        .mockResolvedValue({ alreadyExists: true, url: existingUrl });
+      const mockUpdateVTODO = jest.fn().mockResolvedValue(undefined);
+      const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: mockCreateVTODO,
+        updateVTODO: mockUpdateVTODO,
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+      const testAdapter = new CalDAVAdapter(mockClient);
+
+      const task = {
+        uid: 'already-here',
+        title: 'Resurrected task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      await testAdapter.applyChanges(
+        [{ type: 'create', task }],
+        emptyIdMapping,
+      );
+
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
+      const [vtodoArg, newData] = mockUpdateVTODO.mock.calls[0] as [
+        { url: string; etag?: string },
+        string,
+      ];
+      expect(vtodoArg.url).toBe(existingUrl);
+      expect(vtodoArg.etag).toBeUndefined();
+      expect(newData).toContain('UID:already-here');
+      expect(newData).toContain('SUMMARY:Resurrected task');
     });
 
     it('should call delete for delete changes', async () => {

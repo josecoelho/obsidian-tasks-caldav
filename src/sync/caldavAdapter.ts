@@ -82,7 +82,13 @@ export class CalDAVAdapter {
       switch (change.type) {
         case 'create': {
           const vtodoData = this.fromCommonTask(change.task, caldavUID);
-          await this.client.createVTODO(vtodoData, caldavUID);
+          const result = await this.client.createVTODO(vtodoData, caldavUID);
+          if (result.alreadyExists) {
+            // Server already has a VTODO at this UID — most likely the same
+            // logical task whose mapping/baseline we lost locally. Overwrite
+            // it so this task re-enters the normal sync flow. See issue #105.
+            await this.client.updateVTODO({ url: result.url, data: '', etag: undefined }, vtodoData);
+          }
           break;
         }
         case 'update': {

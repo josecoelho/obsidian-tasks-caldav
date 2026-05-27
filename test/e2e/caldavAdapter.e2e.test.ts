@@ -376,5 +376,43 @@ describe('CalDAVAdapter E2E', () => {
       const updated = tasks.find(t => t.title === 'Updated existing task');
       expect(updated?.status).toBe('DONE');
     });
+
+    it('recovers when create lands on a UID the server already has (issue #105)', async () => {
+      const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
+      await client.connect();
+
+      // Pre-seed the server with a VTODO at the colliding UID — simulates the
+      // "local state lost / server still has the task" condition that produced
+      // the 412 Precondition Failed in the wild.
+      const collidingUID = `e2e-collision-${Date.now()}`;
+      await client.createVTODO(buildVTODO(collidingUID, 'Stale server copy'), collidingUID);
+
+      const fresh: CommonTask = {
+        uid: collidingUID,
+        title: 'Fresh local copy',
+        status: 'TODO',
+        dueDate: '2025-09-01',
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'high',
+        tags: ['sync'],
+        recurrenceRule: '',
+        body: '',
+      };
+
+      await expect(
+        adapter.applyChanges([{ type: 'create', task: fresh }], emptyIdMapping),
+      ).resolves.not.toThrow();
+
+      const vtodos = await client.fetchVTODOs();
+      const tasks = adapter.normalize(vtodos, emptyIdMapping);
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].uid).toBe(collidingUID);
+      expect(tasks[0].title).toBe('Fresh local copy');
+      expect(tasks[0].dueDate).toBe('2025-09-01');
+      expect(tasks[0].priority).toBe('high');
+    });
   });
 });

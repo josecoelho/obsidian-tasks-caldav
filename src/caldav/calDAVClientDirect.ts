@@ -10,12 +10,21 @@ export interface CalDAVConnectionConfig {
 }
 
 /**
+ * Result of a VTODO create attempt. `alreadyExists` lets the caller fall
+ * back to an update when the server already has a resource at the target
+ * URL (412 Precondition Failed against the `If-None-Match: *` header).
+ */
+export type CreateVTODOResult =
+  | { alreadyExists: false }
+  | { alreadyExists: true; url: string };
+
+/**
  * Interface for CalDAV client operations used by adapters.
  */
 export interface CalDAVClient {
   connect(): Promise<void>;
   fetchVTODOs(): Promise<CalendarObject[]>;
-  createVTODO(vtodoData: string, uid: string): Promise<void>;
+  createVTODO(vtodoData: string, uid: string): Promise<CreateVTODOResult>;
   updateVTODO(vtodo: { data: string; url: string; etag?: string }, newData: string): Promise<void>;
   deleteVTODOByUID(uid: string): Promise<void>;
   fetchVTODOByUID(uid: string): Promise<{ data: string; url: string; etag?: string } | null>;
@@ -332,9 +341,10 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Create a new VTODO
+   * Create a new VTODO. Returns `alreadyExists` on 412 so the caller can
+   * recover by routing the task through the update path — see issue #105.
    */
-  async createVTODO(vtodoData: string, uid: string): Promise<void> {
+  async createVTODO(vtodoData: string, uid: string): Promise<CreateVTODOResult> {
     if (!this.calendarUrl) {
       throw new Error('Not connected to calendar server');
     }
@@ -354,10 +364,15 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw: false
     });
 
+    if (response.status === 412) {
+      return { alreadyExists: true, url };
+    }
+
     if (response.status !== 201 && response.status !== 204) {
       throw new Error(`Create VTODO failed: ${response.status} ${response.text}`);
     }
 
+    return { alreadyExists: false };
   }
 
   /**
