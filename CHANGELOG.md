@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Per-calendar filter is now configured as two independent fields, **Obsidian tag** and **Server category** (#94, #98 — thanks @AlfHou). The previous single **Tag** field is split automatically on first launch; existing setups keep their behavior. Leaving **Server category** empty pulls every task on the server (useful when clients like the iOS Reminders app can't set CATEGORIES). Different values on each side are supported when your Obsidian tag and server category vocabularies differ.
+
+### Bug Fixes
+
+- Convergent edits no longer trigger a conflict — when both sides independently change a task to the same value, the diff treats it as already resolved instead of forcing one side to overwrite the other (#106).
+
+### Infrastructure
+
+- Migrations now record which ones have already run (`appliedMigrations` in settings), so each migration executes at most once per install regardless of its own idempotency checks (#107).
+
 ## 1.0.0
 
 ### Features

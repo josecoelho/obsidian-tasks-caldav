@@ -8,7 +8,7 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 
 ## Features
 
-- **Multi-calendar support** — sync different tags to different calendars and servers (tasks must have the tag on both sides — Obsidian `#tag` and CalDAV `CATEGORIES`)
+- **Multi-calendar support** — sync different tags to different calendars and servers, with independent identifiers per side (Obsidian tag and CalDAV category)
 - **Bidirectional sync** — push tasks to CalDAV servers and pull changes back
 - **Auto-sync** — configurable interval (default: 5 minutes)
 - **Dry-run mode** — preview what will sync before committing changes
@@ -56,10 +56,13 @@ Open Settings → Tasks CalDAV Sync. Add one or more calendars, each with:
 
 | Setting | Description |
 |---------|-------------|
-| **Tag** | Only tasks with this tag are synced — on both sides (Obsidian tags and CalDAV CATEGORIES must match) |
+| **Obsidian tag** | Only Obsidian tasks with this tag are pushed to the server. Leave empty to push every task. |
+| **Server category** | Only server tasks with this `CATEGORIES` value are pulled into Obsidian. Leave empty to pull every task (useful when some clients — such as the iOS Reminders app — can't set categories). |
 | **Calendar name** | Name of the calendar on the server |
 | **Server URL** | CalDAV server endpoint |
 | **Username / Password** | CalDAV credentials |
+
+The two fields are independent. Set them to the same value for a symmetric sync (every synced task has that identifier on both sides), or use different values when your Obsidian tag and server category naming conventions differ. Leaving either side empty disables filtering on that side only.
 
 Global settings:
 
@@ -133,12 +136,12 @@ These notes round-trip to/from CalDAV clients like Thunderbird or Tasks.org.
 
 ### Sync reports success but nothing changes
 
-The **Tag** setting is a hard filter on **both** sides, not just routing:
+The **Obsidian tag** and **Server category** settings are hard filters, not just routing — each side independently decides what gets sent across:
 
-- **Obsidian → CalDAV** — only tasks carrying the Obsidian `#tag` are pushed
-- **CalDAV → Obsidian** — only server VTODOs whose `CATEGORIES` include that tag are pulled
+- **Obsidian → CalDAV** — only tasks carrying the Obsidian tag are pushed (skipped if **Obsidian tag** is empty: every task is pushed).
+- **CalDAV → Obsidian** — only server VTODOs whose `CATEGORIES` include the configured category are pulled (skipped if **Server category** is empty: every task is pulled).
 
-If your server tasks have no matching `CATEGORIES`, sync completes successfully but pulls nothing ("No tasks"). To sync everything regardless of category, leave the **Tag** field empty.
+If your server tasks have no matching `CATEGORIES` (for example, tasks created from the iOS Reminders app, which can't set categories), leave **Server category** empty to pull them anyway.
 
 ## Known limitations
 
