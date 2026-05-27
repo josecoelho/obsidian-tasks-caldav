@@ -18,12 +18,17 @@ type VTODOTaskFields = Omit<CommonTask, 'uid'>;
 export class VTODOMapper {
   /**
    * Convert a CommonTask to VTODO iCalendar string.
+   *
    * @param task The common task
-   * @param uid The CalDAV UID (use for updates, generate new for creates)
-   * @param parentCaldavUid Resolved parent CalDAV UID for subtask hierarchy; emits RELATED-TO;RELTYPE=PARENT when set
+   * @param opts.uid The CalDAV UID (use for updates, generate new for creates)
+   * @param opts.parentCaldavUid Resolved parent CalDAV UID for subtask hierarchy; emits RELATED-TO;RELTYPE=PARENT when set
    * @returns VTODO iCalendar string
    */
-  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string, parentCaldavUid?: string | null): string {
+  taskToVTODO(
+    task: Omit<CommonTask, 'uid'>,
+    opts: { uid: string; parentCaldavUid?: string | null },
+  ): string {
+    const { uid, parentCaldavUid = null } = opts;
     const lines: string[] = [];
 
     lines.push('BEGIN:VCALENDAR');

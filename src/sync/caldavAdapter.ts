@@ -96,7 +96,7 @@ export class CalDAVAdapter {
    */
   fromCommonTask(task: CommonTask, caldavUID: string, parentCaldavUid: string | null): string {
     const tags = injectTagIdentifier(task.tags, this.caldavCategory);
-    return this.mapper.taskToVTODO({ ...task, tags }, caldavUID, parentCaldavUid);
+    return this.mapper.taskToVTODO({ ...task, tags }, { uid: caldavUID, parentCaldavUid });
   }
 
   /**
