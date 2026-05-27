@@ -57,7 +57,7 @@ afterAll(async () => {
 describe('subtask sync (Radicale)', () => {
   it('round-trips RELATED-TO;RELTYPE=PARENT', async () => {
     const client = makeClient();
-    const adapter = new CalDAVAdapter(client);
+    const adapter = new CalDAVAdapter(client, 'sync');
     await client.connect();
 
     const idMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
@@ -80,7 +80,7 @@ describe('subtask sync (Radicale)', () => {
     expect(childVtodo!.data).toContain('RELATED-TO;RELTYPE=PARENT:p1');
 
     // Verify round-trip via fetchTasks
-    const tasks = await adapter.fetchTasks('sync', idMapping);
+    const tasks = await adapter.fetchTasks(idMapping);
     const fetchedChild = tasks.find(t => t.title === 'Child task');
     expect(fetchedChild).toBeDefined();
     expect(fetchedChild!.parentUid).toBe('p1');
@@ -88,7 +88,7 @@ describe('subtask sync (Radicale)', () => {
 
   it('re-parent (un-parent) propagates via update', async () => {
     const client = makeClient();
-    const adapter = new CalDAVAdapter(client);
+    const adapter = new CalDAVAdapter(client, 'sync');
     await client.connect();
 
     const idMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
@@ -118,7 +118,7 @@ describe('subtask sync (Radicale)', () => {
     expect(childVtodo!.data).not.toContain('RELATED-TO');
 
     // Verify fetchTasks returns null parentUid for child
-    const tasks = await adapter.fetchTasks('sync', idMapping);
+    const tasks = await adapter.fetchTasks(idMapping);
     const fetchedChild = tasks.find(t => t.title === 'Child task');
     expect(fetchedChild).toBeDefined();
     expect(fetchedChild!.parentUid ?? null).toBeNull();
@@ -126,7 +126,7 @@ describe('subtask sync (Radicale)', () => {
 
   it('child VTODO with RELATED-TO PARENT round-trips from CalDAV→Obsidian', async () => {
     const client = makeClient();
-    const adapter = new CalDAVAdapter(client);
+    const adapter = new CalDAVAdapter(client, 'sync');
     await client.connect();
 
     const idMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
@@ -165,7 +165,7 @@ describe('subtask sync (Radicale)', () => {
     await client.createVTODO(childVtodo, 'c1');
 
     // Fetch and assert parentUid resolved (raw fallback since idMapping is empty)
-    const tasks = await adapter.fetchTasks('sync', idMapping);
+    const tasks = await adapter.fetchTasks(idMapping);
     const fetchedChild = tasks.find(t => t.title === 'Child task');
     expect(fetchedChild).toBeDefined();
     expect(fetchedChild!.parentUid).toBe('p1');

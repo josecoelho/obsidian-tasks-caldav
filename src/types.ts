@@ -1,5 +1,6 @@
 export interface CalendarMapping {
-  tag: string;
+  obsidianTag: string;
+  caldavCategory: string;
   calendarName: string;
   serverUrl: string;
   username: string;

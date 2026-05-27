@@ -2,6 +2,7 @@ import { App } from 'obsidian';
 import { runMigrations, Migration, __setMigrationsForTesting, __resetMigrationsForTesting } from './migrationRunner';
 import { mappingJsonToIdMapping } from './001-mapping-json-to-id-mapping';
 import { flatStorageToPerCalendar } from './002-flat-storage-to-per-calendar';
+import { tagToObsidianTagAndCaldavCategory } from './003-tag-to-obsidian-tag-and-caldav-category';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
 
 function createMockAdapter() {
@@ -22,7 +23,8 @@ function settingsWithCalendar(calendarName: string): CalDAVSettings {
   return {
     ...DEFAULT_CALDAV_SETTINGS,
     calendars: [{
-      tag: 'sync',
+      obsidianTag: 'sync',
+      caldavCategory: 'sync',
       calendarName,
       serverUrl: 'https://example.com',
       username: 'user',
@@ -326,5 +328,62 @@ describe('002-flat-storage-to-per-calendar', () => {
 
     expect(adapter.write).toHaveBeenCalledTimes(1);
     expect(adapter.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('003-tag-to-obsidian-tag-and-caldav-category', () => {
+  let adapter: ReturnType<typeof createMockAdapter>;
+  let app: App;
+
+  beforeEach(() => {
+    adapter = createMockAdapter();
+    app = createMockApp(adapter);
+  });
+
+  it('splits legacy `tag` into obsidianTag and caldavCategory', async () => {
+    const settings: CalDAVSettings = {
+      ...DEFAULT_CALDAV_SETTINGS,
+      calendars: [{ tag: 'work' } as never],
+    };
+
+    await tagToObsidianTagAndCaldavCategory.run(app, settings);
+
+    const cal = settings.calendars[0] as unknown as Record<string, unknown>;
+    expect(cal.obsidianTag).toBe('work');
+    expect(cal.caldavCategory).toBe('work');
+    expect(cal.tag).toBeUndefined();
+  });
+
+  it('leaves already-migrated calendars untouched', async () => {
+    const settings: CalDAVSettings = {
+      ...DEFAULT_CALDAV_SETTINGS,
+      calendars: [{
+        obsidianTag: 'a',
+        caldavCategory: 'b',
+        calendarName: 'X',
+        serverUrl: 'https://x',
+        username: 'u',
+        password: 'p',
+      }],
+    };
+
+    await tagToObsidianTagAndCaldavCategory.run(app, settings);
+
+    expect(settings.calendars[0].obsidianTag).toBe('a');
+    expect(settings.calendars[0].caldavCategory).toBe('b');
+  });
+
+  it('is idempotent across repeated runs', async () => {
+    const settings: CalDAVSettings = {
+      ...DEFAULT_CALDAV_SETTINGS,
+      calendars: [{ tag: 'foo' } as never],
+    };
+
+    await tagToObsidianTagAndCaldavCategory.run(app, settings);
+    await tagToObsidianTagAndCaldavCategory.run(app, settings);
+
+    const cal = settings.calendars[0] as unknown as Record<string, unknown>;
+    expect(cal.obsidianTag).toBe('foo');
+    expect(cal.caldavCategory).toBe('foo');
   });
 });

@@ -30,7 +30,8 @@ function makeObsidianTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
 
 function makeCalendarMapping(overrides: Partial<CalendarMapping> = {}): CalendarMapping {
   return {
-    tag: '',
+    obsidianTag: '',
+    caldavCategory: '',
     calendarName: 'TestCalendar',
     serverUrl: 'https://caldav.example.com',
     username: 'user',
@@ -702,7 +703,7 @@ describe('SyncEngine', () => {
 
       mockGetAllTasksWithBody.mockResolvedValue(withBody(syncedTask, unsyncedTask));
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }), makeSettings());
       await engine.initialize();
       await engine.sync();
 
@@ -723,7 +724,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync({ dryRun: true });
 
@@ -744,7 +745,7 @@ describe('SyncEngine', () => {
         caldavUidToTaskId: { 'caldav-mapped': 'task-mapped' },
       });
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync({ dryRun: true });
 
@@ -759,7 +760,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync({ dryRun: true });
 
@@ -775,7 +776,7 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: 'sync' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync({ dryRun: true });
 
@@ -791,12 +792,174 @@ describe('SyncEngine', () => {
       mockGetAllTasksWithBody.mockResolvedValue([]);
       mockGetBaseline.mockReturnValue([]);
 
-      const engine = new SyncEngine(new App(), makeCalendarMapping({ tag: '' }), makeSettings());
+      const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: '', caldavCategory: '' }), makeSettings());
       await engine.initialize();
       const result = await engine.sync({ dryRun: true });
 
       expect(result.success).toBe(true);
       expect(result.details.caldavTasks!.length).toBe(2);
+    });
+
+    it('pulls every CalDAV task when caldavCategory is empty (issue #94, iOS Reminders case)', async () => {
+      const vtodoTagged = makeCalObj('caldav-tagged', 'Tagged task', ['CATEGORIES:sync']);
+      const vtodoBare = makeCalObj('caldav-ios', 'iOS task with no CATEGORIES');
+
+      mockFetchVTODOs.mockResolvedValue([vtodoTagged, vtodoBare]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: '' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.details.caldavTasks!.length).toBe(2);
+      expect(result.created.toObsidian).toBe(2);
+    });
+
+    it('still filters Obsidian tasks by obsidianTag when caldavCategory is empty', async () => {
+      const tagged = makeObsidianTask({
+        description: 'Tagged task',
+        id: '20250101-tag',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Tagged task [id::20250101-tag] #sync',
+      });
+      const untagged = makeObsidianTask({
+        description: 'Untagged task',
+        id: '20250101-no',
+        tags: [],
+        originalMarkdown: '- [ ] Untagged task [id::20250101-no]',
+      });
+
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(tagged, untagged));
+      mockGetBaseline.mockReturnValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: '' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync({ dryRun: true });
+
+      expect(result.success).toBe(true);
+      expect(result.created.toCalDAV).toBe(1);
+      expect(result.details.toCalDAV[0].task.title).toBe('Tagged task');
+    });
+
+    it('round-trips with asymmetric identifiers: each side keeps its own, neither leaks into the other', async () => {
+      const obsidianMatch = makeObsidianTask({
+        description: 'Obsidian work task',
+        id: '20250101-w',
+        tags: ['#work'],
+        originalMarkdown: '- [ ] Obsidian work task [id::20250101-w] #work',
+      });
+      const obsidianMiss = makeObsidianTask({
+        description: 'Obsidian personal task',
+        id: '20250101-p',
+        tags: ['#personal'],
+        originalMarkdown: '- [ ] Obsidian personal task [id::20250101-p] #personal',
+      });
+
+      const vtodoMatch = makeCalObj('caldav-pro', 'Server professional task', ['CATEGORIES:professional']);
+      const vtodoMiss = makeCalObj('caldav-other', 'Server other task', ['CATEGORIES:other']);
+
+      mockFetchVTODOs.mockResolvedValue([vtodoMatch, vtodoMiss]);
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsidianMatch, obsidianMiss));
+      mockGetBaseline.mockReturnValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ obsidianTag: 'work', caldavCategory: 'professional' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+
+      // Filter: each side honours its own identifier (the miss tasks are excluded).
+      expect(result.details.caldavTasks!.map(t => t.title)).toEqual(['Server professional task']);
+      expect(result.details.toCalDAV).toHaveLength(1);
+      expect(result.details.toCalDAV[0].task.title).toBe('Obsidian work task');
+
+      // Strip-on-read: identifiers don't leak into CommonTask.tags.
+      expect(result.details.caldavTasks![0].tags).toEqual([]);
+      expect(result.details.toCalDAV[0].task.tags).toEqual([]);
+
+      // Inject-on-write to CalDAV: the outgoing VTODO has CATEGORIES:professional, not 'work'.
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const [vtodoData] = mockCreateVTODO.mock.calls[0] as [string, string];
+      expect(vtodoData).toMatch(/CATEGORIES:[^\r\n]*\bprofessional\b/);
+      expect(vtodoData).not.toMatch(/CATEGORIES:[^\r\n]*\bwork\b/);
+
+      // Inject-on-write to Obsidian: the new markdown carries #work, not #professional.
+      expect(mockCreateTask).toHaveBeenCalledTimes(1);
+      const [obsidianMarkdown] = mockCreateTask.mock.calls[0] as [string, string, string | undefined];
+      expect(obsidianMarkdown).toMatch(/#work\b/);
+      expect(obsidianMarkdown).not.toMatch(/#professional\b/);
+    });
+  });
+
+  describe('first post-upgrade sync (baseline carries the legacy identifier)', () => {
+    it('produces no changes when both sides converge on the stripped tags', async () => {
+      // Pre-upgrade baseline written under the single-`tag` regime — every task
+      // has the identifier in its tags. Post-upgrade reads strip the identifier
+      // on both sides, so the diff should rely on the smarter-diff convergence
+      // path: both sides changed identically (removed the identifier) → no-op.
+      const obsidianTask = makeObsidianTask({
+        description: 'Existing task',
+        id: 'task-1',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Existing task [id::task-1] #sync',
+      });
+      const vtodo = makeCalObj('task-1', 'Existing task', ['CATEGORIES:sync']);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsidianTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([
+        {
+          uid: 'task-1',
+          title: 'Existing task',
+          status: 'TODO',
+          dueDate: null,
+          scheduledDate: null,
+          startDate: null,
+          completedDate: null,
+          priority: 'none',
+          tags: ['sync'],
+          recurrenceRule: '',
+          body: '',
+        },
+      ]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-1': 'task-1' },
+        caldavUidToTaskId: { 'task-1': 'task-1' },
+      });
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(result.details.toObsidian).toHaveLength(0);
+      expect(result.details.toCalDAV).toHaveLength(0);
+      expect(result.created.toObsidian).toBe(0);
+      expect(result.created.toCalDAV).toBe(0);
+      expect(result.updated.toObsidian).toBe(0);
+      expect(result.updated.toCalDAV).toBe(0);
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
     });
   });
 
@@ -1447,7 +1610,7 @@ describe('SyncEngine', () => {
 
       const workEngine = new SyncEngine(
         new App(),
-        makeCalendarMapping({ tag: 'work', calendarName: 'Work' }),
+        makeCalendarMapping({ obsidianTag: 'work', caldavCategory: 'work', calendarName: 'Work' }),
         settings,
       );
       await workEngine.initialize();
@@ -1467,7 +1630,7 @@ describe('SyncEngine', () => {
 
       const personalEngine = new SyncEngine(
         new App(),
-        makeCalendarMapping({ tag: 'personal', calendarName: 'Personal' }),
+        makeCalendarMapping({ obsidianTag: 'personal', caldavCategory: 'personal', calendarName: 'Personal' }),
         settings,
       );
       await personalEngine.initialize();
@@ -1494,7 +1657,7 @@ describe('SyncEngine', () => {
 
       const engine = new SyncEngine(
         new App(),
-        makeCalendarMapping({ tag: 'work', calendarName: 'Work' }),
+        makeCalendarMapping({ obsidianTag: 'work', caldavCategory: 'work', calendarName: 'Work' }),
         makeSettings(),
       );
       await engine.initialize();

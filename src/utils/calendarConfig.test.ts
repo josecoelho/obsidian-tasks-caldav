@@ -2,7 +2,8 @@ import { missingCalendarFields, isCalendarConfigured, describeIncompleteCalendar
 import { CalendarMapping } from '../types';
 
 const full: CalendarMapping = {
-  tag: '#todo',
+  obsidianTag: '#todo',
+  caldavCategory: '#todo',
   calendarName: 'J ToDo',
   serverUrl: 'http://localhost:37358/',
   username: 'username@mail.com',
@@ -16,7 +17,7 @@ describe('calendarConfig', () => {
   });
 
   it('lists every missing field for a blank calendar (issue #72)', () => {
-    const blank: CalendarMapping = { tag: '', calendarName: '', serverUrl: '', username: '', password: '' };
+    const blank: CalendarMapping = { obsidianTag: '', caldavCategory: '', calendarName: '', serverUrl: '', username: '', password: '' };
     expect(missingCalendarFields(blank)).toEqual(['server URL', 'username', 'calendar name']);
     expect(isCalendarConfigured(blank)).toBe(false);
   });
@@ -28,7 +29,7 @@ describe('calendarConfig', () => {
   });
 
   it('does not require tag or password', () => {
-    const noTagNoPass: CalendarMapping = { ...full, tag: '', password: '' };
+    const noTagNoPass: CalendarMapping = { ...full, obsidianTag: '', caldavCategory: '', password: '' };
     expect(isCalendarConfigured(noTagNoPass)).toBe(true);
   });
 
@@ -38,7 +39,7 @@ describe('calendarConfig', () => {
     });
 
     it('falls back to a positional name for a blank calendar (issue #72)', () => {
-      const blank: CalendarMapping = { tag: '', calendarName: '', serverUrl: '', username: '', password: '' };
+      const blank: CalendarMapping = { obsidianTag: '', caldavCategory: '', calendarName: '', serverUrl: '', username: '', password: '' };
       expect(describeIncompleteCalendar(blank, 1)).toBe(
         'Calendar 2 (missing server URL, username, calendar name)',
       );

@@ -132,6 +132,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
 		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
 
+		// Pre-calendars-array installs stored a single flat calendar at the top
+		// level. Lift it into the new array with the legacy `tag` field intact;
+		// migration 003 owns the tag→obsidianTag/caldavCategory split, and
+		// `runMigrations` in onload will persist both changes in one write.
 		const legacy = loaded;
 		if (legacy.serverUrl && !legacy.calendars) {
 			this.settings.calendars = [{
@@ -140,8 +144,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 				serverUrl: (legacy.serverUrl as string) ?? '',
 				username: (legacy.username as string) ?? '',
 				password: (legacy.password as string) ?? '',
-			}];
-			await this.saveData(this.settings);
+			} as unknown as CalDAVSettings['calendars'][number]];
 		}
 	}
 
@@ -223,7 +226,8 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setButtonText('Add calendar')
 				.onClick(async () => {
 					this.plugin.settings.calendars.push({
-						tag: '',
+						obsidianTag: '',
+						caldavCategory: '',
 						calendarName: '',
 						serverUrl: '',
 						username: '',
@@ -323,15 +327,40 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Tag')
-			.setDesc('Only tasks with this tag are synced, both ways — the Obsidian tag when pushing, the matching server category when pulling. Leave empty to sync all tasks.')
+			.setName('Obsidian tag')
+			.setDesc('Only Obsidian tasks with this tag are pushed to the server. Leave empty to push every task.')
 			.addText(text => text
-				.setPlaceholder('Work')
-				.setValue(calendar.tag)
+				.setPlaceholder('Sync')
+				.setValue(calendar.obsidianTag)
 				.onChange(async (value) => {
-					calendar.tag = value;
+					calendar.obsidianTag = value;
 					await this.plugin.saveSettings();
+					updateHint();
 				}));
+
+		new Setting(containerEl)
+			.setName('Server category')
+			.setDesc("Only server tasks with this category are pulled into Obsidian. Leave empty to pull every task (useful when some clients — such as the iOS reminders app — can't set categories).")
+			.addText(text => text
+				.setPlaceholder('Sync')
+				.setValue(calendar.caldavCategory)
+				.onChange(async (value) => {
+					calendar.caldavCategory = value;
+					await this.plugin.saveSettings();
+					updateHint();
+				}));
+
+		let hintEl: HTMLElement | null = null;
+		const updateHint = () => {
+			hintEl?.remove();
+			hintEl = null;
+			if (calendar.obsidianTag || calendar.caldavCategory) return;
+			hintEl = containerEl.createDiv({
+				cls: 'setting-item-description',
+				text: 'No filter set — every task in this calendar will sync both ways.',
+			});
+		};
+		updateHint();
 
 		new Setting(containerEl)
 			.setName('Calendar name')
@@ -378,4 +407,5 @@ class CalDAVSettingTab extends PluginSettingTab {
 					});
 			});
 	}
+
 }

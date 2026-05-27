@@ -2,6 +2,7 @@ import { App } from 'obsidian';
 import { CalDAVSettings } from '../types';
 import { mappingJsonToIdMapping } from './001-mapping-json-to-id-mapping';
 import { flatStorageToPerCalendar } from './002-flat-storage-to-per-calendar';
+import { tagToObsidianTagAndCaldavCategory } from './003-tag-to-obsidian-tag-and-caldav-category';
 
 export interface Migration {
   name: string;
@@ -11,6 +12,7 @@ export interface Migration {
 const registeredMigrations: Migration[] = [
   mappingJsonToIdMapping,
   flatStorageToPerCalendar,
+  tagToObsidianTagAndCaldavCategory,
 ];
 
 let activeMigrations: Migration[] = registeredMigrations;

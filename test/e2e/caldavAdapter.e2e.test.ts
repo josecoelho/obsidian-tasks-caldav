@@ -377,4 +377,51 @@ describe('CalDAVAdapter E2E', () => {
       expect(updated?.status).toBe('DONE');
     });
   });
+
+  describe('fetchTasks category filter', () => {
+    it('pulls every server task when the category is empty (iOS Reminders case, issue #94)', async () => {
+      const client = makeClient();
+      const adapter = new CalDAVAdapter(client, '');
+      await client.connect();
+
+      const uidTagged = `e2e-cat-tagged-${Date.now()}`;
+      const uidBare = `e2e-cat-bare-${Date.now()}`;
+      await client.createVTODO(
+        buildVTODO(uidTagged, 'Tagged task', ['CATEGORIES:sync']),
+        uidTagged,
+      );
+      await client.createVTODO(
+        buildVTODO(uidBare, 'iOS task with no CATEGORIES'),
+        uidBare,
+      );
+
+      const tasks = await adapter.fetchTasks(emptyIdMapping);
+
+      const titles = tasks.map((t: CommonTask) => t.title).sort();
+      expect(titles).toEqual(['Tagged task', 'iOS task with no CATEGORIES'].sort());
+    });
+
+    it('pulls only matching tasks when a category is set', async () => {
+      const client = makeClient();
+      const adapter = new CalDAVAdapter(client, 'work');
+      await client.connect();
+
+      const uidWork = `e2e-cat-work-${Date.now()}`;
+      const uidPersonal = `e2e-cat-personal-${Date.now()}`;
+      await client.createVTODO(
+        buildVTODO(uidWork, 'Work task', ['CATEGORIES:work']),
+        uidWork,
+      );
+      await client.createVTODO(
+        buildVTODO(uidPersonal, 'Personal task', ['CATEGORIES:personal']),
+        uidPersonal,
+      );
+
+      const tasks = await adapter.fetchTasks(emptyIdMapping);
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].title).toBe('Work task');
+      expect(tasks[0].tags).toEqual([]);
+    });
+  });
 });
