@@ -49,6 +49,7 @@ export class SyncEngine {
 		this.storage = new SyncStorage(app, calendarStorageId(calendar.serverUrl, calendar.calendarName));
 		this.caldavAdapter = new CalDAVAdapter(
 			new CalDAVClientDirect(calendar),
+			calendar.caldavCategory,
 		);
 		this.obsidianAdapter = new ObsidianAdapter(wrapper, {
 			syncTag: calendar.obsidianTag,
@@ -77,11 +78,8 @@ export class SyncEngine {
 
 			const idMapping = this.storage.getIdMapping();
 
-			const caldavTasks = await this.caldavAdapter.fetchTasks(
-				this.calendar.caldavCategory,
-				idMapping,
-			);
-			const obsidianTasks = await this.obsidianAdapter.fetchTasks(this.calendar.obsidianTag);
+			const caldavTasks = await this.caldavAdapter.fetchTasks(idMapping);
+			const obsidianTasks = await this.obsidianAdapter.fetchTasks();
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());

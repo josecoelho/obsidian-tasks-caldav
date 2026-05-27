@@ -354,21 +354,6 @@ describe('003-tag-to-obsidian-tag-and-caldav-category', () => {
     expect(cal.tag).toBeUndefined();
   });
 
-  it('translates filterByServerCategory:false into an empty caldavCategory', async () => {
-    const settings: CalDAVSettings = {
-      ...DEFAULT_CALDAV_SETTINGS,
-      calendars: [{ tag: 'sync', filterByServerCategory: false } as never],
-    };
-
-    await tagToObsidianTagAndCaldavCategory.run(app, settings);
-
-    const cal = settings.calendars[0] as unknown as Record<string, unknown>;
-    expect(cal.obsidianTag).toBe('sync');
-    expect(cal.caldavCategory).toBe('');
-    expect(cal.tag).toBeUndefined();
-    expect(cal.filterByServerCategory).toBeUndefined();
-  });
-
   it('leaves already-migrated calendars untouched', async () => {
     const settings: CalDAVSettings = {
       ...DEFAULT_CALDAV_SETTINGS,

@@ -6,6 +6,7 @@ import {
 } from "../tasks/obsidianTasksWrapper";
 import { ObsidianMapper } from "../tasks/obsidianMapper";
 import { generateTaskId } from "../utils/taskIdGenerator";
+import { stripTagIdentifier } from "../utils/tagIdentifier";
 
 export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
 
@@ -43,13 +44,22 @@ export class ObsidianAdapter {
 		return this.wrapper.initialize();
 	}
 
-	async fetchTasks(syncTag?: string): Promise<CommonTask[]> {
+	async fetchTasks(): Promise<CommonTask[]> {
 		const allInputs = await this.wrapper.getAllTasksWithBody();
-		const filtered = this.wrapper.filterByTag(allInputs, syncTag);
-		return this.normalize(
+		const filtered = this.wrapper.filterByTag(allInputs, this.settings.syncTag);
+		const normalized = this.normalize(
 			filtered,
 			(task) => this.wrapper.extractId(task),
 		);
+		// Strip both reserved identifiers so the diff layer only sees user-content
+		// tags. obsidian-tasks normally pre-strips its globalFilter (PR #93), but
+		// stripping it here keeps the adapter independent of that behavior.
+		const { globalFilter } = await this.wrapper.getTasksPluginConfig();
+		return normalized.map((t) => {
+			let tags = stripTagIdentifier(t.tags, this.settings.syncTag ?? '');
+			tags = stripTagIdentifier(tags, globalFilter);
+			return { ...t, tags };
+		});
 	}
 
 	/**

@@ -1,4 +1,5 @@
 import { CalDAVAdapter } from './caldavAdapter';
+import { CommonTask } from './types';
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { CalDAVClient } from '../caldav/calDAVClientDirect';
 import { IdMapping } from '../types';
@@ -168,20 +169,79 @@ describe('CalDAVAdapter', () => {
     const untagged = makeCalObj('c-untagged', 'iOS task with no CATEGORIES');
 
     it('keeps only tasks whose CATEGORIES match when a category is set', async () => {
-      const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]));
-      const tasks = await localAdapter.fetchTasks('work', emptyIdMapping);
+      const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]), 'work');
+      const tasks = await localAdapter.fetchTasks(emptyIdMapping);
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Tagged task');
     });
 
     it('returns every task when the category is empty (iOS Reminders case)', async () => {
-      const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]));
-      const tasks = await localAdapter.fetchTasks('', emptyIdMapping);
+      const localAdapter = new CalDAVAdapter(makeClientReturning([tagged, untagged]), '');
+      const tasks = await localAdapter.fetchTasks(emptyIdMapping);
       expect(tasks).toHaveLength(2);
       expect(tasks.map(t => t.title).sort()).toEqual([
         'Tagged task',
         'iOS task with no CATEGORIES',
       ]);
+    });
+
+    it('strips the configured category from CommonTask.tags', async () => {
+      const userTagged = makeCalObj('c-mixed', 'Mixed task', ['CATEGORIES:work,urgent']);
+      const localAdapter = new CalDAVAdapter(makeClientReturning([userTagged]), 'work');
+      const tasks = await localAdapter.fetchTasks(emptyIdMapping);
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].tags).toEqual(['urgent']);
+    });
+  });
+
+  describe('fromCommonTask category injection', () => {
+    function makeNoopClient(): CalDAVClient {
+      return {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: jest.fn(),
+        updateVTODO: jest.fn(),
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+    }
+
+    const baseTask: CommonTask = {
+      uid: 'task-1',
+      title: 'A task',
+      status: 'TODO',
+      dueDate: null,
+      scheduledDate: null,
+      startDate: null,
+      completedDate: null,
+      priority: 'none',
+      tags: ['urgent'],
+      recurrenceRule: '',
+      body: '',
+    };
+
+    it('injects the configured category into outgoing CATEGORIES', () => {
+      const localAdapter = new CalDAVAdapter(makeNoopClient(), 'work');
+      const vtodo = localAdapter.fromCommonTask(baseTask, 'uid-1');
+      expect(vtodo).toMatch(/CATEGORIES:[^\r\n]*\burgent\b/);
+      expect(vtodo).toMatch(/CATEGORIES:[^\r\n]*\bwork\b/);
+    });
+
+    it('does not duplicate when the category is already in tags', () => {
+      const localAdapter = new CalDAVAdapter(makeNoopClient(), 'work');
+      const taskWithCategory: CommonTask = { ...baseTask, tags: ['work', 'urgent'] };
+      const vtodo = localAdapter.fromCommonTask(taskWithCategory, 'uid-1');
+      const match = vtodo.match(/CATEGORIES:([^\r\n]+)/);
+      const categories = match![1].split(',').map((c) => c.trim());
+      const workCount = categories.filter((c) => c.toLowerCase() === 'work').length;
+      expect(workCount).toBe(1);
+    });
+
+    it('omits CATEGORIES line entirely when category and tags are both empty', () => {
+      const localAdapter = new CalDAVAdapter(makeNoopClient(), '');
+      const taskNoTags: CommonTask = { ...baseTask, tags: [] };
+      const vtodo = localAdapter.fromCommonTask(taskNoTags, 'uid-1');
+      expect(vtodo).not.toMatch(/^CATEGORIES:/m);
     });
   });
 

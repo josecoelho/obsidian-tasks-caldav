@@ -852,7 +852,7 @@ describe('SyncEngine', () => {
       expect(result.details.toCalDAV[0].task.title).toBe('Tagged task');
     });
 
-    it('filters each side independently when obsidianTag and caldavCategory differ', async () => {
+    it('round-trips with asymmetric identifiers: each side keeps its own, neither leaks into the other', async () => {
       const obsidianMatch = makeObsidianTask({
         description: 'Obsidian work task',
         id: '20250101-w',
@@ -879,12 +879,87 @@ describe('SyncEngine', () => {
         makeSettings(),
       );
       await engine.initialize();
-      const result = await engine.sync({ dryRun: true });
+      const result = await engine.sync();
 
       expect(result.success).toBe(true);
+
+      // Filter: each side honours its own identifier (the miss tasks are excluded).
       expect(result.details.caldavTasks!.map(t => t.title)).toEqual(['Server professional task']);
       expect(result.details.toCalDAV).toHaveLength(1);
       expect(result.details.toCalDAV[0].task.title).toBe('Obsidian work task');
+
+      // Strip-on-read: identifiers don't leak into CommonTask.tags.
+      expect(result.details.caldavTasks![0].tags).toEqual([]);
+      expect(result.details.toCalDAV[0].task.tags).toEqual([]);
+
+      // Inject-on-write to CalDAV: the outgoing VTODO has CATEGORIES:professional, not 'work'.
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const [vtodoData] = mockCreateVTODO.mock.calls[0] as [string, string];
+      expect(vtodoData).toMatch(/CATEGORIES:[^\r\n]*\bprofessional\b/);
+      expect(vtodoData).not.toMatch(/CATEGORIES:[^\r\n]*\bwork\b/);
+
+      // Inject-on-write to Obsidian: the new markdown carries #work, not #professional.
+      expect(mockCreateTask).toHaveBeenCalledTimes(1);
+      const [obsidianMarkdown] = mockCreateTask.mock.calls[0] as [string, string, string | undefined];
+      expect(obsidianMarkdown).toMatch(/#work\b/);
+      expect(obsidianMarkdown).not.toMatch(/#professional\b/);
+    });
+  });
+
+  describe('first post-upgrade sync (baseline carries the legacy identifier)', () => {
+    it('produces no changes when both sides converge on the stripped tags', async () => {
+      // Pre-upgrade baseline written under the single-`tag` regime — every task
+      // has the identifier in its tags. Post-upgrade reads strip the identifier
+      // on both sides, so the diff should rely on the smarter-diff convergence
+      // path: both sides changed identically (removed the identifier) → no-op.
+      const obsidianTask = makeObsidianTask({
+        description: 'Existing task',
+        id: 'task-1',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Existing task [id::task-1] #sync',
+      });
+      const vtodo = makeCalObj('task-1', 'Existing task', ['CATEGORIES:sync']);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsidianTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([
+        {
+          uid: 'task-1',
+          title: 'Existing task',
+          status: 'TODO',
+          dueDate: null,
+          scheduledDate: null,
+          startDate: null,
+          completedDate: null,
+          priority: 'none',
+          tags: ['sync'],
+          recurrenceRule: '',
+          body: '',
+        },
+      ]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-1': 'task-1' },
+        caldavUidToTaskId: { 'task-1': 'task-1' },
+      });
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ obsidianTag: 'sync', caldavCategory: 'sync' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(result.details.toObsidian).toHaveLength(0);
+      expect(result.details.toCalDAV).toHaveLength(0);
+      expect(result.created.toObsidian).toBe(0);
+      expect(result.created.toCalDAV).toBe(0);
+      expect(result.updated.toObsidian).toBe(0);
+      expect(result.updated.toCalDAV).toBe(0);
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateTaskInVault).not.toHaveBeenCalled();
     });
   });
 

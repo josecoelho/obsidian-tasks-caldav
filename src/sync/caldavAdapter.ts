@@ -2,25 +2,37 @@ import { CommonTask, SyncChange } from './types';
 import { VTODOMapper, CalendarObject } from '../caldav/vtodoMapper';
 import { CalDAVClient } from '../caldav/calDAVClientDirect';
 import { IdMapping } from '../types';
+import {
+  injectTagIdentifier,
+  normalizeTagIdentifier,
+  stripTagIdentifier,
+} from '../utils/tagIdentifier';
 
 export class CalDAVAdapter {
   private mapper: VTODOMapper;
   private client: CalDAVClient;
+  private caldavCategory: string;
 
-  constructor(client: CalDAVClient, mapper?: VTODOMapper) {
+  constructor(client: CalDAVClient, caldavCategory: string = '', mapper?: VTODOMapper) {
     this.client = client;
+    this.caldavCategory = caldavCategory;
     this.mapper = mapper ?? new VTODOMapper();
   }
 
   /**
-   * Full pipeline: connect → fetch → normalize → filter.
-   * SyncEngine calls this and gets back CommonTask[].
+   * Full pipeline: connect → fetch → normalize → filter → strip identifier.
+   * Returns CommonTasks with the configured caldavCategory removed from
+   * `tags`, so the diff layer sees only user-content tags.
    */
-  async fetchTasks(syncTag: string | undefined, idMapping: IdMapping): Promise<CommonTask[]> {
+  async fetchTasks(idMapping: IdMapping): Promise<CommonTask[]> {
     await this.client.connect();
     const vtodos = await this.client.fetchVTODOs();
     const allTasks = this.normalize(vtodos, idMapping);
-    return this.filterByTag(allTasks, syncTag);
+    const filtered = this.filterByCategory(allTasks);
+    return filtered.map((t) => ({
+      ...t,
+      tags: stripTagIdentifier(t.tags, this.caldavCategory),
+    }));
   }
 
   /**
@@ -66,10 +78,13 @@ export class CalDAVAdapter {
   }
 
   /**
-   * Convert a CommonTask back to a VTODO iCal string.
+   * Convert a CommonTask back to a VTODO iCal string. Injects the configured
+   * caldavCategory into the outgoing CATEGORIES so the task stays identifiable
+   * on the server even if user content tags don't include it.
    */
   fromCommonTask(task: CommonTask, caldavUID: string): string {
-    return this.mapper.taskToVTODO(task, caldavUID);
+    const tags = injectTagIdentifier(task.tags, this.caldavCategory);
+    return this.mapper.taskToVTODO({ ...task, tags }, caldavUID);
   }
 
   /**
@@ -119,14 +134,11 @@ export class CalDAVAdapter {
     }
   }
 
-  /**
-   * Filter tasks by sync tag. Only include tasks whose tags contain the sync tag.
-   */
-  private filterByTag(tasks: CommonTask[], syncTag?: string): CommonTask[] {
-    if (!syncTag || syncTag.trim() === '') return tasks;
-    const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+  private filterByCategory(tasks: CommonTask[]): CommonTask[] {
+    const id = normalizeTagIdentifier(this.caldavCategory);
+    if (!id) return tasks;
     return tasks.filter((task) =>
-      task.tags.some((tag) => tag.toLowerCase() === tagLower)
+      task.tags.some((tag) => normalizeTagIdentifier(tag) === id)
     );
   }
 

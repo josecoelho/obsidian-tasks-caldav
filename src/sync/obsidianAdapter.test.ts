@@ -92,6 +92,48 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('fetchTasks strips reserved identifiers from CommonTask.tags', () => {
+    function makeWrapper(getAllTasks: TaskWithBody[], globalFilter = ''): ObsidianTasksWrapper {
+      return {
+        ...dummyWrapper,
+        getAllTasksWithBody: jest.fn().mockResolvedValue(getAllTasks),
+        filterByTag: jest.fn().mockImplementation((inputs: TaskWithBody[]) => inputs),
+        extractId: jest.fn().mockImplementation((task: ObsidianTask) => task.id || null),
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'emoji', globalFilter }),
+      } as unknown as ObsidianTasksWrapper;
+    }
+
+    it('strips the configured syncTag', async () => {
+      const task = makeTask({ id: 't1', tags: ['#sync', '#urgent'] });
+      const adapter = new ObsidianAdapter(makeWrapper([withBody(task)]), { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
+
+      const tasks = await adapter.fetchTasks();
+
+      expect(tasks[0].tags).toEqual(['urgent']);
+    });
+
+    it('also strips obsidian-tasks globalFilter even when present in task.tags', async () => {
+      // Defends against obsidian-tasks behavior changes; obsidian-tasks
+      // normally pre-strips its globalFilter, but if it ever stopped, we
+      // must not leak the identifier into outgoing tags.
+      const task = makeTask({ id: 't1', tags: ['#task', '#sync', '#urgent'] });
+      const adapter = new ObsidianAdapter(makeWrapper([withBody(task)], '#task'), { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
+
+      const tasks = await adapter.fetchTasks();
+
+      expect(tasks[0].tags).toEqual(['urgent']);
+    });
+
+    it('preserves user-content tags that happen to overlap with neither identifier', async () => {
+      const task = makeTask({ id: 't1', tags: ['#sync', '#work', '#urgent'] });
+      const adapter = new ObsidianAdapter(makeWrapper([withBody(task)], '#task'), { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
+
+      const tasks = await adapter.fetchTasks();
+
+      expect(tasks[0].tags.sort()).toEqual(['urgent', 'work']);
+    });
+  });
+
   describe('findOriginalTask', () => {
     it('should return the original ObsidianTask after normalize', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);

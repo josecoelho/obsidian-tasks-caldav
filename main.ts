@@ -132,18 +132,19 @@ export default class CalDAVSyncPlugin extends Plugin {
 		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
 		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
 
+		// Pre-calendars-array installs stored a single flat calendar at the top
+		// level. Lift it into the new array with the legacy `tag` field intact;
+		// migration 003 owns the tag→obsidianTag/caldavCategory split, and
+		// `runMigrations` in onload will persist both changes in one write.
 		const legacy = loaded;
 		if (legacy.serverUrl && !legacy.calendars) {
-			const legacyTag = (legacy.syncTag as string) ?? 'sync';
 			this.settings.calendars = [{
-				obsidianTag: legacyTag,
-				caldavCategory: legacyTag,
+				tag: (legacy.syncTag as string) ?? 'sync',
 				calendarName: (legacy.calendarName as string) ?? '',
 				serverUrl: (legacy.serverUrl as string) ?? '',
 				username: (legacy.username as string) ?? '',
 				password: (legacy.password as string) ?? '',
-			}];
-			await this.saveData(this.settings);
+			} as unknown as CalDAVSettings['calendars'][number]];
 		}
 	}
 
@@ -334,6 +335,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					calendar.obsidianTag = value;
 					await this.plugin.saveSettings();
+					updateHint();
 				}));
 
 		new Setting(containerEl)
@@ -345,14 +347,20 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					calendar.caldavCategory = value;
 					await this.plugin.saveSettings();
+					updateHint();
 				}));
 
-		if (!calendar.obsidianTag && !calendar.caldavCategory) {
-			containerEl.createDiv({
+		let hintEl: HTMLElement | null = null;
+		const updateHint = () => {
+			hintEl?.remove();
+			hintEl = null;
+			if (calendar.obsidianTag || calendar.caldavCategory) return;
+			hintEl = containerEl.createDiv({
 				cls: 'setting-item-description',
 				text: 'No filter set — every task in this calendar will sync both ways.',
 			});
-		}
+		};
+		updateHint();
 
 		new Setting(containerEl)
 			.setName('Calendar name')

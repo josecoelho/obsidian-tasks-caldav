@@ -381,7 +381,7 @@ describe('CalDAVAdapter E2E', () => {
   describe('fetchTasks category filter', () => {
     it('pulls every server task when the category is empty (iOS Reminders case, issue #94)', async () => {
       const client = makeClient();
-      const adapter = new CalDAVAdapter(client);
+      const adapter = new CalDAVAdapter(client, '');
       await client.connect();
 
       const uidTagged = `e2e-cat-tagged-${Date.now()}`;
@@ -395,7 +395,7 @@ describe('CalDAVAdapter E2E', () => {
         uidBare,
       );
 
-      const tasks = await adapter.fetchTasks('', emptyIdMapping);
+      const tasks = await adapter.fetchTasks(emptyIdMapping);
 
       const titles = tasks.map((t: CommonTask) => t.title).sort();
       expect(titles).toEqual(['Tagged task', 'iOS task with no CATEGORIES'].sort());
@@ -403,7 +403,7 @@ describe('CalDAVAdapter E2E', () => {
 
     it('pulls only matching tasks when a category is set', async () => {
       const client = makeClient();
-      const adapter = new CalDAVAdapter(client);
+      const adapter = new CalDAVAdapter(client, 'work');
       await client.connect();
 
       const uidWork = `e2e-cat-work-${Date.now()}`;
@@ -417,10 +417,11 @@ describe('CalDAVAdapter E2E', () => {
         uidPersonal,
       );
 
-      const tasks = await adapter.fetchTasks('work', emptyIdMapping);
+      const tasks = await adapter.fetchTasks(emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Work task');
+      expect(tasks[0].tags).toEqual([]);
     });
   });
 });
