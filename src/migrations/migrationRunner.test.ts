@@ -1,5 +1,5 @@
 import { App } from 'obsidian';
-import { runMigrations, Migration } from './migrationRunner';
+import { runMigrations, Migration, __setMigrationsForTesting, __resetMigrationsForTesting } from './migrationRunner';
 import { mappingJsonToIdMapping } from './001-mapping-json-to-id-mapping';
 import { flatStorageToPerCalendar } from './002-flat-storage-to-per-calendar';
 import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from '../types';
@@ -55,7 +55,117 @@ describe('runMigrations', () => {
     adapter.exists.mockResolvedValue(false);
     const app = createMockApp(adapter);
 
-    await expect(runMigrations(app, DEFAULT_CALDAV_SETTINGS)).resolves.toBeUndefined();
+    await expect(runMigrations(app, { ...DEFAULT_CALDAV_SETTINGS })).resolves.toBe(true);
+  });
+});
+
+describe('runMigrations gating via appliedMigrations', () => {
+  afterEach(() => {
+    __resetMigrationsForTesting();
+  });
+
+  function makeMigration(name: string, calls: string[], opts: { throws?: boolean } = {}): Migration {
+    return {
+      name,
+      async run() {
+        await Promise.resolve();
+        if (opts.throws) {
+          throw new Error(`boom-${name}`);
+        }
+        calls.push(name);
+      },
+    };
+  }
+
+  function emptyApp(): App {
+    const adapter = createMockAdapter();
+    adapter.exists.mockResolvedValue(false);
+    return createMockApp(adapter);
+  }
+
+  it('runs every migration and records each name when appliedMigrations is empty', async () => {
+    const calls: string[] = [];
+    __setMigrationsForTesting([
+      makeMigration('m-a', calls),
+      makeMigration('m-b', calls),
+    ]);
+
+    const settings: CalDAVSettings = { ...DEFAULT_CALDAV_SETTINGS };
+
+    const dirty = await runMigrations(emptyApp(), settings);
+
+    expect(calls).toEqual(['m-a', 'm-b']);
+    expect(settings.appliedMigrations).toEqual(['m-a', 'm-b']);
+    expect(dirty).toBe(true);
+  });
+
+  it('treats absent appliedMigrations the same as an empty array', async () => {
+    const calls: string[] = [];
+    __setMigrationsForTesting([makeMigration('m-a', calls)]);
+
+    const settings: CalDAVSettings = { ...DEFAULT_CALDAV_SETTINGS };
+    expect(settings.appliedMigrations).toBeUndefined();
+
+    await runMigrations(emptyApp(), settings);
+
+    expect(calls).toEqual(['m-a']);
+    expect(settings.appliedMigrations).toEqual(['m-a']);
+  });
+
+  it('only runs migrations not already in appliedMigrations', async () => {
+    const calls: string[] = [];
+    __setMigrationsForTesting([
+      makeMigration('m-a', calls),
+      makeMigration('m-b', calls),
+      makeMigration('m-c', calls),
+    ]);
+
+    const settings: CalDAVSettings = {
+      ...DEFAULT_CALDAV_SETTINGS,
+      appliedMigrations: ['m-a', 'm-c'],
+    };
+
+    const dirty = await runMigrations(emptyApp(), settings);
+
+    expect(calls).toEqual(['m-b']);
+    expect(settings.appliedMigrations).toEqual(expect.arrayContaining(['m-a', 'm-b', 'm-c']));
+    expect(settings.appliedMigrations).toHaveLength(3);
+    expect(dirty).toBe(true);
+  });
+
+  it('skips every migration and returns false when appliedMigrations covers them all', async () => {
+    const calls: string[] = [];
+    __setMigrationsForTesting([
+      makeMigration('m-a', calls),
+      makeMigration('m-b', calls),
+    ]);
+
+    const settings: CalDAVSettings = {
+      ...DEFAULT_CALDAV_SETTINGS,
+      appliedMigrations: ['m-a', 'm-b'],
+    };
+
+    const dirty = await runMigrations(emptyApp(), settings);
+
+    expect(calls).toEqual([]);
+    expect(settings.appliedMigrations).toEqual(['m-a', 'm-b']);
+    expect(dirty).toBe(false);
+  });
+
+  it('does not record a failing migration and aborts the chain', async () => {
+    const calls: string[] = [];
+    __setMigrationsForTesting([
+      makeMigration('m-a', calls),
+      makeMigration('m-b', calls, { throws: true }),
+      makeMigration('m-c', calls),
+    ]);
+
+    const settings: CalDAVSettings = { ...DEFAULT_CALDAV_SETTINGS };
+
+    await expect(runMigrations(emptyApp(), settings)).rejects.toThrow('boom-m-b');
+
+    expect(calls).toEqual(['m-a']);
+    expect(settings.appliedMigrations).toEqual(['m-a']);
   });
 });
 

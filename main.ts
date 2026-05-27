@@ -16,7 +16,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		await runMigrations(this.app, this.settings);
+		if (await runMigrations(this.app, this.settings)) {
+			await this.saveData(this.settings);
+		}
 
 		await this.initializeEngines();
 
