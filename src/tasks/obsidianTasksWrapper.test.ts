@@ -906,40 +906,49 @@ More content`;
         });
     });
 
-    describe('getConfiguredFormat', () => {
+    describe('getTasksPluginConfig', () => {
         function wrapperWith(tasksPlugin: unknown): ObsidianTasksWrapper {
             const app = { vault: {}, plugins: { plugins: tasksPlugin ? { 'obsidian-tasks-plugin': tasksPlugin } : {} } };
             return new ObsidianTasksWrapper(app as unknown as App);
         }
 
-        it("returns 'dataview' when obsidian-tasks is configured for dataview", async () => {
-            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ taskFormat: 'dataview' }) });
-            await expect(w.getConfiguredFormat()).resolves.toBe('dataview');
+        const defaults = { format: 'emoji', globalFilter: '' };
+
+        it('reads format and globalFilter from a single loadData call', async () => {
+            const loadData = jest.fn().mockResolvedValue({ taskFormat: 'dataview', globalFilter: '#task' });
+            const w = wrapperWith({ loadData });
+            await expect(w.getTasksPluginConfig()).resolves.toEqual({ format: 'dataview', globalFilter: '#task' });
+            expect(loadData).toHaveBeenCalledTimes(1);
         });
 
-        it("returns 'emoji' when obsidian-tasks is configured for tasksPluginEmoji", async () => {
+        it("maps unrecognised taskFormat values to 'emoji'", async () => {
             const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ taskFormat: 'tasksPluginEmoji' }) });
-            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+            await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
         });
 
-        it("returns 'emoji' when taskFormat key is missing", async () => {
+        it('preserves a globalFilter without # prefix', async () => {
+            const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({ globalFilter: 'todo' }) });
+            await expect(w.getTasksPluginConfig()).resolves.toEqual({ format: 'emoji', globalFilter: 'todo' });
+        });
+
+        it('returns defaults when both keys are missing', async () => {
             const w = wrapperWith({ loadData: jest.fn().mockResolvedValue({}) });
-            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+            await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
         });
 
-        it("returns 'emoji' when loadData returns null", async () => {
+        it('returns defaults when loadData returns null', async () => {
             const w = wrapperWith({ loadData: jest.fn().mockResolvedValue(null) });
-            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+            await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
         });
 
-        it("returns 'emoji' when the obsidian-tasks plugin is absent", async () => {
+        it('returns defaults when the obsidian-tasks plugin is absent', async () => {
             const w = wrapperWith(null);
-            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+            await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
         });
 
-        it("returns 'emoji' when loadData throws", async () => {
+        it('returns defaults when loadData throws', async () => {
             const w = wrapperWith({ loadData: jest.fn().mockRejectedValue(new Error('boom')) });
-            await expect(w.getConfiguredFormat()).resolves.toBe('emoji');
+            await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
         });
     });
 

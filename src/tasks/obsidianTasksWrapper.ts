@@ -447,26 +447,34 @@ export class ObsidianTasksWrapper {
     }
 
     /**
-     * The task format obsidian-tasks itself is configured to write.
-     * Read from its persisted settings (its in-memory settings live in a
-     * module closure and are not reliably exposed). Anything other than
-     * 'dataview' — including a missing plugin or a read error — maps to
-     * 'emoji', which is obsidian-tasks' own default.
+     * Read the obsidian-tasks persisted settings we depend on:
+     *   - `format`: which markdown format to write (its in-memory settings
+     *     live in a module closure and are not reliably exposed, so we read
+     *     `loadData()`). Anything other than 'dataview' maps to 'emoji'.
+     *   - `globalFilter`: when set, obsidian-tasks only parses lines
+     *     containing this tag and strips it from `task.tags`, so we re-add
+     *     it on writeback to keep them recognised. '' when unset.
+     *
+     * Missing plugin, missing method, or any read error returns the safe
+     * defaults (`{ format: 'emoji', globalFilter: '' }`).
      */
-    async getConfiguredFormat(): Promise<'emoji' | 'dataview'> {
+    async getTasksPluginConfig(): Promise<{ format: 'emoji' | 'dataview'; globalFilter: string }> {
+        const defaults = { format: 'emoji' as const, globalFilter: '' };
         const appWithPlugins = this.app as App & {
             plugins: { plugins: Record<string, { loadData?: () => Promise<unknown> }> };
         };
         const tasksPlugin = appWithPlugins.plugins.plugins['obsidian-tasks-plugin'];
         if (!tasksPlugin || typeof tasksPlugin.loadData !== 'function') {
-            return 'emoji';
+            return defaults;
         }
         try {
-            const data = await tasksPlugin.loadData();
-            const fmt = (data as { taskFormat?: unknown } | null)?.taskFormat;
-            return fmt === 'dataview' ? 'dataview' : 'emoji';
+            const data = (await tasksPlugin.loadData()) as { taskFormat?: unknown; globalFilter?: unknown } | null;
+            return {
+                format: data?.taskFormat === 'dataview' ? 'dataview' : 'emoji',
+                globalFilter: typeof data?.globalFilter === 'string' ? data.globalFilter : '',
+            };
         } catch {
-            return 'emoji';
+            return defaults;
         }
     }
 

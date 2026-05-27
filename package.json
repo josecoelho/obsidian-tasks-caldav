@@ -1,6 +1,6 @@
 {
 	"name": "tasks-caldav-sync",
-	"version": "1.2.0",
+	"version": "1.2.2",
 	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"main": "main.js",
 	"type": "module",
@@ -52,5 +52,8 @@
 	},
 	"dependencies": {
 		"rrule": "^2.8.1"
+	},
+	"overrides": {
+		"serialize-javascript": "^7.0.5"
 	}
 }

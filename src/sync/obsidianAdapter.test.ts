@@ -37,7 +37,7 @@ const dummyWrapper = {
   initialize: jest.fn().mockReturnValue(true),
   getTaskId: jest.fn(),
   getToggleCommand: jest.fn().mockReturnValue(null),
-  getConfiguredFormat: jest.fn().mockResolvedValue('emoji'),
+  getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'emoji', globalFilter: '' }),
 } as unknown as ObsidianTasksWrapper;
 
 const defaultSettings: ObsidianSyncSettings = {
@@ -230,7 +230,7 @@ describe('ObsidianAdapter', () => {
       const createTask = jest.fn().mockImplementation((markdown: string) => { written = markdown; return Promise.resolve(); });
       const wrapper = {
         ...dummyWrapper, createTask,
-        getConfiguredFormat: jest.fn().mockResolvedValue('dataview'),
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'dataview', globalFilter: '' }),
       } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
 
@@ -245,7 +245,7 @@ describe('ObsidianAdapter', () => {
       const createTask = jest.fn().mockImplementation((markdown: string) => { written = markdown; return Promise.resolve(); });
       const wrapper = {
         ...dummyWrapper, createTask,
-        getConfiguredFormat: jest.fn().mockResolvedValue('emoji'),
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'emoji', globalFilter: '' }),
       } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
 
@@ -263,7 +263,7 @@ describe('ObsidianAdapter', () => {
         ...dummyWrapper,
         findTaskById: jest.fn().mockReturnValue(existing),
         updateTaskInVault,
-        getConfiguredFormat: jest.fn().mockResolvedValue('dataview'),
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'dataview', globalFilter: '' }),
       } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
 
@@ -282,7 +282,7 @@ describe('ObsidianAdapter', () => {
         ...dummyWrapper,
         extractId: jest.fn().mockReturnValue(null),
         updateTaskInVault,
-        getConfiguredFormat: jest.fn().mockResolvedValue('dataview'),
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format: 'dataview', globalFilter: '' }),
       } as unknown as ObsidianTasksWrapper;
       const adapter = new ObsidianAdapter(wrapper, { syncTag: 'sync', newTasksDestination: 'Inbox.md' });
 
