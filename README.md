@@ -143,6 +143,10 @@ per-subtask tag needed) and get a `🆔` auto-assigned on first sync. Re-indenti
 subtask in Obsidian (moving it under a different parent, or un-indenting to
 top-level) propagates as a `RELATED-TO` update on CalDAV.
 
+See [docs/examples/subtasks.md](docs/examples/subtasks.md) for worked
+before → after-sync examples (basic nesting, re-parenting, body + subtasks,
+completion, and tag inheritance).
+
 Out of scope (future work):
 
 - `⛔ dependsOn` (cross-note subtasks via obsidian-tasks task dependencies).
