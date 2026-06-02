@@ -12,10 +12,19 @@ import { execFileSync } from 'node:child_process';
 //        creates the GitHub release as a pre-release, and calls
 //        release.yml to build, attest, upload, and promote.
 //
+// For stable X.Y.Z versions, release.yml promotes to the latest stable
+// release. For pre-release versions with a SemVer suffix (e.g.
+// 1.3.0-beta.1), release.yml skips that promotion step — the release
+// stays as a pre-release so BRAT beta-channel testers pick it up but
+// stable Obsidian community users do not. This script also skips the
+// versions.json update for pre-releases (that file only gates stable
+// updates via Obsidian's community catalog).
+//
 // It builds and uploads NOTHING locally. Obsidian ignores pre-releases,
 // so there is never a public window with missing assets.
 //
-//   npm run release 1.1.8                  bump -> PR -> auto-merge
+//   npm run release 1.1.8                  stable bump -> PR -> auto-merge
+//   npm run release 1.3.0-beta.1           pre-release (BRAT testers)
 //   npm run release 1.1.8 -- --skip-checks  skip the local preflight
 //
 // Requires the `gh` CLI, authenticated.
@@ -24,10 +33,11 @@ const args = process.argv.slice(2);
 const skipChecks = args.includes('--skip-checks');
 const version = args.find((arg) => !arg.startsWith('-'));
 
-if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
-	console.error('Usage: npm run release <version>   (e.g. 1.1.8 — no "v" prefix)');
+if (!version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
+	console.error('Usage: npm run release <version>   (e.g. 1.1.8, or 1.3.0-beta.1 for a BRAT pre-release — no "v" prefix)');
 	process.exit(1);
 }
+const isPrerelease = version.includes('-');
 
 const branch = `release/${version}`;
 const git = (...gitArgs) => execFileSync('git', gitArgs, { encoding: 'utf8' }).trim();
@@ -76,13 +86,19 @@ const versions = readJson('versions.json');
 
 manifest.version = version;
 pkg.version = version;
-versions[version] = manifest.minAppVersion;
+// versions.json only gates stable updates via Obsidian's community catalog;
+// adding pre-release entries would pollute it.
+if (!isPrerelease) {
+	versions[version] = manifest.minAppVersion;
+}
 
 git('checkout', '-b', branch);
 
 writeJson('manifest.json', manifest);
 writeJson('package.json', pkg);
-writeJson('versions.json', versions);
+if (!isPrerelease) {
+	writeJson('versions.json', versions);
+}
 
 if (!skipChecks) {
 	console.log('Running preflight (lint, typecheck, unit tests)...');
@@ -92,20 +108,30 @@ if (!skipChecks) {
 	run('npm', ['run', 'test:unit']);
 }
 
-git('add', 'manifest.json', 'package.json', 'versions.json');
+const filesToCommit = isPrerelease
+	? ['manifest.json', 'package.json']
+	: ['manifest.json', 'package.json', 'versions.json'];
+git('add', ...filesToCommit);
 git('commit', '-m', `chore: bump version to ${version}`);
 git('push', '-u', 'origin', branch);
+
+const prBody = isPrerelease
+	? `Pre-release version bump to \`${version}\`.\n\n` +
+		'When this merges, `release-tag.yml` creates the GitHub release ' +
+		'(pre-release) and `release.yml` builds, attests, and uploads the ' +
+		'assets. The release stays as a pre-release for BRAT testers; stable ' +
+		'Obsidian community users are unaffected.'
+	: `Version bump to \`${version}\`.\n\n` +
+		'When this merges, `release-tag.yml` creates the GitHub release ' +
+		'(pre-release) and `release.yml` builds, attests, uploads the ' +
+		'assets, and promotes it to the latest stable release.';
 
 const prUrl = execFileSync('gh', [
 	'pr', 'create',
 	'--base', 'master',
 	'--head', branch,
 	'--title', `chore: release ${version}`,
-	'--body',
-	`Version bump to \`${version}\`.\n\n` +
-		'When this merges, `release-tag.yml` creates the GitHub release ' +
-		'(pre-release) and `release.yml` builds, attests, uploads the ' +
-		'assets, and promotes it to the latest stable release.',
+	'--body', prBody,
 ], { encoding: 'utf8' }).trim();
 
 git('checkout', 'master');
