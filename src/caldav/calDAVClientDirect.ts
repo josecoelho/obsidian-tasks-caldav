@@ -206,7 +206,7 @@ export class CalDAVClientDirect implements CalDAVClient {
   /**
    * Parse calendars from PROPFIND XML response (static for testing)
    */
-  static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): CalendarInfo[] {
+  static parseCalendarsFromXML(xmlText: string, contextUrl: string): CalendarInfo[] {
     const calendars: CalendarInfo[] = [];
     const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
@@ -227,7 +227,7 @@ export class CalDAVClientDirect implements CalDAVClient {
 
       // Make absolute URL if relative
       if (!url.startsWith('http')) {
-        const baseUrl = new URL(baseServerUrl);
+        const baseUrl = new URL(contextUrl);
         url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
       }
 
@@ -277,7 +277,7 @@ export class CalDAVClientDirect implements CalDAVClient {
   /**
    * Parse VTODOs from calendar-query XML response (static for testing)
    */
-  static parseVTODOsFromXML(xmlText: string, baseServerUrl: string): CalendarObject[] {
+  static parseVTODOsFromXML(xmlText: string, contextUrl: string): CalendarObject[] {
     const vtodos: CalendarObject[] = [];
     const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
@@ -291,7 +291,7 @@ export class CalDAVClientDirect implements CalDAVClient {
 
       let url = hrefMatch[1];
       if (!url.startsWith('http')) {
-        const baseUrl = new URL(baseServerUrl);
+        const baseUrl = new URL(contextUrl);
         url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
       }
 
@@ -450,7 +450,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       await this.connect();
       return {
         success: true,
-        message: `Successfully connected to calendar '${this.config.calendarName}'`
+        message: `Successfully connected to calendar '${this.config.calendarName || this.config.calendarUrl || 'server'}'`
       };
     } catch (error) {
       return {
