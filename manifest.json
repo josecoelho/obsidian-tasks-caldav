@@ -1,7 +1,7 @@
 {
 	"id": "tasks-caldav-sync",
 	"name": "Tasks CalDAV Sync",
-	"version": "1.3.0",
+	"version": "1.4.0",
 	"minAppVersion": "0.15.0",
 	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"author": "José Coelho",
