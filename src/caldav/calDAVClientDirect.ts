@@ -1,11 +1,27 @@
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { HttpClient, ObsidianHttpClient } from './httpClient';
-import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_VTODOS } from './templates';
+import { REPORT_VTODOS } from './templates';
+import { resolveUrl } from './resolveUrl';
+import { CalDAVDiscoverer } from './calDAVDiscoverer';
 
+/**
+ * How the client reaches a calendar. Two modes:
+ *  - Pinned (primary): `calendarUrl` is set — talk to that collection directly.
+ *  - Legacy discovery: `calendarUrl` is absent — discover calendars under
+ *    `serverUrl` and match `calendarName` by display name.
+ *
+ * `serverUrl` / `calendarName` are used ONLY in the legacy discovery mode; they
+ * are no longer settings fields and persist only for calendars configured before
+ * URL pinning existed. (The "Browse calendars" UI does its own discovery via
+ * {@link CalDAVDiscoverer} and does not go through this client.)
+ */
 export interface CalDAVConnectionConfig {
-  serverUrl: string;
   username: string;
   password: string;
+  /** Pinned mode: the exact calendar collection URL. Preferred. */
+  calendarUrl?: string;
+  /** Legacy discovery mode (used only when `calendarUrl` is absent). */
+  serverUrl: string;
   calendarName: string;
 }
 
@@ -22,7 +38,11 @@ export interface CalDAVClient {
 }
 
 /**
- * Direct CalDAV client implementation.
+ * Direct CalDAV client for a single calendar. After {@link connect} resolves the
+ * calendar URL, it reads and writes VTODOs against that one collection.
+ * Discovering which calendars exist on a server is a separate concern — see
+ * {@link CalDAVDiscoverer}.
+ *
  * Uses an HttpClient abstraction so the transport layer can be swapped
  * (ObsidianHttpClient in production, FetchHttpClient in E2E tests).
  */
@@ -43,24 +63,13 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Connect to CalDAV server and find the calendar
+   * Resolve the calendar URL this client will read from and write to. A pinned
+   * `calendarUrl` is used as-is (no discovery); otherwise we fall back to legacy
+   * discovery, matching the calendar by display name under the server URL.
    */
   async connect(): Promise<void> {
     try {
-      // Step 1: Discover calendar home URL
-      const homeUrl = await this.discoverCalendarHome();
-
-      // Step 2: Find calendars
-      const calendars = await this.findCalendars(homeUrl);
-
-      // Step 3: Find our specific calendar
-      const calendar = calendars.find(c => c.displayName === this.config.calendarName);
-      if (!calendar) {
-        throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
-      }
-
-      this.calendarUrl = calendar.url;
-
+      this.calendarUrl = this.config.calendarUrl ?? await this.resolveCalendarByName();
     } catch (error) {
       console.error('[CalDAV] Connection failed:', error);
       throw error;
@@ -68,184 +77,23 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Discover the calendar home URL using well-known or PROPFIND
+   * Legacy discovery: discover the calendars under `serverUrl` and return the
+   * URL of the one whose display name matches `calendarName`. Only reached when
+   * no `calendarUrl` is pinned.
    */
-  private async discoverCalendarHome(): Promise<string> {
-    // Try well-known CalDAV endpoint first (RFC 6764)
-    const baseUrl = new URL(this.config.serverUrl);
-    const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
-
-    try {
-      const wellKnownResponse = await this.httpClient.request({
-        url: wellKnownUrl,
-        method: 'PROPFIND',
-        headers: {
-          'Authorization': this.authHeader,
-          'Content-Type': 'application/xml; charset=utf-8',
-          'Depth': '0'
-        },
-        body: PROPFIND_PRINCIPAL,
-        throw: false
-      });
-
-      // If well-known works, discover from there
-      if (wellKnownResponse.status === 207) {
-        return await this.discoverFromPrincipal(wellKnownResponse.text, wellKnownUrl);
-      }
-    } catch {
-      // Well-known not supported, fall back to direct PROPFIND
+  private async resolveCalendarByName(): Promise<string> {
+    const discoverer = new CalDAVDiscoverer(
+      this.config.serverUrl,
+      this.config.username,
+      this.config.password,
+      this.httpClient,
+    );
+    const calendars = await discoverer.listCalendars();
+    const calendar = calendars.find(c => c.displayName === this.config.calendarName);
+    if (!calendar) {
+      throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
     }
-
-    // Fall back to direct PROPFIND on server URL
-    const response = await this.httpClient.request({
-      url: this.config.serverUrl,
-      method: 'PROPFIND',
-      headers: {
-        'Authorization': this.authHeader,
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Depth': '0'
-      },
-      body: PROPFIND_PRINCIPAL,
-      throw: false
-    });
-
-    if (response.status !== 207) {
-      throw new Error(`PROPFIND failed: ${response.status} ${response.text.substring(0, 500)}`);
-    }
-
-    return await this.discoverFromPrincipal(response.text, this.config.serverUrl);
-  }
-
-  /**
-   * Discover calendar home from principal URL
-   */
-  private async discoverFromPrincipal(propfindResponse: string, contextUrl: string): Promise<string> {
-    const principalHref = CalDAVClientDirect.parseHrefForProperty(propfindResponse, 'current-user-principal');
-    if (!principalHref) {
-      throw new Error('Could not find current-user-principal in response');
-    }
-
-    let principalUrl = principalHref;
-
-    // Make absolute URL if relative
-    if (!principalUrl.startsWith('http')) {
-      const baseUrl = new URL(contextUrl);
-      principalUrl = `${baseUrl.protocol}//${baseUrl.host}${principalUrl}`;
-    }
-
-    // Now get calendar-home-set from principal
-    const calendarHomeResponse = await this.httpClient.request({
-      url: principalUrl,
-      method: 'PROPFIND',
-      headers: {
-        'Authorization': this.authHeader,
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Depth': '0'
-      },
-      body: PROPFIND_CALENDAR_HOME,
-      throw: false
-    });
-
-    if (calendarHomeResponse.status !== 207) {
-      throw new Error(`Failed to get calendar-home-set: ${calendarHomeResponse.status}`);
-    }
-
-    const homeHref = CalDAVClientDirect.parseHrefForProperty(calendarHomeResponse.text, 'calendar-home-set');
-    if (!homeHref) {
-      throw new Error('Could not find calendar-home-set in principal response');
-    }
-
-    let homeUrl = homeHref;
-
-    // Make absolute URL if relative
-    if (!homeUrl.startsWith('http')) {
-      const baseUrl = new URL(principalUrl);
-      homeUrl = `${baseUrl.protocol}//${baseUrl.host}${homeUrl}`;
-    }
-
-    return homeUrl;
-  }
-
-  /**
-   * Extract the href of a DAV/CalDAV property from a PROPFIND response.
-   *
-   * Tolerates any namespace prefix and inline `xmlns` declarations on both the
-   * property element and its `href` child. SabreDAV-based servers (Baïkal)
-   * declare the CalDAV namespace inline on `calendar-home-set` rather than at
-   * the document root, which a prefix-only matcher misses (issue #71).
-   *
-   * Returns the raw href string, or null if the property is absent.
-   */
-  static parseHrefForProperty(xmlText: string, property: string): string | null {
-    const tag = `(?:\\w+:)?${property}(?:\\s[^>]*)?`;
-    const href = '(?:\\w+:)?href(?:\\s[^>]*)?';
-    const regex = new RegExp(`<${tag}>\\s*<${href}>([^<]+)<\\/(?:\\w+:)?href>`);
-    const match = xmlText.match(regex);
-    return match ? match[1] : null;
-  }
-
-  /**
-   * Parse calendars from PROPFIND XML response (static for testing)
-   */
-  static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): Array<{ url: string; displayName: string; supportsVTODO: boolean }> {
-    const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
-    const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
-    let match;
-
-    while ((match = responseRegex.exec(xmlText)) !== null) {
-      const responseBlock = match[1];
-
-      // Check if it's a calendar (has calendar resourcetype, any namespace prefix)
-      if (!/< ?\w*:?calendar[\s/>]/i.test(responseBlock)) {
-        continue;
-      }
-
-      // Extract href (any namespace prefix or none)
-      const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
-      if (!hrefMatch) continue;
-
-      let url = hrefMatch[1];
-
-      // Make absolute URL if relative
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(baseServerUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
-
-      // Extract display name (handle CDATA, any namespace prefix)
-      const nameMatch = responseBlock.match(/<(?:\w+:)?displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/(?:\w+:)?displayname>/);
-      const displayName = nameMatch ? nameMatch[1].trim() : url;
-
-      // Check if calendar supports VTODO (any namespace prefix, case-insensitive)
-      const supportsVTODO = /< ?\w*:?comp name="VTODO"/i.test(responseBlock);
-
-      calendars.push({ url, displayName, supportsVTODO });
-    }
-
-    return calendars;
-  }
-
-  /**
-   * Find all calendars in the calendar home
-   */
-  private async findCalendars(homeUrl: string): Promise<Array<{ url: string; displayName: string; supportsVTODO: boolean }>> {
-    const response = await this.httpClient.request({
-      url: homeUrl,
-      method: 'PROPFIND',
-      headers: {
-        'Authorization': this.authHeader,
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Depth': '1'
-      },
-      body: PROPFIND_CALENDARS,
-      throw: false
-    });
-
-    if (response.status !== 207) {
-      throw new Error(`PROPFIND calendars failed: ${response.status}`);
-    }
-
-    return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.config.serverUrl);
+    return calendar.url;
   }
 
   /**
@@ -258,7 +106,7 @@ export class CalDAVClientDirect implements CalDAVClient {
   /**
    * Parse VTODOs from calendar-query XML response (static for testing)
    */
-  static parseVTODOsFromXML(xmlText: string, baseServerUrl: string): CalendarObject[] {
+  static parseVTODOsFromXML(xmlText: string, contextUrl: string): CalendarObject[] {
     const vtodos: CalendarObject[] = [];
     const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
@@ -270,11 +118,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
-      let url = hrefMatch[1];
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(baseServerUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
+      const url = resolveUrl(hrefMatch[1], contextUrl);
 
       // Extract etag (any namespace prefix or none)
       // Nextcloud returns ETags with XML-encoded quotes: &quot;abc123&quot;
@@ -320,7 +164,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`REPORT VTODOs failed: ${response.status}`);
     }
 
-    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.config.serverUrl);
+    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.calendarUrl);
   }
 
   /**
@@ -431,7 +275,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       await this.connect();
       return {
         success: true,
-        message: `Successfully connected to calendar '${this.config.calendarName}'`
+        message: `Successfully connected to calendar '${this.config.calendarName || this.config.calendarUrl || 'server'}'`
       };
     } catch (error) {
       return {

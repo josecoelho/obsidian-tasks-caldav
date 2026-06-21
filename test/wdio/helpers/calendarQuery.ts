@@ -18,3 +18,8 @@ export async function fetchVtodos(calendarName: string): Promise<string> {
   }
   return res.text;
 }
+
+/** Number of VTODO objects present in a REPORT multistatus body. */
+export function countVtodos(ical: string): number {
+  return (ical.match(/BEGIN:VTODO/g) ?? []).length;
+}

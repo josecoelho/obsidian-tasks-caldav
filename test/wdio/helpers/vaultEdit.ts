@@ -1,5 +1,13 @@
 import { browser } from '@wdio/globals';
 
+/** Overwrite a vault file with exact content (used to reset state between tests). */
+export async function setFileContent(filePath: string, content: string): Promise<void> {
+  await browser.executeObsidian(async ({ app }, args) => {
+    const f = app.vault.getAbstractFileByPath(args.filePath);
+    await app.vault.modify(f as any, args.content);
+  }, { filePath, content });
+}
+
 /** Append a line to a vault file (newline-separated). */
 export async function appendTaskLine(filePath: string, line: string): Promise<void> {
   await browser.executeObsidian(async ({ app }, args) => {

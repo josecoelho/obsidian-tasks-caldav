@@ -1,6 +1,6 @@
 import { browser } from '@wdio/globals';
 import { createIsolatedCalendar } from '../../helpers/radicaleSetup';
-import { useCalendar, waitForTaskInCache, syncNow } from '../helpers/pluginConfig';
+import { useCalendarUrl, waitForTaskInCache, syncNow } from '../helpers/pluginConfig';
 import { fetchVtodos } from '../helpers/calendarQuery';
 import { buildVtodoIcs, putVtodo } from '../helpers/serverVtodo';
 import { appendTaskLine, replaceInFile } from '../helpers/vaultEdit';
@@ -13,7 +13,7 @@ describe('bidirectional update', function () {
     const cal = await createIsolatedCalendar();
     calendarName = cal.calendarName;
     cleanup = cal.cleanup;
-    await useCalendar(calendarName);
+    await useCalendarUrl(calendarName);
   });
 
   afterEach(async function () { await cleanup?.(); });

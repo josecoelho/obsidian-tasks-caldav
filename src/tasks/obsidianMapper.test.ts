@@ -66,6 +66,19 @@ describe('ObsidianMapper', () => {
       expect(mapper.toCommonTask(task, 'test-001').title).toBe('Buy groceries');
     });
 
+    // Issue #114: nested tags (#work/sample_project) were only partially
+    // stripped from the description, leaving `/sample_project` garbage in the
+    // title that compounded into duplicate tags on every sync.
+    it('should clean nested tags from description', () => {
+      const task = makeTask({
+        description: '#wtd #work/sample_project #work/java Do something',
+        tags: ['#wtd', '#work/sample_project', '#work/java'],
+      });
+      const common = mapper.toCommonTask(task, 'id');
+      expect(common.title).toBe('Do something');
+      expect(common.tags).toEqual(['wtd', 'work/sample_project', 'work/java']);
+    });
+
     it('should clean # prefix from tags', () => {
       const task = makeTask({ tags: ['#sync', '#work', 'plain'] });
       expect(mapper.toCommonTask(task, 'id').tags).toEqual(['sync', 'work', 'plain']);

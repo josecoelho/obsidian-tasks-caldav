@@ -8,7 +8,8 @@ import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
 import { applicableChanges } from "./applicableChanges";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
-import { calendarStorageId } from "../utils/calendarStorageId";
+import { storageIdForCalendar } from "../utils/calendarStorageId";
+import { calendarLabel } from "../utils/calendarLabel";
 
 export interface SyncResult {
 	calendarName: string;
@@ -47,7 +48,7 @@ export class SyncEngine {
 		this.calendar = calendar;
 		this.settings = settings;
 		const wrapper = new ObsidianTasksWrapper(app);
-		this.storage = new SyncStorage(app, calendarStorageId(calendar.serverUrl, calendar.calendarName));
+		this.storage = new SyncStorage(app, storageIdForCalendar(calendar));
 		this.caldavAdapter = new CalDAVAdapter(
 			new CalDAVClientDirect(calendar),
 			calendar.caldavCategory,
@@ -74,7 +75,7 @@ export class SyncEngine {
 		try {
 			const showProgress = !background || this.settings.showAutoSyncNotifications;
 			if (showProgress) {
-				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${calendarLabel(this.calendar)}...`);
 			}
 
 			const idMapping = this.storage.getIdMapping();
@@ -271,7 +272,7 @@ export class SyncEngine {
 	): SyncResult {
 		const counts = this.countChanges(changeset);
 
-		const name = this.calendar.calendarName;
+		const name = calendarLabel(this.calendar);
 		const reconciledSuffix = counts.reconciled > 0 ? ` | Reconciled: ${counts.reconciled}` : "";
 		const message = dryRun
 			? `[${name}] Dry run complete! Would sync:\n` +
@@ -290,7 +291,7 @@ export class SyncEngine {
 		}
 
 		return {
-			calendarName: this.calendar.calendarName,
+			calendarName: calendarLabel(this.calendar),
 			success: true,
 			message,
 			...counts,
@@ -328,11 +329,11 @@ export class SyncEngine {
 
 	private buildErrorResult(error: unknown): SyncResult {
 		const errorMsg = error instanceof Error ? error.message : "Unknown error";
-		const message = `[${this.calendar.calendarName}] Sync failed: ${errorMsg}`;
+		const message = `[${calendarLabel(this.calendar)}] Sync failed: ${errorMsg}`;
 		new Notice(message, 8000);
 		console.error("Sync error:", error);
 		return {
-			calendarName: this.calendar.calendarName,
+			calendarName: calendarLabel(this.calendar),
 			success: false,
 			message,
 			created: { toObsidian: 0, toCalDAV: 0 },

@@ -3,12 +3,20 @@ export type SyncDirection = 'both' | 'pull' | 'push';
 export interface CalendarMapping {
   obsidianTag: string;
   caldavCategory: string;
+  /** Internal: legacy name-match key, storage key, and label. Empty for URL-pinned calendars. */
   calendarName: string;
+  /** Internal: legacy discovery base and storage key. Empty for URL-pinned calendars. */
   serverUrl: string;
   username: string;
   password: string;
   /** Direction of sync for this calendar. Absent ⇒ 'both' (bidirectional). */
   syncDirection?: SyncDirection;
+  /**
+   * Exact CalDAV collection URL. When set, the client talks to this collection
+   * directly and skips discovery + name-matching. When empty, the mapping is a
+   * legacy by-name calendar that discovers and matches by `calendarName`.
+   */
+  calendarUrl?: string;
 }
 
 export interface CalDAVSettings {
