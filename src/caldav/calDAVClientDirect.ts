@@ -2,13 +2,25 @@ import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { HttpClient, ObsidianHttpClient } from './httpClient';
 import { PROPFIND_PRINCIPAL, PROPFIND_CALENDAR_HOME, PROPFIND_CALENDARS, REPORT_VTODOS } from './templates';
 
+/**
+ * How the client reaches a calendar. Two modes:
+ *  - Pinned (primary): `calendarUrl` is set — talk to that collection directly.
+ *  - Legacy discovery: `calendarUrl` is absent — discover calendars under
+ *    `serverUrl` and match `calendarName` by display name.
+ *
+ * `serverUrl` / `calendarName` are used ONLY in the legacy discovery mode (and
+ * by the "Browse calendars" UI, which supplies a server URL directly). They are
+ * no longer settings fields; they persist only for calendars configured before
+ * URL pinning existed.
+ */
 export interface CalDAVConnectionConfig {
-  serverUrl: string;
   username: string;
   password: string;
-  calendarName: string;
-  /** When set, used directly as the calendar collection URL (skips discovery). */
+  /** Pinned mode: the exact calendar collection URL. Preferred. */
   calendarUrl?: string;
+  /** Legacy discovery mode (used only when `calendarUrl` is absent). */
+  serverUrl: string;
+  calendarName: string;
 }
 
 /** A calendar collection discovered on the server. */
@@ -52,25 +64,13 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Connect to the CalDAV server and resolve the calendar URL.
-   *
-   * When `calendarUrl` is configured, it is used directly — no discovery or
-   * name-matching. Otherwise the calendar is discovered and matched by name.
+   * Resolve the calendar URL this client will read from and write to. A pinned
+   * `calendarUrl` is used as-is (no discovery); otherwise we fall back to legacy
+   * discovery, matching the calendar by display name under the server URL.
    */
   async connect(): Promise<void> {
     try {
-      if (this.config.calendarUrl) {
-        this.calendarUrl = this.config.calendarUrl;
-        return;
-      }
-
-      const calendars = await this.listCalendars();
-      const calendar = calendars.find(c => c.displayName === this.config.calendarName);
-      if (!calendar) {
-        throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
-      }
-
-      this.calendarUrl = calendar.url;
+      this.calendarUrl = this.config.calendarUrl ?? await this.resolveCalendarByName();
     } catch (error) {
       console.error('[CalDAV] Connection failed:', error);
       throw error;
@@ -78,8 +78,22 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Discover and return every calendar in the user's calendar home.
-   * Used by the legacy name-match path in `connect()` and by the picker UI.
+   * Legacy discovery: list the calendars under `serverUrl` and return the URL of
+   * the one whose display name matches `calendarName`. Only reached when no
+   * `calendarUrl` is pinned.
+   */
+  private async resolveCalendarByName(): Promise<string> {
+    const calendars = await this.listCalendars();
+    const calendar = calendars.find(c => c.displayName === this.config.calendarName);
+    if (!calendar) {
+      throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
+    }
+    return calendar.url;
+  }
+
+  /**
+   * Discover and return every calendar in the user's calendar home (under
+   * `serverUrl`). Used by `resolveCalendarByName()` and by the Browse-calendars UI.
    */
   async listCalendars(): Promise<CalendarInfo[]> {
     const homeUrl = await this.discoverCalendarHome();
