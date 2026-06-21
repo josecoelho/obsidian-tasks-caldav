@@ -1,6 +1,6 @@
 import { browser } from '@wdio/globals';
 import { createIsolatedCalendar } from '../../helpers/radicaleSetup';
-import { useCalendar, waitForTaskInCache, syncNow } from '../helpers/pluginConfig';
+import { useCalendarUrl, waitForTaskInCache, syncNow } from '../helpers/pluginConfig';
 import { appendTaskLine } from '../helpers/vaultEdit';
 
 /**
@@ -35,7 +35,7 @@ describe('obsidian-tasks global filter', function () {
     const cal = await createIsolatedCalendar();
     cleanup = cal.cleanup;
     await setObsidianTasksGlobalFilter('#task');
-    await useCalendar(cal.calendarName);
+    await useCalendarUrl(cal.calendarName);
   });
 
   afterEach(async function () {

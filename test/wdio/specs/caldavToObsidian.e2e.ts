@@ -1,6 +1,6 @@
 import { browser } from '@wdio/globals';
 import { createIsolatedCalendar } from '../../helpers/radicaleSetup';
-import { useCalendar, syncNow } from '../helpers/pluginConfig';
+import { useCalendarUrl, syncNow } from '../helpers/pluginConfig';
 import { buildVtodoIcs, putVtodo } from '../helpers/serverVtodo';
 
 describe('CalDAV -> Obsidian create', function () {
@@ -11,7 +11,7 @@ describe('CalDAV -> Obsidian create', function () {
     const cal = await createIsolatedCalendar();
     calendarName = cal.calendarName;
     cleanup = cal.cleanup;
-    await useCalendar(calendarName);
+    await useCalendarUrl(calendarName);
   });
 
   afterEach(async function () { await cleanup?.(); });
