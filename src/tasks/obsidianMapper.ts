@@ -177,8 +177,9 @@ export class ObsidianMapper {
 
     // Remove [id::xxx] (backwards compat for tasks indexed before migration)
     cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
-    // Remove hashtags (but not # followed by numbers like #42)
-    cleaned = cleaned.replace(/#[a-zA-Z][\w-]*/g, '');
+    // Remove hashtags, including nested tags like #work/sample_project
+    // (but not # followed by numbers like #42)
+    cleaned = cleaned.replace(/#[a-zA-Z][\w/-]*/g, '');
     // Clean up extra whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
