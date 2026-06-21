@@ -2,10 +2,11 @@ import { App, Notice } from "obsidian";
 import { ObsidianTasksWrapper } from "../tasks/obsidianTasksWrapper";
 import { CalDAVClientDirect } from "../caldav/calDAVClientDirect";
 import { SyncStorage } from "../storage/syncStorage";
-import { CalDAVSettings, CalendarMapping, IdMapping } from "../types";
+import { CalDAVSettings, CalendarMapping, IdMapping, SyncDirection } from "../types";
 import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
+import { applicableChanges } from "./applicableChanges";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
 import { calendarStorageId } from "../utils/calendarStorageId";
 
@@ -83,18 +84,19 @@ export class SyncEngine {
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
+			const applied = applicableChanges(changeset, this.direction());
 
-			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
+			if (dryRun) return this.buildResult(applied, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
-			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(applied.toObsidian);
+			await this.caldavAdapter.applyChanges(applied.toCalDAV, idMapping);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
-			this.updateIdMapping(idMapping, createdMappings, completionRemappings, changeset);
-			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
+			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applied);
+			this.persistState(obsidianTasks, caldavTasks, applied, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
+			return this.buildResult(applied, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}
@@ -119,7 +121,14 @@ export class SyncEngine {
 
 	// --- Private helpers ---
 
+	private direction(): SyncDirection {
+		return this.calendar.syncDirection ?? "both";
+	}
+
 	private conflictStrategy(): ConflictStrategy {
+		const direction = this.direction();
+		if (direction === "pull") return "caldav-wins";
+		if (direction === "push") return "obsidian-wins";
 		return this.settings.autoResolveObsidianWins
 			? "obsidian-wins"
 			: "caldav-wins";
