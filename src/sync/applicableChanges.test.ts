@@ -32,9 +32,9 @@ function makeChangeset(): Changeset {
 }
 
 describe('applicableChanges', () => {
-  it('both: returns the changeset unchanged', () => {
+  it('bidirectional: returns the changeset unchanged', () => {
     const cs = makeChangeset();
-    const result = applicableChanges(cs, 'both');
+    const result = applicableChanges(cs, 'bidirectional');
     expect(result).toBe(cs);
     expect(result.toObsidian).toEqual(cs.toObsidian);
     expect(result.toCalDAV).toEqual(cs.toCalDAV);

@@ -314,6 +314,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 	private renderCalendarMapping(containerEl: HTMLElement, index: number): void {
 		const calendar = this.plugin.settings.calendars[index];
+		const direction = calendar.syncDirection ?? 'bidirectional';
 
 		new Setting(containerEl)
 			.setName(`Calendar ${index + 1}`)
@@ -329,12 +330,12 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Sync direction')
-			.setDesc('Both keeps Obsidian and the server in sync. Pull from server only brings server changes into Obsidian and never writes to the server. Push to server only sends Obsidian changes to the server and never pulls server changes back; it still writes a sync ID into each task it pushes.')
+			.setDesc(this.syncDirectionDesc(direction))
 			.addDropdown(dropdown => dropdown
-				.addOption('both', 'Both')
+				.addOption('bidirectional', 'Bidirectional')
 				.addOption('pull', 'Pull from server only')
 				.addOption('push', 'Push to server only')
-				.setValue(calendar.syncDirection ?? 'both')
+				.setValue(direction)
 				.onChange(async (value) => {
 					calendar.syncDirection = value as SyncDirection;
 					await this.plugin.saveSettings();
@@ -370,7 +371,6 @@ class CalDAVSettingTab extends PluginSettingTab {
 			hintEl?.remove();
 			hintEl = null;
 			if (calendar.obsidianTag || calendar.caldavCategory) return;
-			const direction = calendar.syncDirection ?? 'both';
 			const text = direction === 'pull'
 				? 'No filter set — every server task is pulled into this vault (nothing is written back to the server).'
 				: direction === 'push'
@@ -392,6 +392,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 			.addButton(button => button
 				.setButtonText('Browse calendars')
 				.onClick(() => this.openBrowseCalendars(calendar)));
+		calendarUrlSetting.settingEl.addClass('sync-calendar-url');
 
 		if (!calendar.calendarUrl && calendar.calendarName.trim()) {
 			calendarUrlSetting.setDesc(`Currently matched by name "${calendar.calendarName}" — paste a URL or browse to pin the exact calendar.`);
@@ -421,6 +422,16 @@ class CalDAVSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+	}
+
+	private syncDirectionDesc(direction: SyncDirection): string {
+		if (direction === 'pull') {
+			return 'Server changes are brought into Obsidian. Nothing is ever written to the server.';
+		}
+		if (direction === 'push') {
+			return 'Obsidian changes are sent to the server. Server changes are never pulled back, though a sync ID is still written into each task that is pushed.';
+		}
+		return 'Obsidian and the server are kept in sync, both ways.';
 	}
 
 	private openBrowseCalendars(calendar: CalendarMapping): void {

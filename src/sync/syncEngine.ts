@@ -123,7 +123,7 @@ export class SyncEngine {
 	// --- Private helpers ---
 
 	private direction(): SyncDirection {
-		return this.calendar.syncDirection ?? "both";
+		return this.calendar.syncDirection ?? "bidirectional";
 	}
 
 	private conflictStrategy(): ConflictStrategy {

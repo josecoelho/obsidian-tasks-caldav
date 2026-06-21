@@ -215,3 +215,27 @@
   margin: 0 0 8px;
   font-size: var(--font-ui-medium);
 }
+
+/* Calendar URL field — full-width input with the browse button below it,
+   so a long URL is readable instead of cropped into the narrow control area. */
+
+.sync-calendar-url {
+  display: block;
+}
+
+.sync-calendar-url .setting-item-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  margin-top: var(--size-4-2);
+}
+
+.sync-calendar-url .setting-item-control input[type="text"] {
+  width: 100%;
+}
+
+.sync-calendar-url .setting-item-control button {
+  align-self: flex-start;
+  margin-top: var(--size-4-2);
+}
