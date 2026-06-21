@@ -91,8 +91,7 @@ export class CalDAVClientDirect implements CalDAVClient {
    */
   private async discoverCalendarHome(): Promise<string> {
     // Try well-known CalDAV endpoint first (RFC 6764)
-    const baseUrl = new URL(this.config.serverUrl);
-    const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
+    const wellKnownUrl = resolveUrl('/.well-known/caldav', this.config.serverUrl);
 
     try {
       const wellKnownResponse = await this.httpClient.request({
@@ -144,13 +143,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error('Could not find current-user-principal in response');
     }
 
-    let principalUrl = principalHref;
-
-    // Make absolute URL if relative
-    if (!principalUrl.startsWith('http')) {
-      const baseUrl = new URL(contextUrl);
-      principalUrl = `${baseUrl.protocol}//${baseUrl.host}${principalUrl}`;
-    }
+    const principalUrl = resolveUrl(principalHref, contextUrl);
 
     // Now get calendar-home-set from principal
     const calendarHomeResponse = await this.httpClient.request({
@@ -174,15 +167,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error('Could not find calendar-home-set in principal response');
     }
 
-    let homeUrl = homeHref;
-
-    // Make absolute URL if relative
-    if (!homeUrl.startsWith('http')) {
-      const baseUrl = new URL(principalUrl);
-      homeUrl = `${baseUrl.protocol}//${baseUrl.host}${homeUrl}`;
-    }
-
-    return homeUrl;
+    return resolveUrl(homeHref, principalUrl);
   }
 
   /**
@@ -223,9 +208,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
-      // Resolve the href against the calendar-home URL. Handles absolute,
-      // absolute-path, and relative hrefs.
-      const url = new URL(hrefMatch[1], contextUrl).href;
+      const url = resolveUrl(hrefMatch[1], contextUrl);
 
       // Extract display name (handle CDATA, any namespace prefix)
       const nameMatch = responseBlock.match(/<(?:\w+:)?displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/(?:\w+:)?displayname>/);
@@ -285,9 +268,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
-      // Resolve the href against the collection URL. Handles absolute,
-      // absolute-path, and relative hrefs.
-      const url = new URL(hrefMatch[1], contextUrl).href;
+      const url = resolveUrl(hrefMatch[1], contextUrl);
 
       // Extract etag (any namespace prefix or none)
       // Nextcloud returns ETags with XML-encoded quotes: &quot;abc123&quot;
@@ -460,6 +441,14 @@ export class CalDAVClientDirect implements CalDAVClient {
   getMapper(): VTODOMapper {
     return this.mapper;
   }
+}
+
+/**
+ * Resolve a CalDAV href — absolute, absolute-path, or relative — into an
+ * absolute URL against the given base URL.
+ */
+function resolveUrl(href: string, base: string): string {
+  return new URL(href, base).href;
 }
 
 /**
