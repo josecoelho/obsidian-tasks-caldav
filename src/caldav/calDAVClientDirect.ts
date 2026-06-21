@@ -264,7 +264,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`PROPFIND calendars failed: ${response.status}`);
     }
 
-    return CalDAVClientDirect.parseCalendarsFromXML(response.text, this.config.serverUrl);
+    return CalDAVClientDirect.parseCalendarsFromXML(response.text, homeUrl);
   }
 
   /**
