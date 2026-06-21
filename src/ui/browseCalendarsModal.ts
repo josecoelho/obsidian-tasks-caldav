@@ -1,5 +1,5 @@
 import { App, Modal, Setting } from 'obsidian';
-import { CalDAVClientDirect, CalendarInfo } from '../caldav/calDAVClientDirect';
+import { CalDAVDiscoverer, CalendarInfo } from '../caldav/calDAVDiscoverer';
 import { CalendarMapping } from '../types';
 
 /** Origin of a URL, or '' if it can't be parsed. */
@@ -63,10 +63,10 @@ export class BrowseCalendarsModal extends Modal {
     }
     this.listEl.createEl('p', { text: 'Loading calendars…' });
 
-    const client = new CalDAVClientDirect({ ...this.calendar, serverUrl: this.serverUrl, calendarUrl: undefined });
+    const discoverer = new CalDAVDiscoverer(this.serverUrl, this.calendar.username, this.calendar.password);
     let calendars: CalendarInfo[];
     try {
-      calendars = await client.listCalendars();
+      calendars = await discoverer.listCalendars();
     } catch (error) {
       this.listEl.empty();
       const message = error instanceof Error ? error.message : 'unknown error';

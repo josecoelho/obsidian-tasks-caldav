@@ -1,6 +1,7 @@
 import { App, requestUrl } from 'obsidian';
 import { CalendarMapping } from '../types';
 import { CalDAVClientDirect } from './calDAVClientDirect';
+import { CalDAVDiscoverer } from './calDAVDiscoverer';
 import { VTODOMapper } from './vtodoMapper';
 
 interface CapturedExchange {
@@ -297,7 +298,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 			throw new Error(`PROPFIND calendars failed: ${step3.response.status}`);
 		}
 
-		const calendars = CalDAVClientDirect.parseCalendarsFromXML(step3.response.text, calendar.serverUrl);
+		const calendars = CalDAVDiscoverer.parseCalendarsFromXML(step3.response.text, calendar.serverUrl);
 		addLog(`  Found ${calendars.length} calendars: ${calendars.map(c => c.displayName).join(', ')}`);
 
 		const matchedCalendar = calendars.find(c => c.displayName === calendar.calendarName);
