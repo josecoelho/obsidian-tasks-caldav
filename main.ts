@@ -1,10 +1,11 @@
 import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
+import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
+import { BrowseCalendarsModal } from './src/ui/browseCalendarsModal';
 import { AutoSyncScheduler } from './src/sync/autoSync';
 import { runMigrations } from './src/migrations/migrationRunner';
 
@@ -362,27 +363,24 @@ class CalDAVSettingTab extends PluginSettingTab {
 		};
 		updateHint();
 
-		new Setting(containerEl)
-			.setName('Calendar name')
-			.setDesc('Name of the calendar on the server')
+		const calendarUrlSetting = new Setting(containerEl)
+			.setName('Calendar URL')
 			.addText(text => text
-				.setPlaceholder('Work')
-				.setValue(calendar.calendarName)
+				.setPlaceholder('https://caldav.example.com/dav/calendars/user/personal/')
+				.setValue(calendar.calendarUrl ?? '')
 				.onChange(async (value) => {
-					calendar.calendarName = value;
+					calendar.calendarUrl = value.trim() || undefined;
 					await this.plugin.saveSettings();
-				}));
+				}))
+			.addButton(button => button
+				.setButtonText('Browse calendars')
+				.onClick(() => this.openBrowseCalendars(calendar)));
 
-		new Setting(containerEl)
-			.setName('Server URL')
-			.setDesc('Calendar server URL')
-			.addText(text => text
-				.setPlaceholder('https://caldav.example.com')
-				.setValue(calendar.serverUrl)
-				.onChange(async (value) => {
-					calendar.serverUrl = value;
-					await this.plugin.saveSettings();
-				}));
+		if (!calendar.calendarUrl && calendar.calendarName.trim()) {
+			calendarUrlSetting.setDesc(`Currently matched by name "${calendar.calendarName}" — paste a URL or browse to pin the exact calendar.`);
+		} else {
+			calendarUrlSetting.setDesc("Paste your calendar's URL, or browse to find it.");
+		}
 
 		new Setting(containerEl)
 			.setName('Username')
@@ -406,6 +404,17 @@ class CalDAVSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+	}
+
+	private openBrowseCalendars(calendar: CalendarMapping): void {
+		if (!calendar.username.trim() || !calendar.password.trim()) {
+			new Notice('Enter username and password first.');
+			return;
+		}
+		new BrowseCalendarsModal(this.app, calendar, async () => {
+			await this.plugin.saveSettings();
+			this.display();
+		}).open();
 	}
 
 }
