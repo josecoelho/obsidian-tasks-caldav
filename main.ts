@@ -1,5 +1,5 @@
 import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
+import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
@@ -322,6 +322,20 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setWarning()
 				.onClick(async () => {
 					this.plugin.settings.calendars.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		new Setting(containerEl)
+			.setName('Sync direction')
+			.setDesc('Both keeps Obsidian and the server in sync. Pull from server only brings server changes into Obsidian and never writes to the server. Push to server only sends Obsidian changes to the server and never changes your notes.')
+			.addDropdown(dropdown => dropdown
+				.addOption('both', 'Both')
+				.addOption('pull', 'Pull from server only')
+				.addOption('push', 'Push to server only')
+				.setValue(calendar.syncDirection ?? 'both')
+				.onChange(async (value) => {
+					calendar.syncDirection = value as SyncDirection;
 					await this.plugin.saveSettings();
 					this.display();
 				}));
