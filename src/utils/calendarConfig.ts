@@ -1,7 +1,7 @@
 import { CalendarMapping } from '../types';
 
 /** Calendar fields that must be set before a sync can be attempted, in display order. */
-const REQUIRED_FIELDS: ReadonlyArray<{ key: keyof CalendarMapping; label: string }> = [
+const REQUIRED_FIELDS: ReadonlyArray<{ key: 'serverUrl' | 'username' | 'calendarName'; label: string }> = [
   { key: 'serverUrl', label: 'server URL' },
   { key: 'username', label: 'username' },
   { key: 'calendarName', label: 'calendar name' },
