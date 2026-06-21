@@ -337,7 +337,6 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					calendar.syncDirection = value as SyncDirection;
 					await this.plugin.saveSettings();
-					this.display();
 				}));
 
 		new Setting(containerEl)
