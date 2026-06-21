@@ -11,6 +11,13 @@ export interface CalDAVConnectionConfig {
   calendarUrl?: string;
 }
 
+/** A calendar collection discovered on the server. */
+export interface CalendarInfo {
+  url: string;
+  displayName: string;
+  supportsVTODO: boolean;
+}
+
 /**
  * Interface for CalDAV client operations used by adapters.
  */
@@ -45,28 +52,38 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Connect to CalDAV server and find the calendar
+   * Connect to the CalDAV server and resolve the calendar URL.
+   *
+   * When `calendarUrl` is configured, it is used directly — no discovery or
+   * name-matching. Otherwise the calendar is discovered and matched by name.
    */
   async connect(): Promise<void> {
     try {
-      // Step 1: Discover calendar home URL
-      const homeUrl = await this.discoverCalendarHome();
+      if (this.config.calendarUrl) {
+        this.calendarUrl = this.config.calendarUrl;
+        return;
+      }
 
-      // Step 2: Find calendars
-      const calendars = await this.findCalendars(homeUrl);
-
-      // Step 3: Find our specific calendar
+      const calendars = await this.listCalendars();
       const calendar = calendars.find(c => c.displayName === this.config.calendarName);
       if (!calendar) {
         throw new Error(`Calendar '${this.config.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
       }
 
       this.calendarUrl = calendar.url;
-
     } catch (error) {
       console.error('[CalDAV] Connection failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Discover and return every calendar in the user's calendar home.
+   * Used by the legacy name-match path in `connect()` and by the picker UI.
+   */
+  async listCalendars(): Promise<CalendarInfo[]> {
+    const homeUrl = await this.discoverCalendarHome();
+    return this.findCalendars(homeUrl);
   }
 
   /**
@@ -189,8 +206,8 @@ export class CalDAVClientDirect implements CalDAVClient {
   /**
    * Parse calendars from PROPFIND XML response (static for testing)
    */
-  static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): Array<{ url: string; displayName: string; supportsVTODO: boolean }> {
-    const calendars: Array<{ url: string; displayName: string; supportsVTODO: boolean }> = [];
+  static parseCalendarsFromXML(xmlText: string, baseServerUrl: string): CalendarInfo[] {
+    const calendars: CalendarInfo[] = [];
     const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
     let match;
 
@@ -230,7 +247,7 @@ export class CalDAVClientDirect implements CalDAVClient {
   /**
    * Find all calendars in the calendar home
    */
-  private async findCalendars(homeUrl: string): Promise<Array<{ url: string; displayName: string; supportsVTODO: boolean }>> {
+  private async findCalendars(homeUrl: string): Promise<CalendarInfo[]> {
     const response = await this.httpClient.request({
       url: homeUrl,
       method: 'PROPFIND',
@@ -322,7 +339,7 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw new Error(`REPORT VTODOs failed: ${response.status}`);
     }
 
-    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.config.serverUrl);
+    return CalDAVClientDirect.parseVTODOsFromXML(response.text, this.calendarUrl);
   }
 
   /**

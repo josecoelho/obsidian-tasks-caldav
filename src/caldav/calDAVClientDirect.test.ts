@@ -7,6 +7,48 @@ const mockConfig: CalDAVConnectionConfig = {
     calendarName: 'Tasks',
 };
 
+const PRINCIPAL_XML = `<d:multistatus xmlns:d="DAV:">
+  <d:response><d:href>/.well-known/caldav</d:href>
+    <d:propstat><d:prop>
+      <d:current-user-principal><d:href>/principals/user/</d:href></d:current-user-principal>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+const HOME_XML = `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response><d:href>/principals/user/</d:href>
+    <d:propstat><d:prop>
+      <c:calendar-home-set><d:href>/calendars/user/</d:href></c:calendar-home-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+const CALENDARS_XML = `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/personal-todos/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Personal</d:displayname>
+      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/calendars/user/personal-events/</d:href>
+    <d:propstat><d:prop>
+      <d:displayname>Personal</d:displayname>
+      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+
+function mockDiscovery(request: jest.Mock): void {
+  request
+    .mockResolvedValueOnce({ status: 207, text: PRINCIPAL_XML, headers: {} })
+    .mockResolvedValueOnce({ status: 207, text: HOME_XML, headers: {} })
+    .mockResolvedValueOnce({ status: 207, text: CALENDARS_XML, headers: {} });
+}
+
 describe('CalDAVClientDirect', () => {
     let client: CalDAVClientDirect;
 
@@ -345,4 +387,67 @@ END:VCALENDAR</c:calendar-data>
             expect(CalDAVClientDirect.parseHrefForProperty(xml, 'calendar-home-set')).toBeNull();
         });
     });
+
+  describe('connect(), listCalendars(), and pinned fetch', () => {
+    it('uses calendarUrl directly and makes no discovery requests when pinned', async () => {
+      const request = jest.fn();
+      const pinned = new CalDAVClientDirect(
+        { ...mockConfig, calendarUrl: 'https://caldav.example.com/calendars/user/personal-todos/' },
+        { request },
+      );
+
+      await pinned.connect();
+
+      expect(request).not.toHaveBeenCalled();
+      expect(pinned.isConnected()).toBe(true);
+      expect((pinned as unknown as { calendarUrl: string }).calendarUrl)
+        .toBe('https://caldav.example.com/calendars/user/personal-todos/');
+    });
+
+    it('listCalendars() discovers and returns every calendar with VTODO support flags', async () => {
+      const request = jest.fn();
+      mockDiscovery(request);
+      const c = new CalDAVClientDirect(mockConfig, { request });
+
+      const calendars = await c.listCalendars();
+
+      expect(calendars).toEqual([
+        { url: 'https://caldav.example.com/calendars/user/personal-todos/', displayName: 'Personal', supportsVTODO: true },
+        { url: 'https://caldav.example.com/calendars/user/personal-events/', displayName: 'Personal', supportsVTODO: false },
+      ]);
+    });
+
+    it('connect() without calendarUrl matches the calendar by name', async () => {
+      const request = jest.fn();
+      mockDiscovery(request);
+      const c = new CalDAVClientDirect({ ...mockConfig, calendarName: 'Personal' }, { request });
+
+      await c.connect();
+
+      expect((c as unknown as { calendarUrl: string }).calendarUrl)
+        .toBe('https://caldav.example.com/calendars/user/personal-todos/');
+    });
+
+    it('fetchVTODOs resolves relative hrefs against the pinned URL (empty serverUrl)', async () => {
+      const REPORT_XML = `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:response>
+    <d:href>/calendars/user/personal-todos/t1.ics</d:href>
+    <d:propstat><d:prop>
+      <c:calendar-data>BEGIN:VTODO\nUID:1\nEND:VTODO</c:calendar-data>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>`;
+      const request = jest.fn().mockResolvedValueOnce({ status: 207, text: REPORT_XML, headers: {} });
+      const c = new CalDAVClientDirect(
+        { ...mockConfig, serverUrl: '', calendarUrl: 'https://caldav.example.com/calendars/user/personal-todos/' },
+        { request },
+      );
+
+      await c.connect();
+      const vtodos = await c.fetchVTODOs();
+
+      expect(vtodos).toHaveLength(1);
+      expect(vtodos[0].url).toBe('https://caldav.example.com/calendars/user/personal-todos/t1.ics');
+    });
+  });
 });
