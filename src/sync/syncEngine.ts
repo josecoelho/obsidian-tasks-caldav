@@ -84,19 +84,19 @@ export class SyncEngine {
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
-			const applied = applicableChanges(changeset, this.direction());
+			const applicable = applicableChanges(changeset, this.direction());
 
-			if (dryRun) return this.buildResult(applied, obsidianTasks, caldavTasks, baseline, true, showProgress);
+			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(applied.toObsidian);
-			await this.caldavAdapter.applyChanges(applied.toCalDAV, idMapping);
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(applicable.toObsidian);
+			await this.caldavAdapter.applyChanges(applicable.toCalDAV, idMapping);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
-			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applied);
-			this.persistState(obsidianTasks, caldavTasks, applied, idMapping);
+			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applicable);
+			this.persistState(obsidianTasks, caldavTasks, applicable, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(applied, obsidianTasks, caldavTasks, baseline, false, showProgress);
+			return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}

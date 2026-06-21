@@ -328,7 +328,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Sync direction')
-			.setDesc('Both keeps Obsidian and the server in sync. Pull from server only brings server changes into Obsidian and never writes to the server. Push to server only sends Obsidian changes to the server and never changes your notes.')
+			.setDesc('Both keeps Obsidian and the server in sync. Pull from server only brings server changes into Obsidian and never writes to the server. Push to server only sends Obsidian changes to the server and never pulls server changes back; it still writes a sync ID into each task it pushes.')
 			.addDropdown(dropdown => dropdown
 				.addOption('both', 'Both')
 				.addOption('pull', 'Pull from server only')
