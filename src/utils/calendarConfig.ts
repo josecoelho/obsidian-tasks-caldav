@@ -10,7 +10,7 @@ const REQUIRED_FIELDS: ReadonlyArray<{ key: keyof CalendarMapping; label: string
 /** Labels of required fields that are empty (or whitespace-only). Empty array when fully configured. */
 export function missingCalendarFields(calendar: CalendarMapping): string[] {
   return REQUIRED_FIELDS
-    .filter(({ key }) => calendar[key].trim() === '')
+    .filter(({ key }) => (calendar[key] as string).trim() === '')
     .map(({ label }) => label);
 }
 

@@ -7,6 +7,8 @@ export interface CalDAVConnectionConfig {
   username: string;
   password: string;
   calendarName: string;
+  /** When set, used directly as the calendar collection URL (skips discovery). */
+  calendarUrl?: string;
 }
 
 /**
