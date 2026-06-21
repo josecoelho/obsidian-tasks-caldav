@@ -337,6 +337,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					calendar.syncDirection = value as SyncDirection;
 					await this.plugin.saveSettings();
+					this.display();
 				}));
 
 		new Setting(containerEl)
@@ -368,10 +369,13 @@ class CalDAVSettingTab extends PluginSettingTab {
 			hintEl?.remove();
 			hintEl = null;
 			if (calendar.obsidianTag || calendar.caldavCategory) return;
-			hintEl = containerEl.createDiv({
-				cls: 'setting-item-description',
-				text: 'No filter set — every task in this calendar will sync both ways.',
-			});
+			const direction = calendar.syncDirection ?? 'both';
+			const text = direction === 'pull'
+				? 'No filter set — every server task is pulled into this vault (nothing is written back to the server).'
+				: direction === 'push'
+					? 'No filter set — every task in this vault is pushed to the server (nothing is pulled back).'
+					: 'No filter set — every task in this calendar will sync both ways.';
+			hintEl = containerEl.createDiv({ cls: 'setting-item-description', text });
 		};
 		updateHint();
 
