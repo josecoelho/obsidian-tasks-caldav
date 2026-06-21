@@ -1,4 +1,5 @@
-import { calendarStorageId } from './calendarStorageId';
+import { calendarStorageId, storageIdForCalendar } from './calendarStorageId';
+import { CalendarMapping } from '../types';
 
 describe('calendarStorageId', () => {
   it('should return a stable id for the same inputs', () => {
@@ -37,5 +38,29 @@ describe('calendarStorageId', () => {
   it('should handle http urls', () => {
     const id = calendarStorageId('http://localhost:5232', 'TestTasks');
     expect(id).toBe('localhost-5232_TestTasks');
+  });
+});
+
+describe('storageIdForCalendar', () => {
+  const base: CalendarMapping = {
+    obsidianTag: '', caldavCategory: '', calendarName: '', serverUrl: '', username: '', password: '',
+  };
+
+  it('uses the legacy serverUrl + calendarName key when both are present', () => {
+    const cal: CalendarMapping = { ...base, serverUrl: 'https://caldav.example.com', calendarName: 'Work' };
+    expect(storageIdForCalendar(cal)).toBe(calendarStorageId('https://caldav.example.com', 'Work'));
+  });
+
+  it('keeps the legacy key even when a calendarUrl is also set (legacy adopter — no re-sync)', () => {
+    const cal: CalendarMapping = {
+      ...base, serverUrl: 'https://caldav.example.com', calendarName: 'Work',
+      calendarUrl: 'https://caldav.example.com/dav/cal/other/',
+    };
+    expect(storageIdForCalendar(cal)).toBe(calendarStorageId('https://caldav.example.com', 'Work'));
+  });
+
+  it('keys off the calendar URL for a URL-pinned calendar with no legacy pair', () => {
+    const cal: CalendarMapping = { ...base, calendarUrl: 'https://caldav.example.com/dav/cal/personal-todos/' };
+    expect(storageIdForCalendar(cal)).toBe('caldav-example-com-dav-cal-personal-todos');
   });
 });
