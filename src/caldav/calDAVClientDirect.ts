@@ -223,13 +223,9 @@ export class CalDAVClientDirect implements CalDAVClient {
       const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
-      let url = hrefMatch[1];
-
-      // Make absolute URL if relative
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(contextUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
+      // Resolve the href against the calendar-home URL. Handles absolute,
+      // absolute-path, and relative hrefs.
+      const url = new URL(hrefMatch[1], contextUrl).href;
 
       // Extract display name (handle CDATA, any namespace prefix)
       const nameMatch = responseBlock.match(/<(?:\w+:)?displayname>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/(?:\w+:)?displayname>/);
@@ -289,11 +285,9 @@ export class CalDAVClientDirect implements CalDAVClient {
       const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
       if (!hrefMatch) continue;
 
-      let url = hrefMatch[1];
-      if (!url.startsWith('http')) {
-        const baseUrl = new URL(contextUrl);
-        url = `${baseUrl.protocol}//${baseUrl.host}${url}`;
-      }
+      // Resolve the href against the collection URL. Handles absolute,
+      // absolute-path, and relative hrefs.
+      const url = new URL(hrefMatch[1], contextUrl).href;
 
       // Extract etag (any namespace prefix or none)
       // Nextcloud returns ETags with XML-encoded quotes: &quot;abc123&quot;
