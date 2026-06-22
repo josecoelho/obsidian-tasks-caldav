@@ -6,29 +6,39 @@ import {
 
 describe('taskIdGenerator', () => {
   describe('generateTaskId', () => {
-    it('should generate ID in YYYYMMDD-xxx format', () => {
-      const id = generateTaskId();
-      expect(id).toMatch(/^\d{8}-[0-9a-f]{3}$/);
+    afterEach(() => jest.restoreAllMocks());
+
+    it('generates a 10-character base32 id', () => {
+      expect(generateTaskId()).toMatch(/^[0-9a-hjkmnp-tv-z]{10}$/);
     });
 
-    it('should generate IDs with current date', () => {
-      const id = generateTaskId();
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const expectedPrefix = `${year}${month}${day}`;
+    it('shares a 3-character day prefix for ids generated the same day', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 5, 22, 9));
 
-      expect(id.startsWith(expectedPrefix)).toBe(true);
+      const first = generateTaskId();
+      const second = generateTaskId();
+
+      expect(first.slice(0, 3)).toBe(second.slice(0, 3));
     });
 
-    it('should generate unique IDs', () => {
-      const ids = new Set();
-      for (let i = 0; i < 100; i++) {
-        ids.add(generateTaskId());
-      }
-      // Should have high uniqueness (allow for small chance of collision)
-      expect(ids.size).toBeGreaterThan(95);
+    it('uses a lexicographically greater day prefix on a later day', () => {
+      const now = jest.spyOn(Date, 'now');
+
+      now.mockReturnValue(Date.UTC(2026, 0, 1));
+      const earlier = generateTaskId().slice(0, 3);
+      now.mockReturnValue(Date.UTC(2027, 0, 1));
+      const later = generateTaskId().slice(0, 3);
+
+      expect(later > earlier).toBe(true);
+    });
+
+    it('generates unique ids for many tasks created the same day (issue #115)', () => {
+      jest.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 5, 22, 9));
+
+      const ids = new Set<string>();
+      for (let i = 0; i < 500; i++) ids.add(generateTaskId());
+
+      expect(ids.size).toBe(500);
     });
   });
 
@@ -51,7 +61,22 @@ describe('taskIdGenerator', () => {
   });
 
   describe('isValidTaskId', () => {
-    it('should validate correct format', () => {
+    it('validates the new 10-character base32 format', () => {
+      expect(isValidTaskId('0s8k7p2qx9')).toBe(true);
+      expect(isValidTaskId(generateTaskId())).toBe(true);
+    });
+
+    it('rejects a new-format id of the wrong length', () => {
+      expect(isValidTaskId('0s8k7p2qx')).toBe(false);   // 9 chars
+      expect(isValidTaskId('0s8k7p2qx9a')).toBe(false); // 11 chars
+    });
+
+    it('rejects a new-format id with ambiguous or uppercase chars', () => {
+      expect(isValidTaskId('0s8k7p2qxi')).toBe(false); // 'i' not in base32 alphabet
+      expect(isValidTaskId('0S8K7P2QX9')).toBe(false); // uppercase
+    });
+
+    it('validates the legacy YYYYMMDD-xxx format', () => {
       expect(isValidTaskId('20250105-abc')).toBe(true);
       expect(isValidTaskId('20250105-000')).toBe(true);
       expect(isValidTaskId('20250105-fff')).toBe(true);

@@ -1,30 +1,39 @@
 /**
- * Generates unique, human-readable task IDs using timestamp-based format
- * Format: YYYYMMDD-xxx where xxx is a random 3-character hex string
+ * Generates compact, ULID-style task IDs: a 3-character day code followed by
+ * 7 characters of cryptographic randomness, all in Crockford-style base32.
  *
- * This provides:
- * - Human readability: dates are visible at a glance
- * - Sortability: lexicographic order matches chronological order
- * - Collision resistance: ~65k combinations per day
+ * - 10 characters total, opaque — carries no meaning beyond uniqueness
+ * - day code (days since 2024-01-01) keeps IDs lexicographically sortable by day
+ * - 35 random bits per day make same-day collisions negligible, fixing the
+ *   birthday-paradox duplicates of the old 12-bit YYYYMMDD-xxx scheme (#115)
  */
+
+// Crockford-style base32: no i/l/o/u, so IDs are unambiguous and file/URL-safe.
+const BASE32 = '0123456789abcdefghjkmnpqrstvwxyz';
+const MS_PER_DAY = 86_400_000;
+const EPOCH_DAY = Math.floor(Date.UTC(2024, 0, 1) / MS_PER_DAY);
+
+function toBase32(value: number, width: number): string {
+  let out = '';
+  for (let i = 0; i < width; i++) {
+    out = BASE32[value % 32] + out;
+    value = Math.floor(value / 32);
+  }
+  return out;
+}
 
 /**
- * Generate a timestamp-based task ID
- * @returns A task ID in format YYYYMMDD-xxx (e.g., 20250105-a4f)
+ * Generate a 10-character ULID-style task ID (e.g. "0s8k7p2qx9").
+ * @returns A task ID: 3-char day code + 7-char crypto-random base32 string
  */
 export function generateTaskId(): string {
-  const now = new Date();
+  const dayCode = toBase32(Math.floor(Date.now() / MS_PER_DAY) - EPOCH_DAY, 3);
 
-  // Format date as YYYYMMDD
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const datePart = `${year}${month}${day}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(7));
+  let randomPart = '';
+  for (const byte of bytes) randomPart += BASE32[byte & 31];
 
-  // Generate 3-character random hex string
-  const randomPart = Math.floor(Math.random() * 4096).toString(16).padStart(3, '0');
-
-  return `${datePart}-${randomPart}`;
+  return dayCode + randomPart;
 }
 
 /**
@@ -47,10 +56,11 @@ export function extractTaskId(taskText: string): string | null {
 }
 
 /**
- * Validate task ID format
+ * Validate task ID format. Accepts the current 10-character base32 format and
+ * the legacy YYYYMMDD-xxx format, since old IDs remain valid in existing vaults.
  * @param id The task ID to validate
  * @returns true if valid, false otherwise
  */
 export function isValidTaskId(id: string): boolean {
-  return /^\d{8}-[0-9a-f]{3}$/.test(id);
+  return /^[0-9a-hjkmnp-tv-z]{10}$/.test(id) || /^\d{8}-[0-9a-f]{3}$/.test(id);
 }
