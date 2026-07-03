@@ -18,10 +18,11 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 - **Recurrence** — `RRULE` round-trips between CalDAV and obsidian-tasks format
 - **Delete detection** — three-way diff detects deletions on either side
 - **Reconciliation** — automatically matches identical tasks when switching calendars or after lost sync data, preventing duplicates
+- **Mobile support** — runs on Obsidian mobile; a per-device switch decides which device talks to the server
 
 ## Requirements
 
-- Obsidian v0.15.0+
+- Obsidian v1.8.7+
 - [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) plugin (must be installed and enabled)
 - A CalDAV server with VTODO support
 
@@ -69,6 +70,7 @@ Global settings:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
+| **Sync from this device** | Whether this device talks to the CalDAV server — see [Mobile and multiple devices](#mobile-and-multiple-devices) | on (desktop), off (mobile) |
 | **Sync interval** | Auto-sync period in minutes | `5` |
 | **New tasks destination** | File where incoming CalDAV tasks are created | `Inbox.md` |
 | **New tasks section** | Optional heading within the destination file | — |
@@ -84,6 +86,16 @@ Each calendar syncs in one of three directions:
 - **Push to server only** — Obsidian changes are sent to the server; server changes are never pulled back. A sync ID is still written into each task that is pushed, so it can be matched on later syncs.
 
 In one-way modes, deletions mirror in the sync direction only (a deletion on the source side propagates; a deletion on the target side is not sent back), and conflicts resolve automatically toward the source side.
+
+### Mobile and multiple devices
+
+The plugin runs on Obsidian mobile, but only one device should talk to the CalDAV server: if several devices sync the same calendars, they race each other's sync state and can duplicate tasks.
+
+The **Sync from this device** switch controls this per device. It is stored on the device itself — not in the vault — so it does not travel with your settings:
+
+- Defaults to **on** for desktop and **off** for mobile.
+- Leave it on for exactly one device. Every other device still receives synced tasks through your regular vault sync (Obsidian Sync, Syncthing, etc.).
+- To sync from your phone instead, turn the switch off on the desktop and on on the phone.
 
 ### Conflict resolution
 
