@@ -7,6 +7,7 @@ import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
 import { applicableChanges } from "./applicableChanges";
+import { SyncProgress } from "./progress";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
 import { storageIdForCalendar } from "../utils/calendarStorageId";
 import { calendarLabel } from "../utils/calendarLabel";
@@ -35,6 +36,8 @@ export interface SyncOptions {
 	dryRun?: boolean;
 	/** Sync was triggered automatically (not by an explicit user command). */
 	background?: boolean;
+	/** Called with updated counts as each change is applied. */
+	onProgress?: (progress: SyncProgress) => void;
 }
 
 export class SyncEngine {
@@ -71,7 +74,7 @@ export class SyncEngine {
 		return true;
 	}
 
-	async sync({ dryRun = false, background = false }: SyncOptions = {}): Promise<SyncResult> {
+	async sync({ dryRun = false, background = false, onProgress }: SyncOptions = {}): Promise<SyncResult> {
 		try {
 			const showProgress = !background || this.settings.showAutoSyncNotifications;
 			if (showProgress) {
@@ -89,8 +92,29 @@ export class SyncEngine {
 
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(applicable.toObsidian);
-			await this.caldavAdapter.applyChanges(applicable.toCalDAV, idMapping);
+			const progress: SyncProgress = {
+				pullDone: 0,
+				pullTotal: applicable.toObsidian.length,
+				pushDone: 0,
+				pushTotal: applicable.toCalDAV.length,
+			};
+			onProgress?.({ ...progress });
+
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(
+				applicable.toObsidian,
+				() => {
+					progress.pullDone++;
+					onProgress?.({ ...progress });
+				},
+			);
+			await this.caldavAdapter.applyChanges(
+				applicable.toCalDAV,
+				idMapping,
+				() => {
+					progress.pushDone++;
+					onProgress?.({ ...progress });
+				},
+			);
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
 
 			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applicable);

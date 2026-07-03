@@ -4,6 +4,7 @@ import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS, IdMapping } f
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CommonTask } from './types';
+import { SyncProgress } from './progress';
 
 // --- Helpers ---
 
@@ -1807,6 +1808,34 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(result.deleted.toObsidian).toBe(1);
       expect(mockDeleteVTODOByUID).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sync progress reporting', () => {
+    it('reports pull/push totals and per-change progress', async () => {
+      // One pull (server task unknown to the vault) and one push (vault task
+      // unknown to the server).
+      mockFetchVTODOs.mockResolvedValue([{
+        data: buildVTODO('server-task-uid', 'Incoming task'),
+        url: 'https://caldav.example.com/cal/server-task-uid.ics',
+        etag: 'e1',
+      }]);
+      mockGetAllTasksWithBody.mockResolvedValue([{
+        task: makeObsidianTask({
+          description: 'Outgoing task',
+          originalMarkdown: '- [ ] Outgoing task [id::20250101-abc] #sync',
+        }),
+        body: '',
+      }]);
+
+      const updates: SyncProgress[] = [];
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync({ onProgress: (p) => updates.push(p) });
+
+      expect(result.success).toBe(true);
+      expect(updates[0]).toEqual({ pullDone: 0, pullTotal: 1, pushDone: 0, pushTotal: 1 });
+      expect(updates[updates.length - 1]).toEqual({ pullDone: 1, pullTotal: 1, pushDone: 1, pushTotal: 1 });
     });
   });
 });
