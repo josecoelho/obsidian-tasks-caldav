@@ -5,6 +5,8 @@ import { calendarLabel } from './src/utils/calendarLabel';
 import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
+import { SyncGate } from './src/sync/syncGate';
+import { SyncProgress } from './src/sync/progress';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 import { BrowseCalendarsModal } from './src/ui/browseCalendarsModal';
@@ -16,8 +18,11 @@ export default class CalDAVSyncPlugin extends Plugin {
 	private syncEngines: SyncEngine[] = [];
 	private autoSync: AutoSyncScheduler | null = null;
 	private loadFailure: string | null = null;
+	private syncGate = new SyncGate();
+	private statusBar!: HTMLElement;
 
 	async onload() {
+		this.statusBar = this.addStatusBarItem();
 		await this.safeLoad();
 
 		this.addCommand({
@@ -64,6 +69,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 					return;
 				}
 				const results = await this.syncAllEngines(false);
+				if (results === null) return;
 				new SyncResultModal(this.app, results, false).open();
 			}
 		});
@@ -77,7 +83,8 @@ export default class CalDAVSyncPlugin extends Plugin {
 					return;
 				}
 				const results = await this.syncAllEngines(true);
-				new SyncResultModal(this.app, results, true, () => this.syncAllEngines(false)).open();
+				if (results === null) return;
+				new SyncResultModal(this.app, results, true, async () => await this.syncAllEngines(false) ?? []).open();
 			}
 		});
 
@@ -214,16 +221,62 @@ export default class CalDAVSyncPlugin extends Plugin {
 		new Notice(`Skipped ${skipped.length} incomplete ${noun}: ${skipped.join('; ')}. Configure in settings.`, 8000);
 	}
 
-	private async syncAll(): Promise<void> {
-		for (const engine of this.syncEngines) {
-			await engine.sync({ background: true });
-		}
+	/**
+	 * Single entry point for every sync run: holds the gate so runs never
+	 * overlap, and clears the status bar when one finishes. The sync loops
+	 * paint progress via syncProgress().
+	 */
+	private async runSync<T>(fn: () => Promise<T>): Promise<T | null> {
+		return this.syncGate.run(async () => {
+			try {
+				return await fn();
+			} finally {
+				this.statusBar.setText('');
+			}
+		});
 	}
 
-	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
-		const results: SyncResult[] = [];
-		for (const engine of this.syncEngines) {
-			results.push(await engine.sync({ dryRun }));
+	private syncProgress(progress?: SyncProgress): void {
+		this.statusBar.empty();
+		this.statusBar.createSpan({ text: 'CalDAV:' });
+		if (!progress) {
+			this.statusBar.createSpan({ text: ' syncing…' });
+			return;
+		}
+		this.renderDirection('←', progress.pullDone, progress.pullTotal);
+		this.renderDirection('→', progress.pushDone, progress.pushTotal);
+	}
+
+	private renderDirection(arrow: string, done: number, total: number): void {
+		if (total === 0) return;
+		this.statusBar.createSpan({ text: ` ${arrow} ` });
+		const bar = this.statusBar.createEl('progress', { cls: 'caldav-sync-progress' });
+		bar.max = total;
+		bar.value = done;
+		this.statusBar.createSpan({ text: ` ${done}/${total}` });
+	}
+
+	private async syncAll(): Promise<void> {
+		// A tick that lands mid-sync skips silently; the next one catches up.
+		await this.runSync(async () => {
+			for (const engine of this.syncEngines) {
+				this.syncProgress();
+				await engine.sync({ background: true, onProgress: (p) => this.syncProgress(p) });
+			}
+		});
+	}
+
+	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[] | null> {
+		const results = await this.runSync(async () => {
+			const out: SyncResult[] = [];
+			for (const engine of this.syncEngines) {
+				this.syncProgress();
+				out.push(await engine.sync({ dryRun, onProgress: (p) => this.syncProgress(p) }));
+			}
+			return out;
+		});
+		if (results === null) {
+			new Notice('Sync already running — wait for it to finish.');
 		}
 		return results;
 	}

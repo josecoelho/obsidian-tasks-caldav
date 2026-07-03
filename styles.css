@@ -239,3 +239,23 @@
   align-self: flex-start;
   margin-top: var(--size-4-2);
 }
+
+/* Status bar sync progress */
+
+.caldav-sync-progress {
+  width: 60px;
+  height: 6px;
+  vertical-align: middle;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.caldav-sync-progress::-webkit-progress-bar {
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.caldav-sync-progress::-webkit-progress-value {
+  background: var(--interactive-accent);
+  border-radius: 3px;
+}

@@ -107,9 +107,11 @@ export class ObsidianAdapter {
 
 	/**
 	 * Apply sync changes to the Obsidian vault (creates, updates, deletes).
+	 * `onApplied` is called after each change is processed.
 	 */
 	async applyChanges(
 		changes: SyncChange[],
+		onApplied?: () => void,
 	): Promise<ApplyChangesResult> {
 		const createdMappings: Array<{
 			taskId: string;
@@ -218,6 +220,7 @@ export class ObsidianAdapter {
 					error,
 				);
 			}
+			onApplied?.();
 		}
 
 		return { createdMappings, completionRemappings };
