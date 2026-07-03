@@ -1,39 +1,47 @@
 /**
- * Generates compact, ULID-style task IDs: a 3-character day code followed by
- * 7 characters of cryptographic randomness, all in Crockford-style base32.
+ * Generates human-readable task IDs: YYYYMMDD-xxxx, a local calendar date and
+ * a 4-character random hex suffix.
  *
- * - 10 characters total, opaque — carries no meaning beyond uniqueness
- * - day code (days since 2024-01-01) keeps IDs lexicographically sortable by day
- * - 35 random bits per day make same-day collisions negligible, fixing the
- *   birthday-paradox duplicates of the old 12-bit YYYYMMDD-xxx scheme (#115)
+ * Uniqueness comes from the caller-supplied `usedIds` set, not from entropy
+ * alone: candidates already in the set are re-rolled, so same-vault collisions
+ * are impossible by construction (issue #115). The 65,536/day space only has
+ * to cover the cross-device window between generating an ID and syncing it.
  */
-
-// Crockford-style base32: no i/l/o/u, so IDs are unambiguous and file/URL-safe.
-const BASE32 = '0123456789abcdefghjkmnpqrstvwxyz';
-const MS_PER_DAY = 86_400_000;
-const EPOCH_DAY = Math.floor(Date.UTC(2024, 0, 1) / MS_PER_DAY);
-
-function toBase32(value: number, width: number): string {
-  let out = '';
-  for (let i = 0; i < width; i++) {
-    out = BASE32[value % 32] + out;
-    value = Math.floor(value / 32);
-  }
-  return out;
-}
 
 /**
- * Generate a 10-character ULID-style task ID (e.g. "0s8k7p2qx9").
- * @returns A task ID: 3-char day code + 7-char crypto-random base32 string
+ * Generate a task ID like "20260703-a4f3", guaranteed absent from `usedIds`.
+ * The returned ID is added to the set so sequential calls never collide.
+ * If a day's suffix space is ever exhausted, the suffix grows a character.
  */
-export function generateTaskId(): string {
-  const dayCode = toBase32(Math.floor(Date.now() / MS_PER_DAY) - EPOCH_DAY, 3);
+export function generateTaskId(usedIds?: Set<string>): string {
+  const datePart = localDatePart();
+  let width = 4;
+  let attempts = 0;
+  for (;;) {
+    const id = `${datePart}-${randomHex(width)}`;
+    if (!usedIds?.has(id)) {
+      usedIds?.add(id);
+      return id;
+    }
+    if (++attempts >= 16) {
+      width++;
+      attempts = 0;
+    }
+  }
+}
 
-  const bytes = crypto.getRandomValues(new Uint8Array(7));
-  let randomPart = '';
-  for (const byte of bytes) randomPart += BASE32[byte & 31];
+function localDatePart(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}${month}${day}`;
+}
 
-  return dayCode + randomPart;
+function randomHex(width: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(width / 2)));
+  let out = '';
+  for (const byte of bytes) out += byte.toString(16).padStart(2, '0');
+  return out.slice(0, width);
 }
 
 /**
@@ -56,11 +64,9 @@ export function extractTaskId(taskText: string): string | null {
 }
 
 /**
- * Validate task ID format. Accepts the current 10-character base32 format and
- * the legacy YYYYMMDD-xxx format, since old IDs remain valid in existing vaults.
- * @param id The task ID to validate
- * @returns true if valid, false otherwise
+ * Validate task ID format: a date followed by a hex suffix — 3 chars in
+ * legacy IDs, 4 in current ones, longer only on day-space overflow.
  */
 export function isValidTaskId(id: string): boolean {
-  return /^[0-9a-hjkmnp-tv-z]{10}$/.test(id) || /^\d{8}-[0-9a-f]{3}$/.test(id);
+  return /^\d{8}-[0-9a-f]{3,}$/.test(id);
 }

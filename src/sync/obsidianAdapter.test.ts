@@ -134,6 +134,35 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('fetchTasks ID generation', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('never generates an ID owned by a task outside the sync filter (#115)', async () => {
+      const draws = [new Uint8Array([0x12, 0x34]), new Uint8Array([0xab, 0xcd])];
+      jest.spyOn(crypto, 'getRandomValues').mockImplementation(<T,>(arr: T): T => {
+        (arr as Uint8Array).set(draws.shift()!);
+        return arr;
+      });
+      const now = new Date();
+      const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+      const unfiltered = makeTask({ id: `${today}-1234`, tags: ['#other'] });
+      const newTask = makeTask({ id: '', tags: ['#sync'] });
+      const wrapper = {
+        ...dummyWrapper,
+        getAllTasksWithBody: jest.fn().mockResolvedValue([withBody(unfiltered), withBody(newTask)]),
+        filterByTag: jest.fn().mockImplementation((inputs: TaskWithBody[]) =>
+          inputs.filter(({ task }) => task.tags.includes('#sync'))),
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const tasks = await adapter.fetchTasks();
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].uid).toBe(`${today}-abcd`);
+    });
+  });
+
   describe('findOriginalTask', () => {
     it('should return the original ObsidianTask after normalize', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
