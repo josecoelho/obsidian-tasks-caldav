@@ -224,8 +224,9 @@ export class ObsidianAdapter {
 	}
 
 	/**
-	 * Write IDs back to vault for tasks that had in-memory IDs generated during normalize.
-	 * Only called after sync succeeds, so IDs are only persisted when sync completes.
+	 * Write IDs back to vault for tasks that had in-memory IDs generated during
+	 * normalize. Runs before the CalDAV push so a failed push retries with the
+	 * same identities instead of minting new IDs and duplicating tasks.
 	 */
 	async writeBackIds(obsidianTasks: CommonTask[]): Promise<void> {
 		const { format, globalFilter } = await this.wrapper.getTasksPluginConfig();

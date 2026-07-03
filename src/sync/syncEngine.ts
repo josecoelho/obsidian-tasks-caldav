@@ -90,8 +90,11 @@ export class SyncEngine {
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
 			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(applicable.toObsidian);
-			await this.caldavAdapter.applyChanges(applicable.toCalDAV, idMapping);
+			// Stamp IDs before the CalDAV push: if the push fails, the vault
+			// keeps the identities, so the retry converges on the same UIDs
+			// instead of minting new ones and duplicating tasks.
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
+			await this.caldavAdapter.applyChanges(applicable.toCalDAV, idMapping);
 
 			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applicable);
 			this.persistState(obsidianTasks, caldavTasks, applicable, idMapping);

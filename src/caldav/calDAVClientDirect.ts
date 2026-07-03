@@ -199,7 +199,7 @@ export class CalDAVClientDirect implements CalDAVClient {
     });
 
     if (response.status !== 201 && response.status !== 204) {
-      throw new Error(`Create VTODO failed: ${response.status} ${response.text}`);
+      throw new Error(`Create VTODO failed: ${response.status} for ${uid} at ${url} ${response.text}`);
     }
 
   }
