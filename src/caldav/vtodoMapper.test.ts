@@ -1426,20 +1426,20 @@ END:VTODO`;
     };
 
     function roundTrip(task: Omit<CommonTask, 'uid'>) {
-      const data = mapper.taskToVTODO(task, 'rt-uid');
+      const data = mapper.taskToVTODO(task, { uid: 'rt-uid' });
       return mapper.vtodoToTask({ data, url: 'http://x/rt-uid.ics', etag: 'e' });
     }
 
     it('writes DTSTART from scheduledDate even when startDate is also set', () => {
       const ics = mapper.taskToVTODO(
         { ...baseTask, startDate: '2026-07-01', scheduledDate: '2026-07-10' },
-        'uid-1',
+        { uid: 'uid-1' },
       );
       expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
     });
 
     it('does not write DTSTART for a start-only task', () => {
-      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, 'uid-1');
+      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, { uid: 'uid-1' });
       expect(ics).not.toContain('DTSTART');
     });
 
