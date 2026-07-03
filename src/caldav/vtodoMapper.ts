@@ -8,6 +8,7 @@ export interface CalendarObject {
 }
 
 import { CommonTask } from '../sync/types';
+import { extractInlineTags, stripInlineTags } from '../utils/inlineTags';
 
 /** Fields returned by vtodoToTask — everything except uid, which is extracted separately */
 type VTODOTaskFields = Omit<CommonTask, 'uid'>;
@@ -95,8 +96,13 @@ export class VTODOMapper {
     const vtodoMatch = unfolded.match(/BEGIN:VTODO[\s\S]*?END:VTODO/);
     const data = vtodoMatch ? vtodoMatch[0] : unfolded;
 
+    // Inline #tags in SUMMARY (written by older plugin versions or other
+    // clients) move into tags[], so corrupted tasks heal instead of gaining
+    // a duplicate tag on every sync — issue #114.
+    const summary = this.extractRawProperty(data, 'SUMMARY') || '';
+
     return {
-      title: this.extractRawProperty(data, 'SUMMARY') || 'Untitled Task',
+      title: stripInlineTags(summary) || 'Untitled Task',
       status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION') as CommonTask['status'],
       dueDate: this.extractDateProperty(data, 'DUE'),
       scheduledDate: null,
@@ -104,7 +110,7 @@ export class VTODOMapper {
       completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0') as CommonTask['priority'],
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
-      tags: this.extractCategories(data),
+      tags: this.dedupeTags([...this.extractCategories(data), ...extractInlineTags(summary)]),
       body: this.stripObsidianLinks(this.extractRawProperty(data, 'DESCRIPTION') || ''),
     };
   }
@@ -318,6 +324,17 @@ export class VTODOMapper {
     }
 
     return categories;
+  }
+
+  /** Case-insensitive, order-preserving dedupe — Obsidian treats tags case-insensitively. */
+  private dedupeTags(tags: string[]): string[] {
+    const seen = new Set<string>();
+    return tags.filter((tag) => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   /**

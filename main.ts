@@ -1,6 +1,8 @@
 import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS, SyncDirection } from './src/types';
+import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
+import { calendarLabel } from './src/utils/calendarLabel';
+import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
@@ -13,15 +15,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 	settings!: CalDAVSettings;
 	private syncEngines: SyncEngine[] = [];
 	private autoSync: AutoSyncScheduler | null = null;
+	private loadFailure: string | null = null;
 
 	async onload() {
-		await this.loadSettings();
-
-		if (await runMigrations(this.app, this.settings)) {
-			await this.saveData(this.settings);
-		}
-
-		await this.initializeEngines();
+		await this.safeLoad();
 
 		this.addCommand({
 			id: 'validate-task-ids',
@@ -129,27 +126,51 @@ export default class CalDAVSyncPlugin extends Plugin {
 	onunload() {
 	}
 
-	async loadSettings() {
-		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
-		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
-
-		// Pre-calendars-array installs stored a single flat calendar at the top
-		// level. Lift it into the new array with the legacy `tag` field intact;
-		// migration 003 owns the tag→obsidianTag/caldavCategory split, and
-		// `runMigrations` in onload will persist both changes in one write.
-		const legacy = loaded;
-		if (legacy.serverUrl && !legacy.calendars) {
-			this.settings.calendars = [{
-				tag: (legacy.syncTag as string) ?? 'sync',
-				calendarName: (legacy.calendarName as string) ?? '',
-				serverUrl: (legacy.serverUrl as string) ?? '',
-				username: (legacy.username as string) ?? '',
-				password: (legacy.password as string) ?? '',
-			} as unknown as CalDAVSettings['calendars'][number]];
+	/**
+	 * Load settings and run migrations, then build sync engines. A settings or
+	 * migration failure is caught: the plugin stays enabled with commands and
+	 * the settings tab available, syncing is paused, and nothing is written to
+	 * data.json — so a transient read failure can never wipe the stored
+	 * configuration (#126). Engine failures are isolated per calendar inside
+	 * initializeEngines and never set loadFailure, so they don't block saving.
+	 */
+	private async safeLoad(): Promise<void> {
+		try {
+			await this.loadSettings();
+			if (await runMigrations(this.app, this.settings)) {
+				await this.saveData(this.settings);
+			}
+		} catch (error) {
+			this.loadFailure = error instanceof Error ? error.message : String(error);
+			this.settings ??= resolveSettings(null);
+			console.error('[CalDAV sync] Load failed:', error);
+			new Notice(
+				`CalDAV sync could not start: ${this.loadFailure}\nSyncing is paused and your saved settings were left untouched. Restart Obsidian to retry.`,
+				10000,
+			);
+			return;
 		}
+		await this.initializeEngines();
+	}
+
+	async loadSettings() {
+		this.settings = await loadSettingsFrom({
+			loadData: () => this.loadData(),
+			dataFileExists: () => this.dataFileExists(),
+		});
+	}
+
+	private async dataFileExists(): Promise<boolean> {
+		const dir = this.manifest.dir;
+		if (!dir) return false;
+		return this.app.vault.adapter.exists(`${dir}/data.json`);
 	}
 
 	async saveSettings() {
+		if (this.loadFailure) {
+			new Notice('Settings failed to load at startup, so saving is disabled to protect your stored configuration. Restart Obsidian and try again.', 8000);
+			return;
+		}
 		await this.saveData(this.settings);
 		await this.initializeEngines();
 		this.autoSync?.start(this.settings.syncInterval);
@@ -167,10 +188,16 @@ export default class CalDAVSyncPlugin extends Plugin {
 				continue;
 			}
 			configuredCount++;
-			const engine = new SyncEngine(this.app, calendar, this.settings);
-			const ready = await engine.initialize();
-			if (ready) {
-				this.syncEngines.push(engine);
+			try {
+				const engine = new SyncEngine(this.app, calendar, this.settings);
+				const ready = await engine.initialize();
+				if (ready) {
+					this.syncEngines.push(engine);
+				}
+			} catch (error) {
+				const name = calendarLabel(calendar) || `Calendar ${index + 1}`;
+				console.error(`[CalDAV sync] Failed to initialize ${name}:`, error);
+				skipped.push(`${name} (failed to initialize)`);
 			}
 		}
 		this.notifySkippedCalendars(skipped);
