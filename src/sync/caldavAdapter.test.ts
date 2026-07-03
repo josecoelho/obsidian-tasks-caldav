@@ -48,7 +48,7 @@ describe('CalDAVAdapter', () => {
   describe('toCommonTask', () => {
     it('should convert a basic VTODO to CommonTask', () => {
       const vtodo = makeCalObj('caldav-001', 'Buy groceries');
-      const task = adapter.toCommonTask(vtodo, 'my-task-id');
+      const task = adapter.toCommonTask(vtodo, 'my-task-id', null);
 
       expect(task.uid).toBe('my-task-id');
       expect(task.title).toBe('Buy groceries');
@@ -65,19 +65,19 @@ describe('CalDAVAdapter', () => {
 
     it('should extract notes from DESCRIPTION', () => {
       const vtodo = makeCalObj('caldav-notes', 'Task with notes', ['DESCRIPTION:Remember to check']);
-      const task = adapter.toCommonTask(vtodo, 'my-id');
+      const task = adapter.toCommonTask(vtodo, 'my-id', null);
       expect(task.body).toBe('Remember to check');
     });
 
     it('should map VTODO status correctly', () => {
       const done = makeCalObj('c-done', 'Done task', ['STATUS:COMPLETED']);
-      expect(adapter.toCommonTask(done, 'id').status).toBe('DONE');
+      expect(adapter.toCommonTask(done, 'id', null).status).toBe('DONE');
 
       const inProgress = makeCalObj('c-ip', 'In progress', ['STATUS:IN-PROCESS']);
-      expect(adapter.toCommonTask(inProgress, 'id').status).toBe('IN_PROGRESS');
+      expect(adapter.toCommonTask(inProgress, 'id', null).status).toBe('IN_PROGRESS');
 
       const cancelled = makeCalObj('c-can', 'Cancelled', ['STATUS:CANCELLED']);
-      expect(adapter.toCommonTask(cancelled, 'id').status).toBe('CANCELLED');
+      expect(adapter.toCommonTask(cancelled, 'id', null).status).toBe('CANCELLED');
     });
 
     it('should extract dates', () => {
@@ -87,7 +87,7 @@ describe('CalDAVAdapter', () => {
         'COMPLETED:20250112T140000Z',
       ]);
 
-      const task = adapter.toCommonTask(vtodo, 'id');
+      const task = adapter.toCommonTask(vtodo, 'id', null);
       expect(task.dueDate).toBe('2025-01-15');
       expect(task.scheduledDate).toBe('2025-01-10');
       expect(task.completedDate).toBe('2025-01-12');
@@ -95,24 +95,24 @@ describe('CalDAVAdapter', () => {
 
     it('should extract tags from CATEGORIES', () => {
       const vtodo = makeCalObj('c-tags', 'Tagged task', ['CATEGORIES:sync,work,urgent']);
-      const task = adapter.toCommonTask(vtodo, 'id');
+      const task = adapter.toCommonTask(vtodo, 'id', null);
       expect(task.tags).toEqual(['sync', 'work', 'urgent']);
     });
 
     it('should extract priority', () => {
       const high = makeCalObj('c-hi', 'High', ['PRIORITY:1']);
-      expect(adapter.toCommonTask(high, 'id').priority).toBe('highest');
+      expect(adapter.toCommonTask(high, 'id', null).priority).toBe('highest');
 
       const med = makeCalObj('c-med', 'Med', ['PRIORITY:5']);
-      expect(adapter.toCommonTask(med, 'id').priority).toBe('medium');
+      expect(adapter.toCommonTask(med, 'id', null).priority).toBe('medium');
 
       const low = makeCalObj('c-lo', 'Low', ['PRIORITY:9']);
-      expect(adapter.toCommonTask(low, 'id').priority).toBe('lowest');
+      expect(adapter.toCommonTask(low, 'id', null).priority).toBe('lowest');
     });
 
     it('should extract recurrence rule', () => {
       const vtodo = makeCalObj('c-rrule', 'Recurring', ['RRULE:FREQ=DAILY;COUNT=30']);
-      const task = adapter.toCommonTask(vtodo, 'id');
+      const task = adapter.toCommonTask(vtodo, 'id', null);
       expect(task.recurrenceRule).toBe('FREQ=DAILY;COUNT=30');
     });
   });
@@ -222,7 +222,7 @@ describe('CalDAVAdapter', () => {
 
     it('injects the configured category into outgoing CATEGORIES', () => {
       const localAdapter = new CalDAVAdapter(makeNoopClient(), 'work');
-      const vtodo = localAdapter.fromCommonTask(baseTask, 'uid-1');
+      const vtodo = localAdapter.fromCommonTask(baseTask, 'uid-1', null);
       expect(vtodo).toMatch(/CATEGORIES:[^\r\n]*\burgent\b/);
       expect(vtodo).toMatch(/CATEGORIES:[^\r\n]*\bwork\b/);
     });
@@ -230,7 +230,7 @@ describe('CalDAVAdapter', () => {
     it('does not duplicate when the category is already in tags', () => {
       const localAdapter = new CalDAVAdapter(makeNoopClient(), 'work');
       const taskWithCategory: CommonTask = { ...baseTask, tags: ['work', 'urgent'] };
-      const vtodo = localAdapter.fromCommonTask(taskWithCategory, 'uid-1');
+      const vtodo = localAdapter.fromCommonTask(taskWithCategory, 'uid-1', null);
       const match = vtodo.match(/CATEGORIES:([^\r\n]+)/);
       const categories = match![1].split(',').map((c) => c.trim());
       const workCount = categories.filter((c) => c.toLowerCase() === 'work').length;
@@ -240,7 +240,7 @@ describe('CalDAVAdapter', () => {
     it('omits CATEGORIES line entirely when category and tags are both empty', () => {
       const localAdapter = new CalDAVAdapter(makeNoopClient(), '');
       const taskNoTags: CommonTask = { ...baseTask, tags: [] };
-      const vtodo = localAdapter.fromCommonTask(taskNoTags, 'uid-1');
+      const vtodo = localAdapter.fromCommonTask(taskNoTags, 'uid-1', null);
       expect(vtodo).not.toMatch(/^CATEGORIES:/m);
     });
   });
@@ -261,7 +261,7 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
-      const vtodo = adapter.fromCommonTask(task, 'caldav-uid-001');
+      const vtodo = adapter.fromCommonTask(task, 'caldav-uid-001', null);
 
       expect(vtodo).toContain('UID:caldav-uid-001');
       expect(vtodo).toContain('SUMMARY:Test task');
@@ -287,7 +287,7 @@ describe('CalDAVAdapter', () => {
         body: 'Remember to bring supplies',
       };
 
-      const vtodo = adapter.fromCommonTask(task, 'caldav-notes');
+      const vtodo = adapter.fromCommonTask(task, 'caldav-notes', null);
       expect(vtodo).toContain('DESCRIPTION:Remember to bring supplies');
     });
 
@@ -306,7 +306,7 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
-      const vtodo = adapter.fromCommonTask(task, 'caldav-no-notes');
+      const vtodo = adapter.fromCommonTask(task, 'caldav-no-notes', null);
       expect(vtodo).not.toContain('DESCRIPTION');
     });
 
@@ -325,11 +325,35 @@ describe('CalDAVAdapter', () => {
         body: '',
       };
 
-      const vtodo = adapter.fromCommonTask(task, 'caldav-done');
+      const vtodo = adapter.fromCommonTask(task, 'caldav-done', null);
 
       expect(vtodo).toContain('STATUS:COMPLETED');
       expect(vtodo).toContain('COMPLETED:');
       expect(vtodo).toContain('PERCENT-COMPLETE:100');
+    });
+  });
+
+  describe('parentUid resolution', () => {
+    const childVtodo: CalendarObject = {
+      data: 'BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:cal-child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=PARENT:cal-parent\r\nEND:VTODO\r\nEND:VCALENDAR',
+      url: 'http://example.com/cal-child.ics',
+      etag: 'etag-cal-child',
+    };
+
+    it('maps parent CalDAV UID to parent sync UID via idMapping', () => {
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: {},
+        caldavUidToTaskId: { 'cal-parent': 'obs-parent' },
+      };
+      const tasks = adapter.normalize([childVtodo], idMapping);
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].parentUid).toBe('obs-parent');
+    });
+
+    it('falls back to raw CalDAV UID when no mapping exists', () => {
+      const tasks = adapter.normalize([childVtodo], emptyIdMapping);
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].parentUid).toBe('cal-parent');
     });
   });
 
@@ -364,11 +388,11 @@ describe('CalDAVAdapter', () => {
       // Phone completes the task at 22:00 local on Jan 15; server stores it
       // in UTC as Jan 16 03:00. The completion happened on Jan 15 locally.
       const vtodo = makeCalObj('c-ext', 'Done on phone', ['COMPLETED:20250116T030000Z']);
-      expect(adapter.toCommonTask(vtodo, 'id').completedDate).toBe('2025-01-15');
+      expect(adapter.toCommonTask(vtodo, 'id', null).completedDate).toBe('2025-01-15');
     });
 
     it('writes COMPLETED anchored to the local completion date, not UTC midnight', () => {
-      const ics = adapter.fromCommonTask(doneTask, 'uid-1');
+      const ics = adapter.fromCommonTask(doneTask, 'uid-1', null);
       const match = ics.match(/COMPLETED:(\d{8}T\d{6}Z)/);
       expect(match).not.toBeNull();
       // Interpreted back in the user's zone, it must land on Jan 15.
@@ -376,9 +400,9 @@ describe('CalDAVAdapter', () => {
     });
 
     it('round-trips a date-only completion without shifting the day', () => {
-      const ics = adapter.fromCommonTask(doneTask, 'uid-1');
+      const ics = adapter.fromCommonTask(doneTask, 'uid-1', null);
       const calObj: CalendarObject = { data: ics, url: 'http://x/uid-1.ics', etag: 'e' };
-      expect(adapter.toCommonTask(calObj, 'uid-1').completedDate).toBe('2025-01-15');
+      expect(adapter.toCommonTask(calObj, 'uid-1', null).completedDate).toBe('2025-01-15');
     });
   });
 
@@ -498,6 +522,85 @@ describe('CalDAVAdapter', () => {
 
       expect(mockFetchVTODOByUID).toHaveBeenCalledWith('caldav-upd');
       expect(mockUpdateVTODO).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes resolved parent CalDAV UID to create when parent is mapped', async () => {
+      const mockCreateVTODO = jest.fn();
+      const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: mockCreateVTODO,
+        updateVTODO: jest.fn(),
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+      const testAdapter = new CalDAVAdapter(mockClient);
+
+      const task = {
+        uid: 'child-task',
+        title: 'Child task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+        parentUid: 'obs-parent-id',
+      };
+
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { 'obs-parent-id': 'caldav-parent-uid' },
+        caldavUidToTaskId: { 'caldav-parent-uid': 'obs-parent-id' },
+      };
+
+      await testAdapter.applyChanges(
+        [{ type: 'create', task }],
+        idMapping,
+      );
+
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const vtodoData = (mockCreateVTODO.mock.calls[0] as [string, string])[0];
+      expect(vtodoData).toContain('RELATED-TO;RELTYPE=PARENT:caldav-parent-uid');
+    });
+
+    it('falls back to raw parentUid when parent is unmapped', async () => {
+      const mockCreateVTODO = jest.fn();
+      const mockClient: CalDAVClient = {
+        connect: jest.fn(),
+        fetchVTODOs: jest.fn(),
+        createVTODO: mockCreateVTODO,
+        updateVTODO: jest.fn(),
+        deleteVTODOByUID: jest.fn(),
+        fetchVTODOByUID: jest.fn(),
+      };
+      const testAdapter = new CalDAVAdapter(mockClient);
+
+      const task = {
+        uid: 'child-task-2',
+        title: 'Child task 2',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+        parentUid: 'raw-parent-uid',
+      };
+
+      await testAdapter.applyChanges(
+        [{ type: 'create', task }],
+        emptyIdMapping,
+      );
+
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      const vtodoData = (mockCreateVTODO.mock.calls[0] as [string, string])[0];
+      expect(vtodoData).toContain('RELATED-TO;RELTYPE=PARENT:raw-parent-uid');
     });
 
     describe('complete change type', () => {

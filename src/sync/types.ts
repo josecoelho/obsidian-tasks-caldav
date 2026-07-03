@@ -16,6 +16,9 @@ export interface CommonTask {
   // Outbound-only: set by ObsidianAdapter when includeObsidianLink is enabled.
   // Never populated on inbound, and must not participate in diff equality.
   obsidianUrl?: string;
+  // Parent task's sync UID for subtask hierarchy. null/absent = top-level.
+  // Maps to VTODO RELATED-TO;RELTYPE=PARENT on the CalDAV side.
+  parentUid?: string | null;
 }
 
 export interface SyncChange {

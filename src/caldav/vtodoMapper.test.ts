@@ -24,7 +24,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid-123');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid-123' });
 
       expect(vtodo).toMatch(/^BEGIN:VCALENDAR\r?\n/);
       expect(vtodo).toMatch(/\r?\nEND:VCALENDAR$/);
@@ -47,7 +47,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('DUE;VALUE=DATE:20250115');
     });
@@ -66,7 +66,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('DTSTART;VALUE=DATE:20250110');
     });
@@ -93,7 +93,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
           body: '',
         };
 
-        const result = mapper.taskToVTODO(task, 'test-uid');
+        const result = mapper.taskToVTODO(task, { uid: 'test-uid' });
         expect(result).toContain(`STATUS:${vtodo}`);
       });
     });
@@ -122,7 +122,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
           body: '',
         };
 
-        const result = mapper.taskToVTODO(task, 'test-uid');
+        const result = mapper.taskToVTODO(task, { uid: 'test-uid' });
         expect(result).toContain(`PRIORITY:${vtodo}`);
       });
     });
@@ -141,7 +141,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('COMPLETED:20250105T103000Z');
       expect(vtodo).toContain('PERCENT-COMPLETE:100');
@@ -161,7 +161,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('CATEGORIES:work,urgent,project-a');
     });
@@ -180,7 +180,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('SUMMARY:Task with\\; comma\\, backslash\\\\ and newline\\n');
     });
@@ -199,7 +199,7 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       expect(vtodo).toContain('RRULE:FREQ=DAILY;COUNT=10');
     });
@@ -220,31 +220,31 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
 
       it('should add URL property when obsidianUrl is set', () => {
         const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md' };
-        const vtodo = mapper.taskToVTODO(task, 'url-test-1');
+        const vtodo = mapper.taskToVTODO(task, { uid: 'url-test-1' });
         expect(vtodo).toContain('URL:obsidian://open?vault=Notes&file=Tasks.md');
       });
 
       it('should prepend obsidian link to DESCRIPTION when obsidianUrl is set and body exists', () => {
         const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md', body: 'My notes' };
-        const vtodo = mapper.taskToVTODO(task, 'url-test-2');
+        const vtodo = mapper.taskToVTODO(task, { uid: 'url-test-2' });
         expect(vtodo).toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md\\n\\nMy notes');
       });
 
       it('should set DESCRIPTION to obsidian link when obsidianUrl is set and body is empty', () => {
         const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=Notes&file=Tasks.md', body: '' };
-        const vtodo = mapper.taskToVTODO(task, 'url-test-3');
+        const vtodo = mapper.taskToVTODO(task, { uid: 'url-test-3' });
         expect(vtodo).toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md');
         expect(vtodo).not.toContain('DESCRIPTION:obsidian://open?vault=Notes&file=Tasks.md\\n');
       });
 
       it('should not add URL property when obsidianUrl is not set', () => {
-        const vtodo = mapper.taskToVTODO(baseTask, 'url-test-4');
+        const vtodo = mapper.taskToVTODO(baseTask, { uid: 'url-test-4' });
         expect(vtodo).not.toMatch(/^URL:/m);
       });
 
       it('should handle obsidianUrl with encoded characters', () => {
         const task = { ...baseTask, obsidianUrl: 'obsidian://open?vault=My%20Vault&file=Projects%2Ftodo.md' };
-        const vtodo = mapper.taskToVTODO(task, 'url-test-5');
+        const vtodo = mapper.taskToVTODO(task, { uid: 'url-test-5' });
         expect(vtodo).toContain('URL:obsidian://open?vault=My%20Vault&file=Projects%2Ftodo.md');
       });
     });
@@ -497,7 +497,7 @@ END:VTODO`;
       };
 
       // Escape: task to VTODO
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       expect(vtodo).toContain('SUMMARY:Buy bread\\, milk\\, eggs');
 
       // Unescape: VTODO back to task
@@ -532,7 +532,7 @@ END:VTODO`;
       };
 
       // Round-trip: task → VTODO → task
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       const calendarObject: CalendarObject = {
         data: vtodo,
@@ -561,17 +561,17 @@ END:VTODO`;
       };
 
       // First sync: task → VTODO → task
-      const vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo1 = mapper.taskToVTODO(task, { uid: 'test-uid' });
       const calObject1: CalendarObject = { data: vtodo1, etag: 'e1', url: 'http://test' };
       const task1 = mapper.vtodoToTask(calObject1);
 
       // Second sync: should produce same result
-      const vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      const vtodo2 = mapper.taskToVTODO(task1, { uid: 'test-uid' });
       const calObject2: CalendarObject = { data: vtodo2, etag: 'e2', url: 'http://test' };
       const task2 = mapper.vtodoToTask(calObject2);
 
       // Third sync: should still be the same
-      const vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      const vtodo3 = mapper.taskToVTODO(task2, { uid: 'test-uid' });
       const calObject3: CalendarObject = { data: vtodo3, etag: 'e3', url: 'http://test' };
       const task3 = mapper.vtodoToTask(calObject3);
 
@@ -595,7 +595,7 @@ END:VTODO`;
       };
 
       // Escape: task to VTODO
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       expect(vtodo).toContain('CATEGORIES:home\\,work,urgent');
 
       // Unescape: VTODO back to task
@@ -750,7 +750,7 @@ END:VTODO`;
         body: 'Remember to bring supplies',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       expect(vtodo).toContain('DESCRIPTION:Remember to bring supplies');
     });
 
@@ -768,7 +768,7 @@ END:VTODO`;
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       expect(vtodo).not.toContain('DESCRIPTION');
     });
 
@@ -786,7 +786,7 @@ END:VTODO`;
         body: 'Line 1\nLine 2; with semicolons, commas',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       expect(vtodo).toContain('DESCRIPTION:Line 1\\nLine 2\\; with semicolons\\, commas');
     });
 
@@ -804,7 +804,7 @@ END:VTODO`;
         body: 'Meeting at 10:30\nBring items: laptop, notebook\nNote; important',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
       const calObj: CalendarObject = { data: vtodo, etag: 'e1', url: 'http://test' };
       const parsed = mapper.vtodoToTask(calObj);
 
@@ -851,7 +851,7 @@ END:VTODO`;
         body: '',
       };
 
-      const vtodo = mapper.taskToVTODO(task, 'test-uid');
+      const vtodo = mapper.taskToVTODO(task, { uid: 'test-uid' });
 
       // Should format as YYYYMMDD without timezone shifting
       expect(vtodo).toContain('DUE;VALUE=DATE:20260211');
@@ -874,7 +874,7 @@ END:VTODO`;
       };
 
       // Convert to VTODO and back
-      const vtodoData = mapper.taskToVTODO(originalTask, 'test-uid');
+      const vtodoData = mapper.taskToVTODO(originalTask, { uid: 'test-uid' });
       const calendarObject: CalendarObject = {
         data: vtodoData,
         etag: 'test-etag',
@@ -903,15 +903,15 @@ END:VTODO`;
       };
 
       // Sync 1: task → VTODO → task
-      let vtodo1 = mapper.taskToVTODO(task, 'test-uid');
+      let vtodo1 = mapper.taskToVTODO(task, { uid: 'test-uid' });
       let task1 = mapper.vtodoToTask({ data: vtodo1, etag: 'e1', url: 'http://example.com/1.ics' });
 
       // Sync 2: task → VTODO → task
-      let vtodo2 = mapper.taskToVTODO(task1, 'test-uid');
+      let vtodo2 = mapper.taskToVTODO(task1, { uid: 'test-uid' });
       let task2 = mapper.vtodoToTask({ data: vtodo2, etag: 'e2', url: 'http://example.com/2.ics' });
 
       // Sync 3: task → VTODO → task
-      let vtodo3 = mapper.taskToVTODO(task2, 'test-uid');
+      let vtodo3 = mapper.taskToVTODO(task2, { uid: 'test-uid' });
       let task3 = mapper.vtodoToTask({ data: vtodo3, etag: 'e3', url: 'http://example.com/3.ics' });
 
       // Date should be stable across all syncs
@@ -1128,7 +1128,7 @@ END:VTODO`;
       expect(task.scheduledDate).toBe('2026-03-10');
 
       // Round-trip: convert back to VTODO (will use VALUE=DATE format)
-      const vtodoOut = mapper.taskToVTODO(task, 'round-trip-tzid');
+      const vtodoOut = mapper.taskToVTODO(task, { uid: 'round-trip-tzid' });
       expect(vtodoOut).toContain('DUE;VALUE=DATE:20260315');
       expect(vtodoOut).toContain('DTSTART;VALUE=DATE:20260310');
 
@@ -1236,6 +1236,61 @@ END:VTODO`;
     });
   });
 
+  describe('taskToVTODO RELATED-TO', () => {
+    const mapper = new VTODOMapper();
+    const base = {
+      title: 'Child', status: 'TODO' as const, dueDate: null, startDate: null,
+      scheduledDate: null, completedDate: null, priority: 'none' as const,
+      tags: [], recurrenceRule: '', body: '',
+    };
+
+    it('emits RELATED-TO;RELTYPE=PARENT when a parent CalDAV UID is given', () => {
+      const ical = mapper.taskToVTODO(base, { uid: 'child-uid', parentCaldavUid: 'parent-uid' });
+      expect(ical).toContain('RELATED-TO;RELTYPE=PARENT:parent-uid');
+    });
+
+    it('omits RELATED-TO when no parent is given', () => {
+      const ical = mapper.taskToVTODO(base, { uid: 'child-uid' });
+      expect(ical).not.toContain('RELATED-TO');
+    });
+
+    it('omits RELATED-TO when parent is null', () => {
+      const ical = mapper.taskToVTODO(base, { uid: 'child-uid', parentCaldavUid: null });
+      expect(ical).not.toContain('RELATED-TO');
+    });
+  });
+
+  describe('vtodoToTask RELATED-TO', () => {
+    const mapper = new VTODOMapper();
+    const wrap = (props: string) =>
+      ({ data: `BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:c1\r\nSUMMARY:Child\r\n${props}END:VTODO\r\nEND:VCALENDAR`, url: '' });
+
+    it('parses RELATED-TO;RELTYPE=PARENT', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=PARENT:p1\r\n'));
+      expect(t.parentUid).toBe('p1');
+    });
+
+    it('parses bare RELATED-TO as PARENT (RFC default)', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO:p2\r\n'));
+      expect(t.parentUid).toBe('p2');
+    });
+
+    it('ignores RELTYPE=CHILD and RELTYPE=SIBLING', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=CHILD:c9\r\nRELATED-TO;RELTYPE=SIBLING:s9\r\n'));
+      expect(t.parentUid ?? null).toBeNull();
+    });
+
+    it('is null when no RELATED-TO present', () => {
+      const t = mapper.vtodoToTask(wrap(''));
+      expect(t.parentUid ?? null).toBeNull();
+    });
+
+    it('finds PARENT when a non-parent RELATED-TO precedes it', () => {
+      const t = mapper.vtodoToTask(wrap('RELATED-TO;RELTYPE=CHILD:c9\r\nRELATED-TO;RELTYPE=PARENT:p1\r\n'));
+      expect(t.parentUid).toBe('p1');
+    });
+  });
+
   describe('obsidian link round-trip', () => {
     it('should survive round-trip: body with link outbound, stripped inbound', () => {
       const originalBody = 'Meeting notes from standup';
@@ -1255,7 +1310,7 @@ END:VTODO`;
         obsidianUrl,
       };
 
-      const vtodoString = mapper.taskToVTODO(outboundTask, 'roundtrip-1');
+      const vtodoString = mapper.taskToVTODO(outboundTask, { uid: 'roundtrip-1' });
 
       expect(vtodoString).toContain('URL:obsidian://open?vault=Work&file=Meetings%2Fstandup.md');
       expect(vtodoString).toMatch(/DESCRIPTION:.*obsidian:\/\/open/);
@@ -1283,7 +1338,7 @@ END:VTODO`;
         obsidianUrl,
       };
 
-      const vtodoString = mapper.taskToVTODO(outboundTask, 'roundtrip-2');
+      const vtodoString = mapper.taskToVTODO(outboundTask, { uid: 'roundtrip-2' });
       const vtodo: CalendarObject = { url: '/cal/roundtrip.ics', data: vtodoString };
       const parsed = mapper.vtodoToTask(vtodo);
 
@@ -1371,20 +1426,20 @@ END:VTODO`;
     };
 
     function roundTrip(task: Omit<CommonTask, 'uid'>) {
-      const data = mapper.taskToVTODO(task, 'rt-uid');
+      const data = mapper.taskToVTODO(task, { uid: 'rt-uid' });
       return mapper.vtodoToTask({ data, url: 'http://x/rt-uid.ics', etag: 'e' });
     }
 
     it('writes DTSTART from scheduledDate even when startDate is also set', () => {
       const ics = mapper.taskToVTODO(
         { ...baseTask, startDate: '2026-07-01', scheduledDate: '2026-07-10' },
-        'uid-1',
+        { uid: 'uid-1' },
       );
       expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
     });
 
     it('does not write DTSTART for a start-only task', () => {
-      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, 'uid-1');
+      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, { uid: 'uid-1' });
       expect(ics).not.toContain('DTSTART');
     });
 

@@ -90,6 +90,18 @@ describe('tasksEqual', () => {
     const b = makeCommonTask({ body: 'New note' });
     expect(tasksEqual(a, b)).toBe(false);
   });
+
+  it('should detect parentUid change', () => {
+    const a = makeCommonTask({ parentUid: 'parent-1' });
+    const b = makeCommonTask({ parentUid: 'parent-2' });
+    expect(tasksEqual(a, b)).toBe(false);
+  });
+
+  it('should treat missing parentUid as equal to null', () => {
+    const a = makeCommonTask({ parentUid: null });
+    const b = makeCommonTask();
+    expect(tasksEqual(a, b)).toBe(true);
+  });
 });
 
 describe('diff', () => {

@@ -16,6 +16,7 @@ export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
     a.priority === b.priority &&
     a.recurrenceRule === b.recurrenceRule &&
     a.body === b.body &&
+    (a.parentUid ?? null) === (b.parentUid ?? null) &&
     a.tags.length === b.tags.length &&
     a.tags.every((tag, i) => tag === b.tags[i])
   );

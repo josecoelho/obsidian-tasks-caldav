@@ -1,4 +1,4 @@
-import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody } from './obsidianTasksWrapper';
+import { ObsidianTasksWrapper, ObsidianTask, TaskWithBody, isTaskLine } from './obsidianTasksWrapper';
 import { App, TFile } from 'obsidian';
 
 // Mock TFile class
@@ -670,9 +670,120 @@ More content`;
         });
     });
 
+    describe('updateTaskInVault preserves indentation', () => {
+        let mockFile: MockTFile;
+
+        const fileContent = [
+            '- [ ] Parent 🆔 p1 #sync',
+            '    - body line',
+            '    - [ ] Child 🆔 c1',
+        ].join('\n');
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+        });
+
+        it('preserves indentation when updating a child task', async () => {
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { path: 'test.md', _lineNumber: 2 },
+            });
+
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toContain('    - [x] Child 🆔 c1');
+            expect(written).toContain('- [ ] Parent 🆔 p1 #sync');
+            expect(written).toContain('    - body line');
+        });
+
+        it('does not consume child task lines when updating a parent', async () => {
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toContain('    - [ ] Child 🆔 c1');
+        });
+
+        it('parent update preserves the body line and child', async () => {
+            // File: parent with a body line then a child task
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - body line\n    - [ ] Child 🆔 c1'
+            );
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await wrapper.updateTaskInVault(parentTask, '- [x] Parent 🆔 p1 #sync');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Parent line replaced, old body line consumed (newContent has no body),
+            // child task line preserved untouched (loop stops at isTaskLine)
+            expect(written.split('\n')).toEqual([
+                '- [x] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+            ]);
+        });
+
+        it('child with its own body: indent preserved on rewrite', async () => {
+            // File: parent, then indented child with its own body
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - [ ] Child 🆔 c1\n        - child body'
+            );
+
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { path: 'test.md', _lineNumber: 1 },
+            });
+
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Parent preserved
+            expect(written).toContain('- [ ] Parent 🆔 p1 #sync');
+            // Child updated with original 4-space indent preserved
+            expect(written).toContain('    - [x] Child 🆔 c1');
+            // Old child body line was consumed (newContent has no body)
+            expect(written).not.toContain('- child body');
+        });
+
+        it('recurrence toggle 2-line result on an indented child keeps both lines indented', async () => {
+            // File: parent, then indented child (no body)
+            mockApp.vault.read.mockResolvedValue(
+                '- [ ] Parent 🆔 p1 #sync\n    - [ ] Child 🆔 c1'
+            );
+
+            const childTask = createMockTask({
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { path: 'test.md', _lineNumber: 1 },
+            });
+
+            // Recurrence toggle produces 2 lines: completed + new occurrence
+            await wrapper.updateTaskInVault(childTask, '- [x] Child 🆔 c1\n- [ ] Child 🆔 c2');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            // Both result lines must receive the child's 4-space indent; parent untouched
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [x] Child 🆔 c1',
+                '    - [ ] Child 🆔 c2',
+            ]);
+        });
+    });
+
     describe('filterByTag', () => {
         function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
-            return { task, body };
+            return { task, body, parentTask: null };
         }
 
         it('should filter tasks by sync tag', () => {
@@ -724,6 +835,54 @@ More content`;
         });
     });
 
+    describe('filterByTag inheritance', () => {
+        const tagged = (over: Partial<ObsidianTask>) =>
+            ({ tags: ['#sync'], id: '', originalMarkdown: '', taskLocation: { path: 'a.md', _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+        const plain = (over: Partial<ObsidianTask>) =>
+            ({ tags: [], id: '', originalMarkdown: '', taskLocation: { path: 'a.md', _lineNumber: 0 }, ...over } as unknown as ObsidianTask);
+
+        it('keeps an untagged child when an ancestor carries the sync tag', () => {
+            const parent = tagged({ id: 'p1' });
+            const child = plain({ id: 'c1' });
+            const grandchild = plain({ id: 'g1' });
+            const inputs = [
+                { task: parent, body: '', parentTask: null },
+                { task: child, body: '', parentTask: parent },
+                { task: grandchild, body: '', parentTask: child },
+            ];
+            const kept = wrapper.filterByTag(inputs, '#sync').map(i => i.task.id);
+            expect(kept.sort()).toEqual(['c1', 'g1', 'p1']);
+        });
+
+        it('drops an untagged task whose ancestors are also untagged', () => {
+            const parent = plain({ id: 'p1' });
+            const child = plain({ id: 'c1' });
+            const inputs = [
+                { task: parent, body: '', parentTask: null },
+                { task: child, body: '', parentTask: parent },
+            ];
+            expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(0);
+        });
+
+        it('treats a child as ineligible when its parent is not in inputs', () => {
+            const outsideParent = tagged({ id: 'outside' });
+            const child = plain({ id: 'orphan' });
+            const inputs = [
+                { task: child, body: '', parentTask: outsideParent },
+            ];
+            expect(wrapper.filterByTag(inputs, '#sync')).toHaveLength(0);
+        });
+
+        it('does not infinitely recurse on a parentTask cycle', () => {
+            const a = plain({ id: 'a' });
+            const b = plain({ id: 'b' });
+            const inputA = { task: a, body: '', parentTask: b };
+            const inputB = { task: b, body: '', parentTask: a };
+            expect(() => wrapper.filterByTag([inputA, inputB], '#sync')).not.toThrow();
+            expect(wrapper.filterByTag([inputA, inputB], '#sync')).toHaveLength(0);
+        });
+    });
+
     describe('extractBodyFromFile', () => {
         it('should extract indented bullet lines below a task (4-space indent)', () => {
             const content = '- [ ] Task\n    - Note one\n    - Note two\nNext line';
@@ -756,6 +915,101 @@ More content`;
         });
     });
 
+    describe('extractBodyFromFile with subtasks', () => {
+        it('treats indented checkbox lines as subtasks, not body', () => {
+            const content = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - this is body',
+                '    - [ ] Child task',
+                '    - more body after child',
+            ].join('\n');
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('this is body');
+        });
+
+        it('returns empty body when the first indented line is a subtask', () => {
+            const content = ['- [ ] Parent 🆔 p1 #sync', '    - [ ] Child'].join('\n');
+            expect(wrapper.extractBodyFromFile(content, 0)).toBe('');
+        });
+    });
+
+    describe('insertSubtask', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+        });
+
+        it('inserts child line indented after parent body', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync\n    - parent body';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written).toBe(
+                '- [ ] Parent 🆔 p1 #sync\n    - parent body\n    - [ ] Child 🆔 c1'
+            );
+        });
+
+        it('inserts after existing subtasks', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync\n    - body\n    - [ ] Existing child 🆔 e1';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] New child 🆔 n1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - body',
+                '    - [ ] Existing child 🆔 e1',
+                '    - [ ] New child 🆔 n1',
+            ]);
+        });
+
+        it('parent on the last line of the file', async () => {
+            const fileContent = '- [ ] Parent 🆔 p1 #sync';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1');
+
+            const written = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(written.split('\n')).toEqual([
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+            ]);
+        });
+
+        it('throws when the parent line is not found in the file', async () => {
+            const fileContent = '- [ ] Different task';
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const parentTask = createMockTask({
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'test.md', _lineNumber: 0 },
+            });
+
+            await expect(wrapper.insertSubtask(parentTask, '- [ ] Child 🆔 c1')).rejects.toThrow();
+        });
+    });
+
     describe('extractId', () => {
         it('should return task.id when present', () => {
             const task = createMockTask({ id: 'from-field' });
@@ -765,6 +1019,48 @@ More content`;
         it('should return null when task.id is empty', () => {
             const task = createMockTask({ id: '' });
             expect(wrapper.extractId(task)).toBeNull();
+        });
+    });
+
+    describe('isTaskLine', () => {
+        it('returns true for "- [ ] x"', () => {
+            expect(isTaskLine('- [ ] x')).toBe(true);
+        });
+
+        it('returns true for "- [x] done"', () => {
+            expect(isTaskLine('- [x] done')).toBe(true);
+        });
+
+        it('returns true for "* [ ] x"', () => {
+            expect(isTaskLine('* [ ] x')).toBe(true);
+        });
+
+        it('returns true for "+ [ ] x"', () => {
+            expect(isTaskLine('+ [ ] x')).toBe(true);
+        });
+
+        it('returns true for "1. [ ] x"', () => {
+            expect(isTaskLine('1. [ ] x')).toBe(true);
+        });
+
+        it('returns true for "    - [ ] indented"', () => {
+            expect(isTaskLine('    - [ ] indented')).toBe(true);
+        });
+
+        it('returns true for "\\t- [ ] tab"', () => {
+            expect(isTaskLine('\t- [ ] tab')).toBe(true);
+        });
+
+        it('returns true for "- [ ]" (bare, no description)', () => {
+            expect(isTaskLine('- [ ]')).toBe(true);
+        });
+
+        it('returns false for "- plain bullet"', () => {
+            expect(isTaskLine('- plain bullet')).toBe(false);
+        });
+
+        it('returns false for "not a task"', () => {
+            expect(isTaskLine('not a task')).toBe(false);
         });
     });
 
@@ -949,6 +1245,133 @@ More content`;
         it('returns defaults when loadData throws', async () => {
             const w = wrapperWith({ loadData: jest.fn().mockRejectedValue(new Error('boom')) });
             await expect(w.getTasksPluginConfig()).resolves.toEqual(defaults);
+        });
+    });
+
+    describe('parent map', () => {
+        let mockPlugin: MockTasksPlugin;
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            mockPlugin = { getTasks: jest.fn().mockReturnValue([]) };
+            (mockApp.plugins.plugins as Record<string, unknown>)['obsidian-tasks-plugin'] = mockPlugin;
+            wrapper.initialize();
+        });
+
+        it('should compute structural parent for nested tasks', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child 🆔 c1',
+                '        - [ ] Grandchild 🆔 g1',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
+            });
+            const childTask = createMockTask({
+                id: 'c1',
+                originalMarkdown: '- [ ] Child 🆔 c1',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            const grandchildTask = createMockTask({
+                id: 'g1',
+                originalMarkdown: '- [ ] Grandchild 🆔 g1',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childTask, grandchildTask]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('p1')!.parentTask).toBeNull();
+            expect(byId.get('c1')!.parentTask!.id).toBe('p1');
+            expect(byId.get('g1')!.parentTask!.id).toBe('c1');
+        });
+
+        it('siblings share a parent and are not parents of each other', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child A 🆔 ca',
+                '    - [ ] Child B 🆔 cb',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
+            });
+            const childA = createMockTask({
+                id: 'ca',
+                originalMarkdown: '- [ ] Child A 🆔 ca',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            const childB = createMockTask({
+                id: 'cb',
+                originalMarkdown: '- [ ] Child B 🆔 cb',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childA, childB]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('ca')!.parentTask!.id).toBe('p1');
+            expect(byId.get('cb')!.parentTask!.id).toBe('p1');
+            expect(byId.get('ca')!.parentTask!.id).not.toBe('cb');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('ca');
+        });
+
+        it('a child after a deeper grandchild re-ascends to the root', async () => {
+            const fileContent = [
+                '- [ ] Parent 🆔 p1 #sync',
+                '    - [ ] Child A 🆔 ca',
+                '        - [ ] Grandchild 🆔 g1',
+                '    - [ ] Child B 🆔 cb',
+            ].join('\n');
+
+            const parentTask = createMockTask({
+                id: 'p1',
+                originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 0 },
+            });
+            const childA = createMockTask({
+                id: 'ca',
+                originalMarkdown: '- [ ] Child A 🆔 ca',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
+            });
+            const grandchild = createMockTask({
+                id: 'g1',
+                originalMarkdown: '- [ ] Grandchild 🆔 g1',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 2 },
+            });
+            const childB = createMockTask({
+                id: 'cb',
+                originalMarkdown: '- [ ] Child B 🆔 cb',
+                taskLocation: { path: 'Tasks.md', _lineNumber: 3 },
+            });
+
+            mockPlugin.getTasks.mockReturnValue([parentTask, childA, grandchild, childB]);
+
+            const file = new MockTFile('Tasks.md');
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(file);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+
+            const result = await wrapper.getAllTasksWithBody();
+            const byId = new Map(result.map(r => [r.task.id, r]));
+            expect(byId.get('g1')!.parentTask!.id).toBe('ca');
+            expect(byId.get('cb')!.parentTask!.id).toBe('p1');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('g1');
+            expect(byId.get('cb')!.parentTask!.id).not.toBe('ca');
         });
     });
 

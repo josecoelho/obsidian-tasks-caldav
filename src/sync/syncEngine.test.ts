@@ -68,7 +68,7 @@ function buildVTODO(uid: string, summary: string, extra: string[] = []): string 
 }
 
 function withBody(...tasks: ObsidianTask[]) {
-  return tasks.map(task => ({ task, body: '' }));
+  return tasks.map(task => ({ task, body: '', parentTask: null }));
 }
 
 function makeCalObj(uid: string, summary: string, extra: string[] = []): CalendarObject {

@@ -126,7 +126,7 @@ describe('CalDAVAdapter E2E', () => {
       };
 
       const caldavUID = `e2e-roundtrip-${Date.now()}`;
-      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      const vtodoData = adapter.fromCommonTask(task, caldavUID, null);
       await client.createVTODO(vtodoData, caldavUID);
 
       // Fetch back and normalize
@@ -162,7 +162,7 @@ describe('CalDAVAdapter E2E', () => {
       };
 
       const caldavUID = `e2e-done-${Date.now()}`;
-      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      const vtodoData = adapter.fromCommonTask(task, caldavUID, null);
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
@@ -194,7 +194,7 @@ describe('CalDAVAdapter E2E', () => {
       };
 
       const caldavUID = `e2e-desc-rt-${Date.now()}`;
-      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      const vtodoData = adapter.fromCommonTask(task, caldavUID, null);
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();
@@ -224,7 +224,7 @@ describe('CalDAVAdapter E2E', () => {
       };
 
       const caldavUID = `e2e-desc-special-${Date.now()}`;
-      const vtodoData = adapter.fromCommonTask(task, caldavUID);
+      const vtodoData = adapter.fromCommonTask(task, caldavUID, null);
       await client.createVTODO(vtodoData, caldavUID);
 
       const vtodos = await client.fetchVTODOs();

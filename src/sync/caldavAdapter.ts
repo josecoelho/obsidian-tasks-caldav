@@ -46,8 +46,19 @@ export class CalDAVAdapter {
       const caldavUid = this.mapper.extractUID(vtodo.data);
       if (!caldavUid) continue;
 
+      const parsed = this.mapper.vtodoToTask(vtodo);
       const uid = idMapping.caldavUidToTaskId[caldavUid] ?? caldavUid;
-      tasks.push(this.toCommonTask(vtodo, uid));
+      const rawParent = parsed.parentUid ?? null;
+      const parentUid = rawParent
+        ? (idMapping.caldavUidToTaskId[rawParent] ?? rawParent)
+        : null;
+
+      tasks.push({
+        ...parsed,
+        uid,
+        parentUid,
+        completedDate: parsed.completedDate ? this.toLocalDate(parsed.completedDate) : null,
+      });
     }
 
     return tasks;
@@ -56,12 +67,13 @@ export class CalDAVAdapter {
   /**
    * Convert a single VTODO CalendarObject to a CommonTask.
    */
-  toCommonTask(vtodo: CalendarObject, uid: string): CommonTask {
+  toCommonTask(vtodo: CalendarObject, uid: string, parentUid: string | null): CommonTask {
     const parsed = this.mapper.vtodoToTask(vtodo);
 
     return {
       ...parsed,
       uid,
+      parentUid,
       completedDate: parsed.completedDate ? this.toLocalDate(parsed.completedDate) : null,
     };
   }
@@ -82,9 +94,9 @@ export class CalDAVAdapter {
    * caldavCategory into the outgoing CATEGORIES so the task stays identifiable
    * on the server even if user content tags don't include it.
    */
-  fromCommonTask(task: CommonTask, caldavUID: string): string {
+  fromCommonTask(task: CommonTask, caldavUID: string, parentCaldavUid: string | null): string {
     const tags = injectTagIdentifier(task.tags, this.caldavCategory);
-    return this.mapper.taskToVTODO({ ...task, tags }, caldavUID);
+    return this.mapper.taskToVTODO({ ...task, tags }, { uid: caldavUID, parentCaldavUid });
   }
 
   /**
@@ -94,10 +106,13 @@ export class CalDAVAdapter {
   async applyChanges(changes: SyncChange[], idMapping: IdMapping, onApplied?: () => void): Promise<void> {
     for (const change of changes) {
       const caldavUID = this.resolveCaldavUid(change.task.uid, idMapping);
+      const parentCaldavUid = change.task.parentUid
+        ? (idMapping.taskIdToCaldavUid[change.task.parentUid] ?? change.task.parentUid)
+        : null;
 
       switch (change.type) {
         case 'create': {
-          const vtodoData = this.fromCommonTask(change.task, caldavUID);
+          const vtodoData = this.fromCommonTask(change.task, caldavUID, parentCaldavUid);
           await this.client.createVTODO(vtodoData, caldavUID);
           break;
         }
@@ -107,7 +122,7 @@ export class CalDAVAdapter {
             console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
             continue;
           }
-          const newData = this.fromCommonTask(change.task, caldavUID);
+          const newData = this.fromCommonTask(change.task, caldavUID, parentCaldavUid);
           await this.client.updateVTODO(existing, newData);
           break;
         }
@@ -121,7 +136,7 @@ export class CalDAVAdapter {
             ...change.task,
             recurrenceRule: '',
           };
-          const newData = this.fromCommonTask(completedTask, caldavUID);
+          const newData = this.fromCommonTask(completedTask, caldavUID, parentCaldavUid);
           await this.client.updateVTODO(existing, newData);
           break;
         }

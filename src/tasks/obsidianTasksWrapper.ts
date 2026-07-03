@@ -1,5 +1,10 @@
 import { App, TFile } from 'obsidian';
 
+/** True when a line is a list checkbox task (any indent), e.g. "- [ ] x", "1. [x] y", or a bare "- [ ]". */
+export function isTaskLine(line: string): boolean {
+    return /^\s*(?:[-*+]|\d+\.)\s+\[.\]\s?/.test(line);
+}
+
 /**
  * Represents a task from obsidian-tasks plugin
  * Based on actual Task structure from obsidian-tasks
@@ -39,6 +44,7 @@ export interface ObsidianTask {
 export interface TaskWithBody {
     task: ObsidianTask;
     body: string;
+    parentTask: ObsidianTask | null;
 }
 
 /**
@@ -205,9 +211,11 @@ export class ObsidianTasksWrapper {
             throw new Error(`Could not find task in file: ${originalMarkdown}`);
         }
 
-        // Count indented note lines below the task
+        const originalIndent = lines[taskIndex].match(/^\s*/)?.[0] ?? '';
+
         let noteLineCount = 0;
         for (let i = taskIndex + 1; i < lines.length; i++) {
+            if (isTaskLine(lines[i])) break;
             if (/^(?:\s{2,}|\t)- /.test(lines[i])) {
                 noteLineCount++;
             } else {
@@ -215,11 +223,49 @@ export class ObsidianTasksWrapper {
             }
         }
 
-        // Replace the task line + any note lines with new content
-        const newLines = newContent.split('\n');
+        const newLines = newContent.split('\n').map(l => originalIndent + l);
         lines.splice(taskIndex, 1 + noteLineCount, ...newLines);
 
         // Write back to file
+        await this.app.vault.modify(file, lines.join('\n'));
+    }
+
+    /**
+     * Insert a child task line indented one level under `parentTask`,
+     * placed after the parent's body lines and any existing subtasks.
+     */
+    async insertSubtask(parentTask: ObsidianTask, childMarkdown: string): Promise<void> {
+        const filePath = parentTask.taskLocation.path;
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file || !(file instanceof TFile)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+        const parentIndex = lines.findIndex(
+            l => l.trim() === parentTask.originalMarkdown.trim(),
+        );
+        if (parentIndex === -1) {
+            throw new Error(`Could not find parent in file: ${parentTask.originalMarkdown}`);
+        }
+
+        const parentIndent = lines[parentIndex].match(/^\s*/)?.[0] ?? '';
+        const childIndent = parentIndent + '    ';
+
+        let insertAt = parentIndex + 1;
+        // Blank lines break the scan early; consistent with updateTaskInVault's loop strategy.
+        for (let i = parentIndex + 1; i < lines.length; i++) {
+            const indent = lines[i].match(/^\s*/)?.[0] ?? '';
+            if (indent.length > parentIndent.length && lines[i].trim() !== '') {
+                insertAt = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        const childLines = childMarkdown.split('\n').map(l => childIndent + l);
+        lines.splice(insertAt, 0, ...childLines);
         await this.app.vault.modify(file, lines.join('\n'));
     }
 
@@ -359,29 +405,53 @@ export class ObsidianTasksWrapper {
                 const file = this.app.vault.getAbstractFileByPath(filePath);
                 if (!file || !(file instanceof TFile)) {
                     for (const task of fileTasks) {
-                        result.push({ task, body: '' });
+                        result.push({ task, body: '', parentTask: null });
                     }
                     continue;
                 }
                 const content = await this.app.vault.read(file);
                 const lines = content.split('\n');
 
-                for (const task of fileTasks) {
-                    const lineIndex = lines.findIndex(
-                        line => line.trim() === task.originalMarkdown.trim()
-                    );
-                    if (lineIndex === -1) {
-                        result.push({ task, body: '' });
+                // Structural parent = nearest earlier task line with a smaller
+                // indent. Indent is leading-whitespace character count, so this
+                // assumes consistent space-only indentation (a tab counts as 1).
+                // Lines are located by trimmed-markdown match (consistent with the
+                // rest of this file; cache line numbers are intentionally not
+                // trusted). Two tasks with byte-identical trimmed text resolve to
+                // the same line — a known, pre-existing limitation.
+                const lineOf = (t: ObsidianTask) =>
+                    lines.findIndex(l => l.trim() === t.originalMarkdown.trim());
+                const indentOf = (idx: number) =>
+                    idx < 0 ? -1 : (lines[idx].match(/^\s*/)?.[0].length ?? 0);
+
+                const located = fileTasks
+                    .map(task => ({ task, line: lineOf(task) }))
+                    .sort((a, b) => a.line - b.line);
+
+                for (let i = 0; i < located.length; i++) {
+                    const { task, line } = located[i];
+                    if (line === -1) {
+                        result.push({ task, body: '', parentTask: null });
                         continue;
                     }
-
-                    const body = this.extractBodyFromFile(content, lineIndex);
-                    result.push({ task, body });
+                    const myIndent = indentOf(line);
+                    let parentTask: ObsidianTask | null = null;
+                    for (let j = i - 1; j >= 0; j--) {
+                        if (located[j].line !== -1 && indentOf(located[j].line) < myIndent) {
+                            parentTask = located[j].task;
+                            break;
+                        }
+                    }
+                    result.push({
+                        task,
+                        body: this.extractBodyFromFile(content, line),
+                        parentTask,
+                    });
                 }
             } catch (error) {
                 console.error(`[ObsidianTasksWrapper] Failed to read file for body: ${filePath}`, error);
                 for (const task of fileTasks) {
-                    result.push({ task, body: '' });
+                    result.push({ task, body: '', parentTask: null });
                 }
             }
         }
@@ -390,20 +460,35 @@ export class ObsidianTasksWrapper {
     }
 
     /**
-     * Filter task inputs by sync tag.
-     * Keeps only tasks whose tags include the given sync tag (case-insensitive).
-     * Returns all inputs when syncTag is empty or undefined.
+     * Keeps tasks that carry the sync tag, or whose nearest ancestor chain (via parentTask, within `inputs`) carries it — so untagged subtasks of a tagged parent are synced.
+     * If a task's parentTask is not present in `inputs`, ancestry is truncated there: the task is kept only if it carries the tag itself.
+     * Returns all inputs unchanged when syncTag is empty/undefined.
      */
     filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
         if (!syncTag || syncTag.trim() === '') return inputs;
 
         const tagLower = syncTag.toLowerCase().replace(/^#/, '');
-        return inputs.filter(({ task }) => {
-            if (!task.tags || task.tags.length === 0) return false;
-            return task.tags.some((tag: string) =>
-                tag.toLowerCase().replace(/^#/, '') === tagLower
-            );
-        });
+        const hasOwnTag = (task: ObsidianTask) =>
+            !!task.tags && task.tags.some(t => t.toLowerCase().replace(/^#/, '') === tagLower);
+
+        const byTask = new Map<ObsidianTask, TaskWithBody>(inputs.map(i => [i.task, i]));
+
+        const eligible = new Map<ObsidianTask, boolean>();
+        const isEligible = (input: TaskWithBody): boolean => {
+            const cached = eligible.get(input.task);
+            if (cached !== undefined) return cached;
+            // parentTask cycles cannot arise from loadBodies (parents resolve
+            // within one file in line order); this guard only prevents infinite
+            // recursion if inputs are ever built differently. A cycle member is
+            // treated as ineligible.
+            eligible.set(input.task, false); // cycle guard
+            const parentInput = input.parentTask ? byTask.get(input.parentTask) : undefined;
+            const result = hasOwnTag(input.task) || (parentInput ? isEligible(parentInput) : false);
+            eligible.set(input.task, result);
+            return result;
+        };
+
+        return inputs.filter(isEligible);
     }
 
     /**
@@ -416,6 +501,7 @@ export class ObsidianTasksWrapper {
         const noteLines: string[] = [];
 
         for (let i = taskLineIndex + 1; i < lines.length; i++) {
+            if (isTaskLine(lines[i])) break;
             const match = lines[i].match(/^(?:\s{2,}|\t)- (.*)$/);
             if (!match) break;
             noteLines.push(match[1]);

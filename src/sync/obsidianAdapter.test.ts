@@ -1,6 +1,6 @@
 import { ObsidianAdapter, ObsidianSyncSettings, TaskWithBody } from './obsidianAdapter';
 import { ObsidianTask, ObsidianTasksWrapper } from '../tasks/obsidianTasksWrapper';
-import { CommonTask } from './types';
+import { CommonTask, SyncChange } from './types';
 
 function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
   return {
@@ -24,7 +24,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
 }
 
 function withBody(task: ObsidianTask, body: string = ''): TaskWithBody {
-  return { task, body };
+  return { task, body, parentTask: null };
 }
 
 const dummyWrapper = {
@@ -34,6 +34,7 @@ const dummyWrapper = {
   findTaskById: jest.fn().mockReturnValue(null),
   createTask: jest.fn().mockResolvedValue(undefined),
   updateTaskInVault: jest.fn().mockResolvedValue(undefined),
+  insertSubtask: jest.fn().mockResolvedValue(undefined),
   initialize: jest.fn().mockReturnValue(true),
   getTaskId: jest.fn(),
   getToggleCommand: jest.fn().mockReturnValue(null),
@@ -76,7 +77,7 @@ describe('ObsidianAdapter', () => {
     it('should include body from task inputs', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const inputs = [
-        { task: makeTask({ id: 'task-1' }), body: 'Some body' },
+        { task: makeTask({ id: 'task-1' }), body: 'Some body', parentTask: null },
       ];
       const tasks = adapter.normalize(inputs, extractId);
       expect(tasks[0].body).toBe('Some body');
@@ -167,7 +168,7 @@ describe('ObsidianAdapter', () => {
     it('should return the original ObsidianTask after normalize', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
       const task = makeTask({ description: 'Test', id: 'my-id' });
-      adapter.normalize([{ task, body: '' }], extractId);
+      adapter.normalize([{ task, body: '', parentTask: null }], extractId);
 
       expect(adapter.findOriginalTask('my-id')).toBe(task);
     });
@@ -216,6 +217,7 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-1',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);
@@ -249,6 +251,7 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-2',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);
@@ -282,10 +285,56 @@ describe('ObsidianAdapter', () => {
           id: 'test-id-3',
         },
         body: '',
+        parentTask: null,
       }];
 
       const result = adapter.normalize(inputs, (task) => task.id || null);
       expect(result[0].obsidianUrl).toBe('obsidian://open?vault=My%20Vault&file=My%20Folder%2Ftasks%20file.md');
+    });
+  });
+
+  describe('normalize parentUid', () => {
+    it('sets parentUid to the assigned id of the structural parent', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
+      const parent = { id: 'p1', description: 'Parent', tags: ['#sync'],
+        status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+        isDone: false, priority: '0', recurrence: null,
+        taskLocation: { path: 'a.md', _lineNumber: 0 },
+        originalMarkdown: '- [ ] Parent 🆔 p1 #sync',
+        createdDate: null, startDate: null, scheduledDate: null,
+        dueDate: null, doneDate: null, cancelledDate: null } as unknown as ObsidianTask;
+      const child = { ...parent, id: 'c1', description: 'Child',
+        originalMarkdown: '    - [ ] Child 🆔 c1' } as unknown as ObsidianTask;
+
+      const tasks = adapter.normalize(
+        [
+          { task: parent, body: '', parentTask: null },
+          { task: child, body: '', parentTask: parent },
+        ],
+        (t) => (t.id && t.id.length > 0 ? t.id : null),
+      );
+      const byUid = new Map(tasks.map(t => [t.uid, t]));
+      expect(byUid.get('p1')!.parentUid ?? null).toBeNull();
+      expect(byUid.get('c1')!.parentUid).toBe('p1');
+    });
+
+    it('falls back to null parentUid when the structural parent is not in the batch', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
+      const orphanParent = { id: 'p9', description: 'Filtered parent', tags: [],
+        status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
+        isDone: false, priority: '0', recurrence: null,
+        taskLocation: { path: 'a.md', _lineNumber: 0 },
+        originalMarkdown: '- [ ] Filtered parent 🆔 p9',
+        createdDate: null, startDate: null, scheduledDate: null,
+        dueDate: null, doneDate: null, cancelledDate: null } as unknown as ObsidianTask;
+      const child = { ...orphanParent, id: 'c9', description: 'Child',
+        originalMarkdown: '    - [ ] Child 🆔 c9' } as unknown as ObsidianTask;
+
+      const tasks = adapter.normalize(
+        [{ task: child, body: '', parentTask: orphanParent }],
+        (t) => (t.id && t.id.length > 0 ? t.id : null),
+      );
+      expect(tasks[0].parentUid ?? null).toBeNull();
     });
   });
 
@@ -520,6 +569,77 @@ describe('ObsidianAdapter', () => {
           body: '',
         },
       }])).rejects.toThrow('obsidian-tasks API not available');
+    });
+  });
+
+  describe('applyChanges subtask creates', () => {
+    const baseCommonTask = {
+      title: 'Task',
+      status: 'TODO' as const,
+      dueDate: null,
+      startDate: null,
+      scheduledDate: null,
+      completedDate: null,
+      priority: 'none' as const,
+      tags: [],
+      recurrenceRule: '',
+      body: '',
+      parentUid: null,
+    };
+
+    it('creates parent before child and calls insertSubtask for the child', async () => {
+      const createTask = jest.fn().mockResolvedValue(undefined);
+      const insertSubtask = jest.fn().mockResolvedValue(undefined);
+
+      // The parent ObsidianTask returned by findTaskById after the parent is created.
+      // Return it for any call — the first call stores it in createdIdByUid.created,
+      // the second lookup resolves the child's parentTask from that stored entry.
+      const mockParentObsidianTask = makeTask({ id: 'generated-parent-id', description: 'Parent' });
+      const findTaskById = jest.fn().mockReturnValue(mockParentObsidianTask);
+
+      const wrapper = {
+        ...dummyWrapper,
+        createTask,
+        insertSubtask,
+        findTaskById,
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const changes = [
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-child', parentUid: 'cal-parent' } },
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-parent', parentUid: null } },
+      ] as SyncChange[];
+
+      await adapter.applyChanges(changes);
+
+      expect(createTask).toHaveBeenCalledTimes(1);    // only the parent (top-level)
+      expect(insertSubtask).toHaveBeenCalledTimes(1); // the child nested
+    });
+
+    it('returns createdMappings for both parent and child', async () => {
+      const mockParentObsidianTask = makeTask({ id: 'p-id', description: 'Parent' });
+      const findTaskById = jest.fn().mockReturnValue(mockParentObsidianTask);
+
+      const wrapper = {
+        ...dummyWrapper,
+        createTask: jest.fn().mockResolvedValue(undefined),
+        insertSubtask: jest.fn().mockResolvedValue(undefined),
+        findTaskById,
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const changes = [
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-child', parentUid: 'cal-parent' } },
+        { type: 'create', task: { ...baseCommonTask, uid: 'cal-parent', parentUid: null } },
+      ] as SyncChange[];
+
+      const result = await adapter.applyChanges(changes);
+
+      expect(result.createdMappings).toHaveLength(2);
+      const caldavUIDs = result.createdMappings.map(m => m.caldavUID).sort();
+      expect(caldavUIDs).toEqual(['cal-child', 'cal-parent']);
     });
   });
 

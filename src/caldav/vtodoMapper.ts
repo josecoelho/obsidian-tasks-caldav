@@ -19,11 +19,17 @@ type VTODOTaskFields = Omit<CommonTask, 'uid'>;
 export class VTODOMapper {
   /**
    * Convert a CommonTask to VTODO iCalendar string.
+   *
    * @param task The common task
-   * @param uid The CalDAV UID (use for updates, generate new for creates)
+   * @param opts.uid The CalDAV UID (use for updates, generate new for creates)
+   * @param opts.parentCaldavUid Resolved parent CalDAV UID for subtask hierarchy; emits RELATED-TO;RELTYPE=PARENT when set
    * @returns VTODO iCalendar string
    */
-  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
+  taskToVTODO(
+    task: Omit<CommonTask, 'uid'>,
+    opts: { uid: string; parentCaldavUid?: string | null },
+  ): string {
+    const { uid, parentCaldavUid = null } = opts;
     const lines: string[] = [];
 
     lines.push('BEGIN:VCALENDAR');
@@ -80,6 +86,10 @@ export class VTODOMapper {
       lines.push(`CATEGORIES:${task.tags.map(t => this.escapeText(t)).join(',')}`);
     }
 
+    if (parentCaldavUid) {
+      lines.push(`RELATED-TO;RELTYPE=PARENT:${parentCaldavUid}`);
+    }
+
     lines.push('END:VTODO');
     lines.push('END:VCALENDAR');
 
@@ -112,6 +122,7 @@ export class VTODOMapper {
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',
       tags: this.dedupeTags([...this.extractCategories(data), ...extractInlineTags(summary)]),
       body: this.stripObsidianLinks(this.extractRawProperty(data, 'DESCRIPTION') || ''),
+      parentUid: this.extractRelatedParent(data),
     };
   }
 
@@ -122,6 +133,25 @@ export class VTODOMapper {
     const unfolded = this.unfold(data);
     const match = unfolded.match(/^UID:(.+)$/m);
     return match ? match[1].trim() : '';
+  }
+
+  /**
+   * Extract the parent UID from a RELATED-TO property.
+   * RELTYPE=PARENT or an absent RELTYPE (RFC 5545 default) is treated as the
+   * parent link. RELTYPE=CHILD / RELTYPE=SIBLING are ignored.
+   */
+  private extractRelatedParent(data: string): string | null {
+    const regex = /^RELATED-TO(;[^:]*)?:(.+)$/gm;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(data)) !== null) {
+      const params = (match[1] ?? '').toUpperCase();
+      const reltypeMatch = params.match(/RELTYPE=([A-Z]+)/);
+      const reltype = reltypeMatch ? reltypeMatch[1] : 'PARENT';
+      if (reltype === 'PARENT') {
+        return match[2].trim();
+      }
+    }
+    return null;
   }
 
   /**
