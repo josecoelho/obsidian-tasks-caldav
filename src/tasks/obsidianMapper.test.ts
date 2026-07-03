@@ -84,6 +84,29 @@ describe('ObsidianMapper', () => {
       expect(mapper.toCommonTask(task, 'id').tags).toEqual(['sync', 'work', 'plain']);
     });
 
+    // Issue #114 (reopened): the strip regex only matched ASCII tags, so
+    // non-Latin tags survived in the title and were re-emitted from tags[]
+    // on every sync — one more copy per round-trip.
+    it('should clean non-Latin tags from description', () => {
+      const task = makeTask({
+        description: 'Java study #프로그램/자바 #работа #中文',
+        tags: ['#프로그램/자바', '#работа', '#中文'],
+      });
+      const common = mapper.toCommonTask(task, 'id');
+      expect(common.title).toBe('Java study');
+      expect(common.tags).toEqual(['프로그램/자바', 'работа', '中文']);
+    });
+
+    it('should clean accented tags without leaving stray characters', () => {
+      const task = makeTask({ description: 'Order beans #café', tags: ['#café'] });
+      expect(mapper.toCommonTask(task, 'id').title).toBe('Order beans');
+    });
+
+    it('should keep issue references like #42 in the title', () => {
+      const task = makeTask({ description: 'Fix #42 and #1', tags: [] });
+      expect(mapper.toCommonTask(task, 'id').title).toBe('Fix #42 and #1');
+    });
+
     it('should format moment-like dates', () => {
       const mockDate = { format: () => '2025-01-15' };
       const task = makeTask({
@@ -336,6 +359,56 @@ describe('ObsidianMapper', () => {
     it('dedupes case-insensitively when global filter equals sync tag', () => {
       const md = mapper.toMarkdown(baseTask, 'Task', 'emoji', '#task');
       expect((md.match(/#[Tt]ask/g) || []).length).toBe(1);
+    });
+  });
+
+  // Issue #114 (reopened): tag count must be stable across a full
+  // normalize → toMarkdown → re-parse → toMarkdown cycle. Before the fix,
+  // non-Latin tags survived in the title and gained a copy per cycle.
+  describe('round-trip tag stability', () => {
+    /** Simulate obsidian-tasks parsing an emitted markdown line back into a task. */
+    function reparse(markdown: string): ObsidianTask {
+      const description = markdown
+        .replace(/^- \[.\] /, '')
+        .replace(/🆔 \S+/u, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const tags = Array.from(description.matchAll(/#\S+/gu), (m) => m[0]);
+      return makeTask({ description, tags });
+    }
+
+    function countOccurrences(haystack: string, needle: string): number {
+      return haystack.split(needle).length - 1;
+    }
+
+    it('keeps a Korean tag single across two sync cycles', () => {
+      let task = makeTask({
+        description: 'Java study #프로그램/자바 #sync',
+        tags: ['#프로그램/자바', '#sync'],
+      });
+
+      for (let cycle = 0; cycle < 2; cycle++) {
+        const common = mapper.toCommonTask(task, 'id-1');
+        expect(common.title).toBe('Java study');
+        const md = mapper.toMarkdown(common, '#sync');
+        expect(countOccurrences(md, '#프로그램/자바')).toBe(1);
+        task = reparse(md);
+      }
+    });
+
+    it('keeps an ASCII tag single across two sync cycles', () => {
+      let task = makeTask({
+        description: 'Clean up #house #sync',
+        tags: ['#house', '#sync'],
+      });
+
+      for (let cycle = 0; cycle < 2; cycle++) {
+        const common = mapper.toCommonTask(task, 'id-1');
+        expect(common.title).toBe('Clean up');
+        const md = mapper.toMarkdown(common, '#sync');
+        expect(countOccurrences(md, '#house')).toBe(1);
+        task = reparse(md);
+      }
     });
   });
 

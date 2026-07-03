@@ -1,6 +1,7 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from '../sync/types';
 import { ObsidianTask } from './obsidianTasksWrapper';
+import { stripInlineTags } from '../utils/inlineTags';
 
 /**
  * Maps between obsidian-tasks Task objects and CommonTask.
@@ -173,17 +174,9 @@ export class ObsidianMapper {
    * Clean description by removing metadata that belongs in other fields.
    */
   private cleanDescription(description: string): string {
-    let cleaned = description;
-
     // Remove [id::xxx] (backwards compat for tasks indexed before migration)
-    cleaned = cleaned.replace(/\[id::[^\]]+\]/g, '');
-    // Remove hashtags, including nested tags like #work/sample_project
-    // (but not # followed by numbers like #42)
-    cleaned = cleaned.replace(/#[a-zA-Z][\w/-]*/g, '');
-    // Clean up extra whitespace
-    cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
-    return cleaned;
+    const withoutId = description.replace(/\[id::[^\]]+\]/g, '');
+    return stripInlineTags(withoutId);
   }
 
   private cleanTags(tags: string[]): string[] {

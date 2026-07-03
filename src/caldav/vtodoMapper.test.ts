@@ -1,5 +1,6 @@
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { CommonTask, TaskStatus, TaskPriority } from '../sync/types';
+import { ObsidianMapper } from '../tasks/obsidianMapper';
 
 describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
   let mapper: VTODOMapper;
@@ -1287,6 +1288,71 @@ END:VTODO`;
       const parsed = mapper.vtodoToTask(vtodo);
 
       expect(parsed.body).toBe('');
+    });
+  });
+
+  // Issue #114 (reopened): a SUMMARY carrying inline #tags (written by an
+  // older plugin version or another CalDAV client) kept the tag in both
+  // title and CATEGORIES, gaining one copy per sync. The title must never
+  // carry a #tag — inline tags move into tags[] so corrupted tasks heal.
+  describe('inline tags in SUMMARY (issue #114)', () => {
+    function vtodoWith(summary: string, categories?: string): CalendarObject {
+      const lines = [
+        'BEGIN:VTODO',
+        'UID:test-uid',
+        `SUMMARY:${summary}`,
+        'STATUS:NEEDS-ACTION',
+      ];
+      if (categories) lines.push(`CATEGORIES:${categories}`);
+      lines.push('END:VTODO');
+      return { data: lines.join('\n'), url: 'http://example.com/test.ics' };
+    }
+
+    it('strips an inline tag from the title and keeps it once in tags', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Buy bread #house', 'house'));
+      expect(task.title).toBe('Buy bread');
+      expect(task.tags).toEqual(['house']);
+    });
+
+    it('heals a compounded SUMMARY with repeated tags', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('Buy bread #house #house #house', 'house'),
+      );
+      expect(task.title).toBe('Buy bread');
+      expect(task.tags).toEqual(['house']);
+    });
+
+    it('moves an inline tag missing from CATEGORIES into tags', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Water plants #garden'));
+      expect(task.title).toBe('Water plants');
+      expect(task.tags).toEqual(['garden']);
+    });
+
+    it('strips non-Latin inline tags', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('Java study #프로그램/자바', '프로그램/자바'),
+      );
+      expect(task.title).toBe('Java study');
+      expect(task.tags).toEqual(['프로그램/자바']);
+    });
+
+    it('keeps issue references like #42 in the title', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Fix #42 and #1'));
+      expect(task.title).toBe('Fix #42 and #1');
+      expect(task.tags).toEqual([]);
+    });
+
+    // A SUMMARY carrying the sync tag inline must not duplicate the
+    // trailing sync tag suffix when written back to markdown.
+    it('emits the sync tag once when SUMMARY carried it inline', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('water the plants #sync', 'chores/garden'),
+      );
+      const md = new ObsidianMapper().toMarkdown({ ...task, uid: 'id-1' }, '#sync');
+      expect((md.match(/#sync/g) || []).length).toBe(1);
+      expect((md.match(/#chores\/garden/g) || []).length).toBe(1);
+      expect(md).toContain('water the plants');
+      expect(md).not.toContain('plants #sync #');
     });
   });
 });
