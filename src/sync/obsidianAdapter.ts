@@ -29,6 +29,9 @@ export class ObsidianAdapter {
 	private wrapper: ObsidianTasksWrapper;
 	private settings: ObsidianSyncSettings;
 	private tasksById = new Map<string, ObsidianTask>();
+	// Every task ID in the vault (not just this calendar's), so generated IDs
+	// can never collide with a task another calendar or filter owns (#115).
+	private usedIds = new Set<string>();
 
 	constructor(
 		wrapper: ObsidianTasksWrapper,
@@ -46,6 +49,11 @@ export class ObsidianAdapter {
 
 	async fetchTasks(): Promise<CommonTask[]> {
 		const allInputs = await this.wrapper.getAllTasksWithBody();
+		this.usedIds = new Set(
+			allInputs
+				.map(({ task }) => this.wrapper.extractId(task))
+				.filter((id): id is string => id !== null),
+		);
 		const filtered = this.wrapper.filterByTag(allInputs, this.settings.syncTag);
 		const normalized = this.normalize(
 			filtered,
@@ -77,7 +85,7 @@ export class ObsidianAdapter {
 		const pending: Array<{ common: CommonTask; parentTask: ObsidianTask | null }> = [];
 
 		for (const { task, body, parentTask } of inputs) {
-			const taskId = extractId(task) ?? generateTaskId();
+			const taskId = extractId(task) ?? generateTaskId(this.usedIds);
 			this.tasksById.set(taskId, task);
 			idByTask.set(task, taskId);
 			const common = this.mapper.toCommonTask(task, taskId, body);
@@ -108,9 +116,11 @@ export class ObsidianAdapter {
 
 	/**
 	 * Apply sync changes to the Obsidian vault (creates, updates, deletes).
+	 * `onApplied` is called after each change is processed.
 	 */
 	async applyChanges(
 		changes: SyncChange[],
+		onApplied?: () => void,
 	): Promise<ApplyChangesResult> {
 		const createdMappings: Array<{
 			taskId: string;
@@ -130,7 +140,7 @@ export class ObsidianAdapter {
 			try {
 				switch (change.type) {
 					case "create": {
-						const taskId = generateTaskId();
+						const taskId = generateTaskId(this.usedIds);
 						// parentUid is zeroed for the markdown payload because
 						// nesting on the Obsidian side is expressed by where
 						// insertSubtask places the line, NOT by line content.
@@ -186,8 +196,11 @@ export class ObsidianAdapter {
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
 
+						// startDate (🛫) is local-only and never syncs; carry the
+						// vault's value so a CalDAV rewrite doesn't erase it.
+						const localStart = this.mapper.toCommonTask(existingTask, change.task.uid).startDate;
 						const markdown = this.mapper.toMarkdown(
-							change.task,
+							{ ...change.task, startDate: localStart },
 							this.settings.syncTag,
 							format,
 							globalFilter,
@@ -247,14 +260,16 @@ export class ObsidianAdapter {
 					error,
 				);
 			}
+			onApplied?.();
 		}
 
 		return { createdMappings, completionRemappings };
 	}
 
 	/**
-	 * Write IDs back to vault for tasks that had in-memory IDs generated during normalize.
-	 * Only called after sync succeeds, so IDs are only persisted when sync completes.
+	 * Write IDs back to vault for tasks that had in-memory IDs generated during
+	 * normalize. Runs before the CalDAV push so a failed push retries with the
+	 * same identities instead of minting new IDs and duplicating tasks.
 	 */
 	async writeBackIds(obsidianTasks: CommonTask[]): Promise<void> {
 		const { format, globalFilter } = await this.wrapper.getTasksPluginConfig();

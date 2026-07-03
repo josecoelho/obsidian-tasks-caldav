@@ -4,6 +4,7 @@ import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS, IdMapping } f
 import { CalendarObject } from '../caldav/vtodoMapper';
 import { ObsidianTask } from '../tasks/obsidianTasksWrapper';
 import { CommonTask } from './types';
+import { SyncProgress } from './progress';
 
 // --- Helpers ---
 
@@ -1666,6 +1667,198 @@ describe('SyncEngine', () => {
       // No changes — task doesn't match this calendar's tag
       expect(result.details.toCalDAV).toHaveLength(0);
       expect(result.details.toObsidian).toHaveLength(0);
+    });
+  });
+
+  describe('sync direction', () => {
+    it('pull-only: applies CalDAV→Obsidian creates but never writes to the server', async () => {
+      mockFetchVTODOs.mockResolvedValue([makeCalObj('cal-pull-1', 'Pulled task')]);
+      mockGetAllTasksWithBody.mockResolvedValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ syncDirection: 'pull' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(mockCreateTask).toHaveBeenCalledTimes(1);
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockUpdateVTODO).not.toHaveBeenCalled();
+      expect(mockDeleteVTODOByUID).not.toHaveBeenCalled();
+    });
+
+    it('pull-only: a new local task is never pushed to the server', async () => {
+      const localTask = makeObsidianTask({ description: 'Local only', id: '20250101-loc', tags: ['#sync'] });
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(localTask));
+      mockFetchVTODOs.mockResolvedValue([]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ syncDirection: 'pull' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      // No phantom mapping recorded for the un-pushed task.
+      const idMapping = (mockSetIdMapping.mock.calls.at(-1) as [IdMapping] | undefined)?.[0];
+      expect(idMapping?.taskIdToCaldavUid['20250101-loc']).toBeUndefined();
+    });
+
+    it('push-only: pushes new Obsidian tasks but never creates tasks in Obsidian', async () => {
+      const localTask = makeObsidianTask({ description: 'Push me', id: '20250101-psh', tags: ['#sync'] });
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(localTask));
+      mockFetchVTODOs.mockResolvedValue([makeCalObj('cal-srv-only', 'Server only task')]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ syncDirection: 'push' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(mockCreateVTODO).toHaveBeenCalledTimes(1);
+      expect(mockCreateTask).not.toHaveBeenCalled();
+      // The suppressed server-only task must not get a phantom mapping.
+      const idMapping = (mockSetIdMapping.mock.calls.at(-1) as [IdMapping] | undefined)?.[0];
+      expect(idMapping?.caldavUidToTaskId['cal-srv-only']).toBeUndefined();
+    });
+
+    it('pull-only: forces caldav-wins even when autoResolveObsidianWins is true', async () => {
+      const baseline = {
+        uid: '20250101-abc',
+        description: 'Original task',
+        status: 'TODO' as const,
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none' as const,
+        tags: [] as string[],
+        recurrenceRule: '',
+        body: '',
+      };
+      const obsTask = makeObsidianTask({
+        description: 'Updated in Obsidian',
+        id: '20250101-abc',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Updated in Obsidian [id::20250101-abc] #sync',
+      });
+      const vtodo = makeCalObj('caldav-abc', 'Updated in CalDAV');
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([baseline]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-abc': 'caldav-abc' },
+        caldavUidToTaskId: { 'caldav-abc': '20250101-abc' },
+      });
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ syncDirection: 'pull' }),
+        makeSettings({ autoResolveObsidianWins: true }),
+      );
+      await engine.initialize();
+      const result = await engine.sync({ dryRun: true });
+
+      expect(result.conflicts).toBe(1);
+      expect(result.updated.toObsidian).toBe(1);
+      expect(result.updated.toCalDAV).toBe(0);
+      expect(result.details.toObsidian[0].task.title).toBe('Updated in CalDAV');
+    });
+
+    it('pull-only: a CalDAV deletion still removes the task in Obsidian (mirror)', async () => {
+      // Task is in baseline + Obsidian but gone from CalDAV ⇒ deleted on server.
+      const obsTask = makeObsidianTask({ description: 'Gone on server', id: '20250101-gone', tags: ['#sync'] });
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetBaseline.mockReturnValue([{
+        uid: '20250101-gone',
+        description: 'Gone on server',
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      }]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { '20250101-gone': 'caldav-gone' },
+        caldavUidToTaskId: { 'caldav-gone': '20250101-gone' },
+      });
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping({ syncDirection: 'pull' }),
+        makeSettings(),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(result.deleted.toObsidian).toBe(1);
+      expect(mockDeleteVTODOByUID).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('id write-back happens before the CalDAV push', () => {
+    it('stamps generated IDs into the vault even when the CalDAV apply fails', async () => {
+      mockCreateVTODO.mockRejectedValue(new Error('Create VTODO failed: 412'));
+      mockGetAllTasksWithBody.mockResolvedValue([{
+        task: makeObsidianTask({
+          description: 'New local task',
+          id: '',
+          originalMarkdown: '- [ ] New local task #sync',
+        }),
+        body: '',
+      }]);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(false);
+      const stamped = mockUpdateTaskInVault.mock.calls
+        .filter(([, content]) => typeof content === 'string' && content.includes('🆔 '));
+      expect(stamped).toHaveLength(1);
+    });
+  });
+
+  describe('sync progress reporting', () => {
+    it('reports pull/push totals and per-change progress', async () => {
+      // One pull (server task unknown to the vault) and one push (vault task
+      // unknown to the server).
+      mockFetchVTODOs.mockResolvedValue([{
+        data: buildVTODO('server-task-uid', 'Incoming task'),
+        url: 'https://caldav.example.com/cal/server-task-uid.ics',
+        etag: 'e1',
+      }]);
+      mockGetAllTasksWithBody.mockResolvedValue([{
+        task: makeObsidianTask({
+          description: 'Outgoing task',
+          originalMarkdown: '- [ ] Outgoing task [id::20250101-abc] #sync',
+        }),
+        body: '',
+      }]);
+
+      const updates: SyncProgress[] = [];
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync({ onProgress: (p) => updates.push(p) });
+
+      expect(result.success).toBe(true);
+      expect(updates[0]).toEqual({ pullDone: 0, pullTotal: 1, pushDone: 0, pushTotal: 1 });
+      expect(updates[updates.length - 1]).toEqual({ pullDone: 1, pullTotal: 1, pushDone: 1, pushTotal: 1 });
     });
   });
 });

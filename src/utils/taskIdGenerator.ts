@@ -1,35 +1,47 @@
 /**
- * Generates unique, human-readable task IDs using timestamp-based format
- * Format: YYYYMMDD-xxx where xxx is a random 3-character hex string
+ * Generates human-readable task IDs: YYYYMMDD-xxxx, a local calendar date and
+ * a 4-character random hex suffix.
  *
- * This provides:
- * - Human readability: dates are visible at a glance
- * - Sortability: lexicographic order matches chronological order
- * - Collision resistance: ~65k combinations per day
+ * Uniqueness comes from the caller-supplied `usedIds` set, not from entropy
+ * alone: candidates already in the set are re-rolled, so same-vault collisions
+ * are impossible by construction (issue #115). The 65,536/day space only has
+ * to cover the cross-device window between generating an ID and syncing it.
  */
 
 /**
- * Generate a timestamp-based task ID
- * @returns A task ID in format YYYYMMDD-xxx (e.g., 20250105-a4f)
+ * Generate a task ID like "20260703-a4f3", guaranteed absent from `usedIds`.
+ * The returned ID is added to the set so sequential calls never collide.
+ * If a day's suffix space is ever exhausted, the suffix grows a character.
  */
-export function generateTaskId(): string {
-  const now = new Date();
+export function generateTaskId(usedIds?: Set<string>): string {
+  const datePart = localDatePart();
+  let width = 4;
+  let attempts = 0;
+  for (;;) {
+    const id = `${datePart}-${randomHex(width)}`;
+    if (!usedIds?.has(id)) {
+      usedIds?.add(id);
+      return id;
+    }
+    if (++attempts >= 16) {
+      width++;
+      attempts = 0;
+    }
+  }
+}
 
-  // Format date as YYYYMMDD
-  const year = now.getFullYear();
+function localDatePart(): string {
+  const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
-  const datePart = `${year}${month}${day}`;
+  return `${now.getFullYear()}${month}${day}`;
+}
 
-  // Generate 3-character random hex string using crypto-grade RNG.
-  // Task IDs are not secrets, but using getRandomValues avoids CodeQL's
-  // js/insecure-randomness alert and removes any modulo-bias edge case
-  // (65536 is an exact multiple of 4096 so the masking is uniform).
-  const buf = new Uint16Array(1);
-  crypto.getRandomValues(buf);
-  const randomPart = (buf[0] % 4096).toString(16).padStart(3, '0');
-
-  return `${datePart}-${randomPart}`;
+function randomHex(width: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(width / 2)));
+  let out = '';
+  for (const byte of bytes) out += byte.toString(16).padStart(2, '0');
+  return out.slice(0, width);
 }
 
 /**
@@ -52,10 +64,9 @@ export function extractTaskId(taskText: string): string | null {
 }
 
 /**
- * Validate task ID format
- * @param id The task ID to validate
- * @returns true if valid, false otherwise
+ * Validate task ID format: a date followed by a hex suffix — 3 chars in
+ * legacy IDs, 4 in current ones, longer only on day-space overflow.
  */
 export function isValidTaskId(id: string): boolean {
-  return /^\d{8}-[0-9a-f]{3}$/.test(id);
+  return /^\d{8}-[0-9a-f]{3,}$/.test(id);
 }

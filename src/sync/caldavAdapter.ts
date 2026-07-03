@@ -101,8 +101,9 @@ export class CalDAVAdapter {
 
   /**
    * Apply a set of sync changes to the CalDAV server.
+   * `onApplied` is called after each change is processed.
    */
-  async applyChanges(changes: SyncChange[], idMapping: IdMapping): Promise<void> {
+  async applyChanges(changes: SyncChange[], idMapping: IdMapping, onApplied?: () => void): Promise<void> {
     for (const change of changes) {
       const caldavUID = this.resolveCaldavUid(change.task.uid, idMapping);
       const parentCaldavUid = change.task.parentUid
@@ -146,6 +147,7 @@ export class CalDAVAdapter {
         case 'reconcile':
           break;
       }
+      onApplied?.();
     }
   }
 

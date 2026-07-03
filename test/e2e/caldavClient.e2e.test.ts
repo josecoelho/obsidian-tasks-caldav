@@ -184,7 +184,7 @@ describe('VTODO with VTIMEZONE and TZID dates', () => {
     const task = mapper.vtodoToTask(todos[0]);
     expect(task.title).toBe('Meeting prep');
     expect(task.dueDate).toBe('2025-06-15');
-    expect(task.startDate).toBe('2025-06-15');
+    expect(task.scheduledDate).toBe('2025-06-15');
   });
 });
 

@@ -3,13 +3,14 @@ import { detectRecurrenceCompletion } from '../caldav/recurrenceDetector';
 
 /**
  * Compare two CommonTasks for equality across all synced fields.
+ * startDate (🛫) is intentionally excluded: it has no CalDAV counterpart and
+ * never syncs, so comparing it would make every 🛫 task re-sync forever.
  */
 export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
   return (
     a.title === b.title &&
     a.status === b.status &&
     a.dueDate === b.dueDate &&
-    a.startDate === b.startDate &&
     a.scheduledDate === b.scheduledDate &&
     a.completedDate === b.completedDate &&
     a.priority === b.priority &&

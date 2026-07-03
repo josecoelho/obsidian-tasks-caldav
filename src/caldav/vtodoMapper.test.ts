@@ -1,5 +1,6 @@
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { CommonTask, TaskStatus, TaskPriority } from '../sync/types';
+import { ObsidianMapper } from '../tasks/obsidianMapper';
 
 describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
   let mapper: VTODOMapper;
@@ -313,7 +314,7 @@ END:VTODO`;
 
       const task = mapper.vtodoToTask(vtodo);
 
-      expect(task.startDate).toBe('2025-01-10');
+      expect(task.scheduledDate).toBe('2025-01-10');
     });
 
     it('should map all VTODO statuses correctly', () => {
@@ -883,7 +884,7 @@ END:VTODO`;
 
       // Dates should be identical after round-trip
       expect(roundTrippedTask.dueDate).toBe('2026-02-11');
-      expect(roundTrippedTask.startDate).toBe('2026-02-10');
+      expect(roundTrippedTask.scheduledDate).toBe('2026-02-10');
     });
 
     it('should handle dates consistently across multiple syncs', () => {
@@ -1002,7 +1003,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.startDate).toBe('2026-02-14');
+      expect(task.scheduledDate).toBe('2026-02-14');
     });
 
     it('should still parse VALUE=DATE format', () => {
@@ -1087,7 +1088,7 @@ END:VTODO`;
 
       // TZID dates should extract date portion
       expect(task.dueDate).toBe('2026-02-14');
-      expect(task.startDate).toBe('2026-02-14');
+      expect(task.scheduledDate).toBe('2026-02-14');
 
       // Other properties should parse normally
       expect(task.status).toBe('TODO');
@@ -1124,7 +1125,7 @@ END:VTODO`;
       // Parse TZID dates
       const task = mapper.vtodoToTask(vtodo);
       expect(task.dueDate).toBe('2026-03-15');
-      expect(task.startDate).toBe('2026-03-10');
+      expect(task.scheduledDate).toBe('2026-03-10');
 
       // Round-trip: convert back to VTODO (will use VALUE=DATE format)
       const vtodoOut = mapper.taskToVTODO(task, { uid: 'round-trip-tzid' });
@@ -1134,7 +1135,7 @@ END:VTODO`;
       // Parse again — dates should be stable
       const task2 = mapper.vtodoToTask({ data: vtodoOut, etag: 'e2', url: 'http://test' });
       expect(task2.dueDate).toBe('2026-03-15');
-      expect(task2.startDate).toBe('2026-03-10');
+      expect(task2.scheduledDate).toBe('2026-03-10');
     });
   });
 
@@ -1342,6 +1343,128 @@ END:VTODO`;
       const parsed = mapper.vtodoToTask(vtodo);
 
       expect(parsed.body).toBe('');
+    });
+  });
+
+  // Issue #114 (reopened): a SUMMARY carrying inline #tags (written by an
+  // older plugin version or another CalDAV client) kept the tag in both
+  // title and CATEGORIES, gaining one copy per sync. The title must never
+  // carry a #tag — inline tags move into tags[] so corrupted tasks heal.
+  describe('inline tags in SUMMARY (issue #114)', () => {
+    function vtodoWith(summary: string, categories?: string): CalendarObject {
+      const lines = [
+        'BEGIN:VTODO',
+        'UID:test-uid',
+        `SUMMARY:${summary}`,
+        'STATUS:NEEDS-ACTION',
+      ];
+      if (categories) lines.push(`CATEGORIES:${categories}`);
+      lines.push('END:VTODO');
+      return { data: lines.join('\n'), url: 'http://example.com/test.ics' };
+    }
+
+    it('strips an inline tag from the title and keeps it once in tags', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Buy bread #house', 'house'));
+      expect(task.title).toBe('Buy bread');
+      expect(task.tags).toEqual(['house']);
+    });
+
+    it('heals a compounded SUMMARY with repeated tags', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('Buy bread #house #house #house', 'house'),
+      );
+      expect(task.title).toBe('Buy bread');
+      expect(task.tags).toEqual(['house']);
+    });
+
+    it('moves an inline tag missing from CATEGORIES into tags', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Water plants #garden'));
+      expect(task.title).toBe('Water plants');
+      expect(task.tags).toEqual(['garden']);
+    });
+
+    it('strips non-Latin inline tags', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('Java study #프로그램/자바', '프로그램/자바'),
+      );
+      expect(task.title).toBe('Java study');
+      expect(task.tags).toEqual(['프로그램/자바']);
+    });
+
+    it('keeps issue references like #42 in the title', () => {
+      const task = mapper.vtodoToTask(vtodoWith('Fix #42 and #1'));
+      expect(task.title).toBe('Fix #42 and #1');
+      expect(task.tags).toEqual([]);
+    });
+
+    // A SUMMARY carrying the sync tag inline must not duplicate the
+    // trailing sync tag suffix when written back to markdown.
+    it('emits the sync tag once when SUMMARY carried it inline', () => {
+      const task = mapper.vtodoToTask(
+        vtodoWith('water the plants #sync', 'chores/garden'),
+      );
+      const md = new ObsidianMapper().toMarkdown({ ...task, uid: 'id-1' }, '#sync');
+      expect((md.match(/#sync/g) || []).length).toBe(1);
+      expect((md.match(/#chores\/garden/g) || []).length).toBe(1);
+      expect(md).toContain('water the plants');
+      expect(md).not.toContain('plants #sync #');
+    });
+  });
+
+  describe('DTSTART maps to scheduledDate only (start date is local-only)', () => {
+    const baseTask: Omit<CommonTask, 'uid'> = {
+      title: 'Date mapping',
+      status: 'TODO',
+      dueDate: null,
+      scheduledDate: null,
+      startDate: null,
+      completedDate: null,
+      priority: 'none',
+      recurrenceRule: '',
+      tags: [],
+      body: '',
+    };
+
+    function roundTrip(task: Omit<CommonTask, 'uid'>) {
+      const data = mapper.taskToVTODO(task, 'rt-uid');
+      return mapper.vtodoToTask({ data, url: 'http://x/rt-uid.ics', etag: 'e' });
+    }
+
+    it('writes DTSTART from scheduledDate even when startDate is also set', () => {
+      const ics = mapper.taskToVTODO(
+        { ...baseTask, startDate: '2026-07-01', scheduledDate: '2026-07-10' },
+        'uid-1',
+      );
+      expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
+    });
+
+    it('does not write DTSTART for a start-only task', () => {
+      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, 'uid-1');
+      expect(ics).not.toContain('DTSTART');
+    });
+
+    it('round-trips a scheduled-only task back to scheduledDate', () => {
+      const back = roundTrip({ ...baseTask, scheduledDate: '2026-07-10' });
+      expect(back.scheduledDate).toBe('2026-07-10');
+      expect(back.startDate).toBeNull();
+    });
+
+    it('maps DTSTART written by another client to scheduledDate', () => {
+      const data = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VTODO',
+        'UID:other-client',
+        'SUMMARY:From another app',
+        'DTSTART;VALUE=DATE:20260710',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const back = mapper.vtodoToTask({ data, url: 'http://x/o.ics', etag: 'e' });
+
+      expect(back.scheduledDate).toBe('2026-07-10');
+      expect(back.startDate).toBeNull();
     });
   });
 });

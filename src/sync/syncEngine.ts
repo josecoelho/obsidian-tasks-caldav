@@ -2,12 +2,15 @@ import { App, Notice } from "obsidian";
 import { ObsidianTasksWrapper } from "../tasks/obsidianTasksWrapper";
 import { CalDAVClientDirect } from "../caldav/calDAVClientDirect";
 import { SyncStorage } from "../storage/syncStorage";
-import { CalDAVSettings, CalendarMapping, IdMapping } from "../types";
+import { CalDAVSettings, CalendarMapping, IdMapping, SyncDirection } from "../types";
 import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
+import { applicableChanges } from "./applicableChanges";
+import { SyncProgress } from "./progress";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
-import { calendarStorageId } from "../utils/calendarStorageId";
+import { storageIdForCalendar } from "../utils/calendarStorageId";
+import { calendarLabel } from "../utils/calendarLabel";
 
 export interface SyncResult {
 	calendarName: string;
@@ -33,6 +36,8 @@ export interface SyncOptions {
 	dryRun?: boolean;
 	/** Sync was triggered automatically (not by an explicit user command). */
 	background?: boolean;
+	/** Called with updated counts as each change is applied. */
+	onProgress?: (progress: SyncProgress) => void;
 }
 
 export class SyncEngine {
@@ -46,7 +51,7 @@ export class SyncEngine {
 		this.calendar = calendar;
 		this.settings = settings;
 		const wrapper = new ObsidianTasksWrapper(app);
-		this.storage = new SyncStorage(app, calendarStorageId(calendar.serverUrl, calendar.calendarName));
+		this.storage = new SyncStorage(app, storageIdForCalendar(calendar));
 		this.caldavAdapter = new CalDAVAdapter(
 			new CalDAVClientDirect(calendar),
 			calendar.caldavCategory,
@@ -69,11 +74,11 @@ export class SyncEngine {
 		return true;
 	}
 
-	async sync({ dryRun = false, background = false }: SyncOptions = {}): Promise<SyncResult> {
+	async sync({ dryRun = false, background = false, onProgress }: SyncOptions = {}): Promise<SyncResult> {
 		try {
 			const showProgress = !background || this.settings.showAutoSyncNotifications;
 			if (showProgress) {
-				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${this.calendar.calendarName}...`);
+				new Notice(`${dryRun ? "[DRY RUN] " : ""}Starting sync for ${calendarLabel(this.calendar)}...`);
 			}
 
 			const idMapping = this.storage.getIdMapping();
@@ -83,18 +88,43 @@ export class SyncEngine {
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
+			const applicable = applicableChanges(changeset, this.direction());
 
-			if (dryRun) return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, true, showProgress);
+			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(changeset.toObsidian);
-			await this.caldavAdapter.applyChanges(changeset.toCalDAV, idMapping);
+			const progress: SyncProgress = {
+				pullDone: 0,
+				pullTotal: applicable.toObsidian.length,
+				pushDone: 0,
+				pushTotal: applicable.toCalDAV.length,
+			};
+			onProgress?.({ ...progress });
+
+			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(
+				applicable.toObsidian,
+				() => {
+					progress.pullDone++;
+					onProgress?.({ ...progress });
+				},
+			);
+			// Stamp IDs before the CalDAV push: if the push fails, the vault
+			// keeps the identities, so the retry converges on the same UIDs
+			// instead of minting new ones and duplicating tasks.
 			await this.obsidianAdapter.writeBackIds(obsidianTasks);
+			await this.caldavAdapter.applyChanges(
+				applicable.toCalDAV,
+				idMapping,
+				() => {
+					progress.pushDone++;
+					onProgress?.({ ...progress });
+				},
+			);
 
-			this.updateIdMapping(idMapping, createdMappings, completionRemappings, changeset);
-			this.persistState(obsidianTasks, caldavTasks, changeset, idMapping);
+			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applicable);
+			this.persistState(obsidianTasks, caldavTasks, applicable, idMapping);
 			await this.storage.save();
 
-			return this.buildResult(changeset, obsidianTasks, caldavTasks, baseline, false, showProgress);
+			return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, false, showProgress);
 		} catch (error) {
 			return this.buildErrorResult(error);
 		}
@@ -119,7 +149,14 @@ export class SyncEngine {
 
 	// --- Private helpers ---
 
+	private direction(): SyncDirection {
+		return this.calendar.syncDirection ?? "bidirectional";
+	}
+
 	private conflictStrategy(): ConflictStrategy {
+		const direction = this.direction();
+		if (direction === "pull") return "caldav-wins";
+		if (direction === "push") return "obsidian-wins";
 		return this.settings.autoResolveObsidianWins
 			? "obsidian-wins"
 			: "caldav-wins";
@@ -262,7 +299,7 @@ export class SyncEngine {
 	): SyncResult {
 		const counts = this.countChanges(changeset);
 
-		const name = this.calendar.calendarName;
+		const name = calendarLabel(this.calendar);
 		const reconciledSuffix = counts.reconciled > 0 ? ` | Reconciled: ${counts.reconciled}` : "";
 		const message = dryRun
 			? `[${name}] Dry run complete! Would sync:\n` +
@@ -281,7 +318,7 @@ export class SyncEngine {
 		}
 
 		return {
-			calendarName: this.calendar.calendarName,
+			calendarName: calendarLabel(this.calendar),
 			success: true,
 			message,
 			...counts,
@@ -319,11 +356,11 @@ export class SyncEngine {
 
 	private buildErrorResult(error: unknown): SyncResult {
 		const errorMsg = error instanceof Error ? error.message : "Unknown error";
-		const message = `[${this.calendar.calendarName}] Sync failed: ${errorMsg}`;
+		const message = `[${calendarLabel(this.calendar)}] Sync failed: ${errorMsg}`;
 		new Notice(message, 8000);
 		console.error("Sync error:", error);
 		return {
-			calendarName: this.calendar.calendarName,
+			calendarName: calendarLabel(this.calendar),
 			success: false,
 			message,
 			created: { toObsidian: 0, toCalDAV: 0 },

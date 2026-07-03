@@ -1,10 +1,15 @@
 import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { CalDAVSettings, DEFAULT_CALDAV_SETTINGS } from './src/types';
+import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
+import { calendarLabel } from './src/utils/calendarLabel';
+import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
+import { SyncGate } from './src/sync/syncGate';
+import { SyncProgress } from './src/sync/progress';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
+import { BrowseCalendarsModal } from './src/ui/browseCalendarsModal';
 import { AutoSyncScheduler } from './src/sync/autoSync';
 import { runMigrations } from './src/migrations/migrationRunner';
 
@@ -12,15 +17,13 @@ export default class CalDAVSyncPlugin extends Plugin {
 	settings!: CalDAVSettings;
 	private syncEngines: SyncEngine[] = [];
 	private autoSync: AutoSyncScheduler | null = null;
+	private loadFailure: string | null = null;
+	private syncGate = new SyncGate();
+	private statusBar!: HTMLElement;
 
 	async onload() {
-		await this.loadSettings();
-
-		if (await runMigrations(this.app, this.settings)) {
-			await this.saveData(this.settings);
-		}
-
-		await this.initializeEngines();
+		this.statusBar = this.addStatusBarItem();
+		await this.safeLoad();
 
 		this.addCommand({
 			id: 'validate-task-ids',
@@ -66,6 +69,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 					return;
 				}
 				const results = await this.syncAllEngines(false);
+				if (results === null) return;
 				new SyncResultModal(this.app, results, false).open();
 			}
 		});
@@ -79,7 +83,8 @@ export default class CalDAVSyncPlugin extends Plugin {
 					return;
 				}
 				const results = await this.syncAllEngines(true);
-				new SyncResultModal(this.app, results, true, () => this.syncAllEngines(false)).open();
+				if (results === null) return;
+				new SyncResultModal(this.app, results, true, async () => await this.syncAllEngines(false) ?? []).open();
 			}
 		});
 
@@ -128,27 +133,51 @@ export default class CalDAVSyncPlugin extends Plugin {
 	onunload() {
 	}
 
-	async loadSettings() {
-		const loaded = ((await this.loadData()) ?? {}) as Record<string, unknown>;
-		this.settings = Object.assign({}, DEFAULT_CALDAV_SETTINGS, loaded) as CalDAVSettings;
-
-		// Pre-calendars-array installs stored a single flat calendar at the top
-		// level. Lift it into the new array with the legacy `tag` field intact;
-		// migration 003 owns the tag→obsidianTag/caldavCategory split, and
-		// `runMigrations` in onload will persist both changes in one write.
-		const legacy = loaded;
-		if (legacy.serverUrl && !legacy.calendars) {
-			this.settings.calendars = [{
-				tag: (legacy.syncTag as string) ?? 'sync',
-				calendarName: (legacy.calendarName as string) ?? '',
-				serverUrl: (legacy.serverUrl as string) ?? '',
-				username: (legacy.username as string) ?? '',
-				password: (legacy.password as string) ?? '',
-			} as unknown as CalDAVSettings['calendars'][number]];
+	/**
+	 * Load settings and run migrations, then build sync engines. A settings or
+	 * migration failure is caught: the plugin stays enabled with commands and
+	 * the settings tab available, syncing is paused, and nothing is written to
+	 * data.json — so a transient read failure can never wipe the stored
+	 * configuration (#126). Engine failures are isolated per calendar inside
+	 * initializeEngines and never set loadFailure, so they don't block saving.
+	 */
+	private async safeLoad(): Promise<void> {
+		try {
+			await this.loadSettings();
+			if (await runMigrations(this.app, this.settings)) {
+				await this.saveData(this.settings);
+			}
+		} catch (error) {
+			this.loadFailure = error instanceof Error ? error.message : String(error);
+			this.settings ??= resolveSettings(null);
+			console.error('[CalDAV sync] Load failed:', error);
+			new Notice(
+				`CalDAV sync could not start: ${this.loadFailure}\nSyncing is paused and your saved settings were left untouched. Restart Obsidian to retry.`,
+				10000,
+			);
+			return;
 		}
+		await this.initializeEngines();
+	}
+
+	async loadSettings() {
+		this.settings = await loadSettingsFrom({
+			loadData: () => this.loadData(),
+			dataFileExists: () => this.dataFileExists(),
+		});
+	}
+
+	private async dataFileExists(): Promise<boolean> {
+		const dir = this.manifest.dir;
+		if (!dir) return false;
+		return this.app.vault.adapter.exists(`${dir}/data.json`);
 	}
 
 	async saveSettings() {
+		if (this.loadFailure) {
+			new Notice('Settings failed to load at startup, so saving is disabled to protect your stored configuration. Restart Obsidian and try again.', 8000);
+			return;
+		}
 		await this.saveData(this.settings);
 		await this.initializeEngines();
 		this.autoSync?.start(this.settings.syncInterval);
@@ -166,10 +195,16 @@ export default class CalDAVSyncPlugin extends Plugin {
 				continue;
 			}
 			configuredCount++;
-			const engine = new SyncEngine(this.app, calendar, this.settings);
-			const ready = await engine.initialize();
-			if (ready) {
-				this.syncEngines.push(engine);
+			try {
+				const engine = new SyncEngine(this.app, calendar, this.settings);
+				const ready = await engine.initialize();
+				if (ready) {
+					this.syncEngines.push(engine);
+				}
+			} catch (error) {
+				const name = calendarLabel(calendar) || `Calendar ${index + 1}`;
+				console.error(`[CalDAV sync] Failed to initialize ${name}:`, error);
+				skipped.push(`${name} (failed to initialize)`);
 			}
 		}
 		this.notifySkippedCalendars(skipped);
@@ -186,16 +221,62 @@ export default class CalDAVSyncPlugin extends Plugin {
 		new Notice(`Skipped ${skipped.length} incomplete ${noun}: ${skipped.join('; ')}. Configure in settings.`, 8000);
 	}
 
-	private async syncAll(): Promise<void> {
-		for (const engine of this.syncEngines) {
-			await engine.sync({ background: true });
-		}
+	/**
+	 * Single entry point for every sync run: holds the gate so runs never
+	 * overlap, and clears the status bar when one finishes. The sync loops
+	 * paint progress via syncProgress().
+	 */
+	private async runSync<T>(fn: () => Promise<T>): Promise<T | null> {
+		return this.syncGate.run(async () => {
+			try {
+				return await fn();
+			} finally {
+				this.statusBar.setText('');
+			}
+		});
 	}
 
-	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[]> {
-		const results: SyncResult[] = [];
-		for (const engine of this.syncEngines) {
-			results.push(await engine.sync({ dryRun }));
+	private syncProgress(progress?: SyncProgress): void {
+		this.statusBar.empty();
+		this.statusBar.createSpan({ text: 'CalDAV:' });
+		if (!progress) {
+			this.statusBar.createSpan({ text: ' syncing…' });
+			return;
+		}
+		this.renderDirection('←', progress.pullDone, progress.pullTotal);
+		this.renderDirection('→', progress.pushDone, progress.pushTotal);
+	}
+
+	private renderDirection(arrow: string, done: number, total: number): void {
+		if (total === 0) return;
+		this.statusBar.createSpan({ text: ` ${arrow} ` });
+		const bar = this.statusBar.createEl('progress', { cls: 'caldav-sync-progress' });
+		bar.max = total;
+		bar.value = done;
+		this.statusBar.createSpan({ text: ` ${done}/${total}` });
+	}
+
+	private async syncAll(): Promise<void> {
+		// A tick that lands mid-sync skips silently; the next one catches up.
+		await this.runSync(async () => {
+			for (const engine of this.syncEngines) {
+				this.syncProgress();
+				await engine.sync({ background: true, onProgress: (p) => this.syncProgress(p) });
+			}
+		});
+	}
+
+	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[] | null> {
+		const results = await this.runSync(async () => {
+			const out: SyncResult[] = [];
+			for (const engine of this.syncEngines) {
+				this.syncProgress();
+				out.push(await engine.sync({ dryRun, onProgress: (p) => this.syncProgress(p) }));
+			}
+			return out;
+		});
+		if (results === null) {
+			new Notice('Sync already running — wait for it to finish.');
 		}
 		return results;
 	}
@@ -313,6 +394,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 
 	private renderCalendarMapping(containerEl: HTMLElement, index: number): void {
 		const calendar = this.plugin.settings.calendars[index];
+		const direction = calendar.syncDirection ?? 'bidirectional';
 
 		new Setting(containerEl)
 			.setName(`Calendar ${index + 1}`)
@@ -322,6 +404,20 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setWarning()
 				.onClick(async () => {
 					this.plugin.settings.calendars.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		new Setting(containerEl)
+			.setName('Sync direction')
+			.setDesc(this.syncDirectionDesc(direction))
+			.addDropdown(dropdown => dropdown
+				.addOption('bidirectional', 'Bidirectional')
+				.addOption('pull', 'Pull from server only')
+				.addOption('push', 'Push to server only')
+				.setValue(direction)
+				.onChange(async (value) => {
+					calendar.syncDirection = value as SyncDirection;
 					await this.plugin.saveSettings();
 					this.display();
 				}));
@@ -355,34 +451,34 @@ class CalDAVSettingTab extends PluginSettingTab {
 			hintEl?.remove();
 			hintEl = null;
 			if (calendar.obsidianTag || calendar.caldavCategory) return;
-			hintEl = containerEl.createDiv({
-				cls: 'setting-item-description',
-				text: 'No filter set — every task in this calendar will sync both ways.',
-			});
+			const text = direction === 'pull'
+				? 'No filter set — every server task is pulled into this vault (nothing is written back to the server).'
+				: direction === 'push'
+					? 'No filter set — every task in this vault is pushed to the server (nothing is pulled back).'
+					: 'No filter set — every task in this calendar will sync both ways.';
+			hintEl = containerEl.createDiv({ cls: 'setting-item-description', text });
 		};
 		updateHint();
 
-		new Setting(containerEl)
-			.setName('Calendar name')
-			.setDesc('Name of the calendar on the server')
+		const calendarUrlSetting = new Setting(containerEl)
+			.setName('Calendar URL')
 			.addText(text => text
-				.setPlaceholder('Work')
-				.setValue(calendar.calendarName)
+				.setPlaceholder('https://caldav.example.com/dav/calendars/user/personal/')
+				.setValue(calendar.calendarUrl ?? '')
 				.onChange(async (value) => {
-					calendar.calendarName = value;
+					calendar.calendarUrl = value.trim() || undefined;
 					await this.plugin.saveSettings();
-				}));
+				}))
+			.addButton(button => button
+				.setButtonText('Browse calendars')
+				.onClick(() => this.openBrowseCalendars(calendar)));
+		calendarUrlSetting.settingEl.addClass('sync-calendar-url');
 
-		new Setting(containerEl)
-			.setName('Server URL')
-			.setDesc('Calendar server URL')
-			.addText(text => text
-				.setPlaceholder('https://caldav.example.com')
-				.setValue(calendar.serverUrl)
-				.onChange(async (value) => {
-					calendar.serverUrl = value;
-					await this.plugin.saveSettings();
-				}));
+		if (!calendar.calendarUrl && calendar.calendarName.trim()) {
+			calendarUrlSetting.setDesc(`Currently matched by name "${calendar.calendarName}" — paste a URL or browse to pin the exact calendar.`);
+		} else {
+			calendarUrlSetting.setDesc("Paste your calendar's URL, or browse to find it.");
+		}
 
 		new Setting(containerEl)
 			.setName('Username')
@@ -406,6 +502,27 @@ class CalDAVSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
+	}
+
+	private syncDirectionDesc(direction: SyncDirection): string {
+		if (direction === 'pull') {
+			return 'Server changes are brought into Obsidian. Nothing is ever written to the server.';
+		}
+		if (direction === 'push') {
+			return 'Obsidian changes are sent to the server. Server changes are never pulled back, though a sync ID is still written into each task that is pushed.';
+		}
+		return 'Obsidian and the server are kept in sync, both ways.';
+	}
+
+	private openBrowseCalendars(calendar: CalendarMapping): void {
+		if (!calendar.username.trim() || !calendar.password.trim()) {
+			new Notice('Enter username and password first.');
+			return;
+		}
+		new BrowseCalendarsModal(this.app, calendar, async () => {
+			await this.plugin.saveSettings();
+			this.display();
+		}).open();
 	}
 
 }

@@ -135,6 +135,35 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('fetchTasks ID generation', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('never generates an ID owned by a task outside the sync filter (#115)', async () => {
+      const draws = [new Uint8Array([0x12, 0x34]), new Uint8Array([0xab, 0xcd])];
+      jest.spyOn(crypto, 'getRandomValues').mockImplementation(<T,>(arr: T): T => {
+        (arr as Uint8Array).set(draws.shift()!);
+        return arr;
+      });
+      const now = new Date();
+      const today = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+      const unfiltered = makeTask({ id: `${today}-1234`, tags: ['#other'] });
+      const newTask = makeTask({ id: '', tags: ['#sync'] });
+      const wrapper = {
+        ...dummyWrapper,
+        getAllTasksWithBody: jest.fn().mockResolvedValue([withBody(unfiltered), withBody(newTask)]),
+        filterByTag: jest.fn().mockImplementation((inputs: TaskWithBody[]) =>
+          inputs.filter(({ task }) => task.tags.includes('#sync'))),
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      const tasks = await adapter.fetchTasks();
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].uid).toBe(`${today}-abcd`);
+    });
+  });
+
   describe('findOriginalTask', () => {
     it('should return the original ObsidianTask after normalize', () => {
       const adapter = new ObsidianAdapter(dummyWrapper, defaultSettings);
@@ -611,6 +640,46 @@ describe('ObsidianAdapter', () => {
       expect(result.createdMappings).toHaveLength(2);
       const caldavUIDs = result.createdMappings.map(m => m.caldavUID).sort();
       expect(caldavUIDs).toEqual(['cal-child', 'cal-parent']);
+    });
+  });
+
+  describe('applyChanges preserves the local-only start date (🛫)', () => {
+    it('keeps 🛫 when a CalDAV update rewrites the task line', async () => {
+      const localTask = makeTask({
+        description: 'Task with start',
+        id: '20250101-abc',
+        startDate: '2026-07-01',
+        originalMarkdown: '- [ ] Task with start 🛫 2026-07-01 🆔 20250101-abc #sync',
+      });
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      const wrapper = {
+        ...dummyWrapper,
+        updateTaskInVault,
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      adapter.normalize([withBody(localTask)], (task) => task.id || null);
+
+      await adapter.applyChanges([{
+        type: 'update',
+        task: {
+          uid: '20250101-abc',
+          title: 'Task with start (renamed on server)',
+          status: 'TODO',
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: null,
+          priority: 'none',
+          tags: [],
+          recurrenceRule: '',
+          body: '',
+        },
+      }]);
+
+      expect(updateTaskInVault).toHaveBeenCalledTimes(1);
+      const written = (updateTaskInVault.mock.calls[0] as [unknown, string])[1];
+      expect(written).toContain('🛫 2026-07-01');
+      expect(written).toContain('renamed on server');
     });
   });
 });

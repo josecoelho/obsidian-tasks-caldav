@@ -2,6 +2,7 @@ import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { ObsidianMapper } from '../../src/tasks/obsidianMapper';
 import { diff } from '../../src/sync/diff';
+import { applicableChanges } from '../../src/sync/applicableChanges';
 import { CommonTask, SyncChange } from '../../src/sync/types';
 import { IdMapping } from '../../src/types';
 import { FetchHttpClient } from '../helpers/fetchHttpClient';
@@ -368,6 +369,82 @@ describe('Sync round-trip E2E', () => {
     expect(changeset.toObsidian[0].task.dueDate).toBe('2026-02-24');
     expect(changeset.toObsidian[0].task.recurrenceRule).toBe('FREQ=WEEKLY');
     expect(changeset.toCalDAV).toHaveLength(0);
+  });
+
+  it('pull-only: a divergent Obsidian state never mutates the server', async () => {
+    const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const keepUid = `e2e-pull-keep-${Date.now()}`;
+    const delUid = `e2e-pull-del-${Date.now()}`;
+    await client.createVTODO(buildVTODO(keepUid, 'Server task to edit'), keepUid);
+    await client.createVTODO(buildVTODO(delUid, 'Server task to delete locally'), delUid);
+
+    // Baseline = what we last pulled.
+    const baseline = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+
+    // Obsidian diverges: edit one task, delete the other — locally only.
+    const obsidianTasks: CommonTask[] = baseline
+      .filter(t => t.uid !== delUid)
+      .map(t => (t.uid === keepUid ? { ...t, title: 'Locally edited' } : t));
+
+    const caldavTasks = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    const changeset = diff(obsidianTasks, caldavTasks, baseline, 'caldav-wins');
+
+    // Sanity: bidirectional would push an update and a delete to the server.
+    expect(changeset.toCalDAV.some(c => c.type === 'update')).toBe(true);
+    expect(changeset.toCalDAV.some(c => c.type === 'delete')).toBe(true);
+
+    // Pull-only strips them, so applying touches nothing on the server.
+    const applied = applicableChanges(changeset, 'pull');
+    await caldavAdapter.applyChanges(applied.toCalDAV, emptyIdMapping);
+
+    const after = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    expect(after).toHaveLength(2);
+    expect(after.find(t => t.uid === keepUid)?.title).toBe('Server task to edit'); // not 'Locally edited'
+    expect(after.find(t => t.uid === delUid)).toBeDefined();                       // not deleted
+  });
+
+  it('push-only: local changes reach the server; a server-only task is not pulled', async () => {
+    const client = makeClient();
+    const caldavAdapter = new CalDAVAdapter(client);
+    await client.connect();
+
+    const serverOnlyUid = `e2e-push-srvonly-${Date.now()}`;
+    await client.createVTODO(buildVTODO(serverOnlyUid, 'Server-only task'), serverOnlyUid);
+
+    const caldavTasks = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    const baseline: CommonTask[] = [];
+
+    const localUid = `obs-push-${Date.now()}`;
+    const obsidianTasks: CommonTask[] = [{
+      uid: localUid,
+      title: 'Local task to push',
+      status: 'TODO',
+      dueDate: null,
+      startDate: null,
+      scheduledDate: null,
+      completedDate: null,
+      priority: 'none',
+      tags: [],
+      recurrenceRule: '',
+      body: '',
+    }];
+
+    const changeset = diff(obsidianTasks, caldavTasks, baseline, 'obsidian-wins');
+    // Sanity: bidirectional would create the server-only task in Obsidian.
+    expect(changeset.toObsidian.some(c => c.type === 'create')).toBe(true);
+
+    const applied = applicableChanges(changeset, 'push');
+    expect(applied.toObsidian.some(c => c.type === 'create')).toBe(false); // the server-only create is suppressed
+
+    await caldavAdapter.applyChanges(applied.toCalDAV, emptyIdMapping);
+
+    const after = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    expect(after).toHaveLength(2);                                                 // pushed task + untouched server task, nothing extra
+    expect(after.find(t => t.title === 'Local task to push')).toBeDefined();      // push happened
+    expect(after.find(t => t.uid === serverOnlyUid)).toBeDefined();               // untouched
   });
 
   it('should handle markdown generation from CalDAV round-trip', async () => {

@@ -4,31 +4,56 @@ import {
   isValidTaskId
 } from './taskIdGenerator';
 
+function todayDatePart(): string {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+}
+
 describe('taskIdGenerator', () => {
   describe('generateTaskId', () => {
-    it('should generate ID in YYYYMMDD-xxx format', () => {
-      const id = generateTaskId();
-      expect(id).toMatch(/^\d{8}-[0-9a-f]{3}$/);
+    afterEach(() => jest.restoreAllMocks());
+
+    it('generates YYYYMMDD-xxxx with a 4-char hex suffix', () => {
+      expect(generateTaskId()).toMatch(/^\d{8}-[0-9a-f]{4}$/);
     });
 
-    it('should generate IDs with current date', () => {
-      const id = generateTaskId();
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const expectedPrefix = `${year}${month}${day}`;
-
-      expect(id.startsWith(expectedPrefix)).toBe(true);
+    it('uses the local calendar date, matching the legacy format', () => {
+      expect(generateTaskId().slice(0, 8)).toBe(todayDatePart());
     });
 
-    it('should generate unique IDs', () => {
-      const ids = new Set();
-      for (let i = 0; i < 100; i++) {
-        ids.add(generateTaskId());
+    it('re-rolls when the candidate id is already in use', () => {
+      const draws = [new Uint8Array([0x12, 0x34]), new Uint8Array([0xab, 0xcd])];
+      jest.spyOn(crypto, 'getRandomValues').mockImplementation(<T,>(arr: T): T => {
+        (arr as Uint8Array).set(draws.shift()!);
+        return arr;
+      });
+
+      const used = new Set([`${todayDatePart()}-1234`]);
+
+      expect(generateTaskId(used)).toBe(`${todayDatePart()}-abcd`);
+    });
+
+    it('records the returned id in the used set', () => {
+      const used = new Set<string>();
+      const id = generateTaskId(used);
+      expect(used.has(id)).toBe(true);
+    });
+
+    it('generates unique ids for many tasks created the same day (issue #115)', () => {
+      const used = new Set<string>();
+      const ids = new Set<string>();
+      for (let i = 0; i < 500; i++) ids.add(generateTaskId(used));
+
+      expect(ids.size).toBe(500);
+    });
+
+    it('grows the suffix instead of looping forever when the day space is exhausted', () => {
+      const used = new Set<string>();
+      for (let i = 0; i < 65536; i++) {
+        used.add(`${todayDatePart()}-${i.toString(16).padStart(4, '0')}`);
       }
-      // Should have high uniqueness (allow for small chance of collision)
-      expect(ids.size).toBeGreaterThan(95);
+
+      expect(generateTaskId(used)).toMatch(/^\d{8}-[0-9a-f]{5,}$/);
     });
   });
 
@@ -51,11 +76,19 @@ describe('taskIdGenerator', () => {
   });
 
   describe('isValidTaskId', () => {
-    it('should validate correct format', () => {
+    it('validates the current 4-char hex suffix format', () => {
+      expect(isValidTaskId('20260703-a4f3')).toBe(true);
+      expect(isValidTaskId(generateTaskId())).toBe(true);
+    });
+
+    it('validates the legacy 3-char hex suffix format', () => {
       expect(isValidTaskId('20250105-abc')).toBe(true);
       expect(isValidTaskId('20250105-000')).toBe(true);
-      expect(isValidTaskId('20250105-fff')).toBe(true);
       expect(isValidTaskId('19991231-123')).toBe(true);
+    });
+
+    it('validates longer suffixes from day-space overflow', () => {
+      expect(isValidTaskId('20260703-a4f3c')).toBe(true);
     });
 
     it('should reject invalid date format', () => {
@@ -66,7 +99,6 @@ describe('taskIdGenerator', () => {
 
     it('should reject invalid hex suffix', () => {
       expect(isValidTaskId('20250105-ab')).toBe(false);   // 2 chars
-      expect(isValidTaskId('20250105-abcd')).toBe(false); // 4 chars
       expect(isValidTaskId('20250105-xyz')).toBe(false);  // non-hex chars
       expect(isValidTaskId('20250105-ABC')).toBe(false);  // uppercase
     });

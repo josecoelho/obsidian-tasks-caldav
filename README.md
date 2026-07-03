@@ -10,6 +10,7 @@ Works with the [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian
 
 - **Multi-calendar support** — sync different tags to different calendars and servers, with independent identifiers per side (Obsidian tag and CalDAV category)
 - **Bidirectional sync** — push tasks to CalDAV servers and pull changes back
+- **Per-calendar sync direction** — bidirectional, pull-only (server → Obsidian), or push-only (Obsidian → server)
 - **Auto-sync** — configurable interval (default: 5 minutes)
 - **Dry-run mode** — preview what will sync before committing changes
 - **Conflict detection** — manual resolution or auto-resolve with Obsidian wins
@@ -56,10 +57,10 @@ Open Settings → Tasks CalDAV Sync. Add one or more calendars, each with:
 
 | Setting | Description |
 |---------|-------------|
+| **Sync direction** | Bidirectional (default), pull from server only, or push to server only — see [Sync direction](#sync-direction) below. |
 | **Obsidian tag** | Only Obsidian tasks with this tag are pushed to the server. Leave empty to push every task. |
 | **Server category** | Only server tasks with this `CATEGORIES` value are pulled into Obsidian. Leave empty to pull every task (useful when some clients — such as the iOS Reminders app — can't set categories). |
-| **Calendar name** | Name of the calendar on the server |
-| **Server URL** | CalDAV server endpoint |
+| **Calendar URL** | The CalDAV collection URL. Paste it directly, or use **Browse calendars** to discover and pick one. |
 | **Username / Password** | CalDAV credentials |
 
 The two fields are independent. Set them to the same value for a symmetric sync (every synced task has that identifier on both sides), or use different values when your Obsidian tag and server category naming conventions differ. Leaving either side empty disables filtering on that side only.
@@ -73,6 +74,16 @@ Global settings:
 | **New tasks section** | Optional heading within the destination file | — |
 | **Sync completed tasks** | Include completed tasks in sync | off |
 | **Delete behavior** | What happens when a task is deleted on one side | `ask` |
+
+### Sync direction
+
+Each calendar syncs in one of three directions:
+
+- **Bidirectional** (default) — changes flow both ways; Obsidian and the server stay in sync.
+- **Pull from server only** — server changes are brought into Obsidian; nothing is ever written to the server. Useful for mirroring a read-only or shared calendar — for example, to report on completed tasks per category with Dataview.
+- **Push to server only** — Obsidian changes are sent to the server; server changes are never pulled back. A sync ID is still written into each task that is pushed, so it can be matched on later syncs.
+
+In one-way modes, deletions mirror in the sync direction only (a deletion on the source side propagates; a deletion on the target side is not sent back), and conflicts resolve automatically toward the source side.
 
 ### Conflict resolution
 
