@@ -223,11 +223,11 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	/**
 	 * Single entry point for every sync run: holds the gate so runs never
-	 * overlap, and shows progress in the status bar while one is active.
+	 * overlap, and clears the status bar when one finishes. The sync loops
+	 * paint progress via syncProgress().
 	 */
 	private async runSync<T>(fn: () => Promise<T>): Promise<T | null> {
 		return this.syncGate.run(async () => {
-			this.statusBar.setText('CalDAV: syncing…');
 			try {
 				return await fn();
 			} finally {
