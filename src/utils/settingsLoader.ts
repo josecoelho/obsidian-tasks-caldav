@@ -1,5 +1,25 @@
 import { CalDAVSettings, CalendarMapping, DEFAULT_CALDAV_SETTINGS } from '../types';
 
+/** The two reads settings loading needs from the host plugin. */
+export interface SettingsIO {
+  loadData(): Promise<unknown>;
+  dataFileExists(): Promise<boolean>;
+}
+
+/**
+ * Load and resolve plugin settings. A null read while the data file exists on
+ * disk is a failure (transient read race or corruption), not a fresh install —
+ * it throws instead of silently yielding defaults, so a later save can never
+ * clobber the stored configuration (#126).
+ */
+export async function loadSettingsFrom(io: SettingsIO): Promise<CalDAVSettings> {
+  const loaded = await io.loadData();
+  if (loaded == null && await io.dataFileExists()) {
+    throw new Error('the settings file exists but could not be read');
+  }
+  return resolveSettings(loaded);
+}
+
 /**
  * Resolve persisted plugin data into usable settings without ever throwing.
  * Null or garbage input yields fresh defaults, a stored object merges over

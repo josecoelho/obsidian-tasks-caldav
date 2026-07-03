@@ -1,5 +1,35 @@
-import { resolveSettings } from './resolveSettings';
+import { loadSettingsFrom, resolveSettings, SettingsIO } from './settingsLoader';
 import { DEFAULT_CALDAV_SETTINGS } from '../types';
+
+function io(overrides: Partial<SettingsIO>): SettingsIO {
+  return {
+    loadData: () => Promise.resolve(null),
+    dataFileExists: () => Promise.resolve(false),
+    ...overrides,
+  };
+}
+
+describe('loadSettingsFrom', () => {
+  it('returns defaults when no data file exists', async () => {
+    const settings = await loadSettingsFrom(io({}));
+    expect(settings).toEqual(DEFAULT_CALDAV_SETTINGS);
+  });
+
+  it('throws when the data file exists but reads null', async () => {
+    const failing = io({ dataFileExists: () => Promise.resolve(true) });
+    await expect(loadSettingsFrom(failing)).rejects.toThrow('could not be read');
+  });
+
+  it('resolves loaded data without checking the file when the read succeeds', async () => {
+    const dataFileExists = jest.fn().mockResolvedValue(true);
+    const settings = await loadSettingsFrom(io({
+      loadData: () => Promise.resolve({ syncInterval: 30 }),
+      dataFileExists,
+    }));
+    expect(settings.syncInterval).toBe(30);
+    expect(dataFileExists).not.toHaveBeenCalled();
+  });
+});
 
 describe('resolveSettings', () => {
   it('returns defaults for null (fresh install)', () => {

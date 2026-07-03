@@ -2,7 +2,7 @@ import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian
 import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { calendarLabel } from './src/utils/calendarLabel';
-import { resolveSettings } from './src/utils/resolveSettings';
+import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
@@ -154,11 +154,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		const loaded: unknown = await this.loadData();
-		if (loaded == null && await this.dataFileExists()) {
-			throw new Error('the settings file exists but could not be read');
-		}
-		this.settings = resolveSettings(loaded);
+		this.settings = await loadSettingsFrom({
+			loadData: () => this.loadData(),
+			dataFileExists: () => this.dataFileExists(),
+		});
 	}
 
 	private async dataFileExists(): Promise<boolean> {
