@@ -159,8 +159,11 @@ export class ObsidianAdapter {
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
 
+						// startDate (🛫) is local-only and never syncs; carry the
+						// vault's value so a CalDAV rewrite doesn't erase it.
+						const localStart = this.mapper.toCommonTask(existingTask, change.task.uid).startDate;
 						const markdown = this.mapper.toMarkdown(
-							change.task,
+							{ ...change.task, startDate: localStart },
 							this.settings.syncTag,
 							format,
 							globalFilter,

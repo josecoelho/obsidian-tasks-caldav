@@ -67,6 +67,12 @@ describe('tasksEqual', () => {
     expect(tasksEqual(a, b)).toBe(false);
   });
 
+  it('ignores startDate differences — 🛫 is local-only and never syncs', () => {
+    const a = makeCommonTask({ startDate: '2026-07-01' });
+    const b = makeCommonTask({ startDate: null });
+    expect(tasksEqual(a, b)).toBe(true);
+  });
+
   it('should detect body change', () => {
     const a = makeCommonTask({ body: 'Note A' });
     const b = makeCommonTask({ body: 'Note B' });

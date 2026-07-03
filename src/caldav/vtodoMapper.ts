@@ -55,10 +55,10 @@ export class VTODOMapper {
       lines.push(`DUE;VALUE=DATE:${this.formatDate(task.dueDate)}`);
     }
 
-    // Start date: prefer startDate (🛫) over scheduledDate (⏳) for DTSTART
-    const dtstart = task.startDate || task.scheduledDate;
-    if (dtstart) {
-      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(dtstart)}`);
+    // DTSTART carries the scheduled date (⏳) — the field CalDAV clients plan
+    // by. The start date (🛫) has no CalDAV counterpart and never syncs.
+    if (task.scheduledDate) {
+      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(task.scheduledDate)}`);
     }
 
     // Completed date
@@ -105,8 +105,8 @@ export class VTODOMapper {
       title: stripInlineTags(summary) || 'Untitled Task',
       status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION') as CommonTask['status'],
       dueDate: this.extractDateProperty(data, 'DUE'),
-      scheduledDate: null,
-      startDate: this.extractDateProperty(data, 'DTSTART'),
+      scheduledDate: this.extractDateProperty(data, 'DTSTART'),
+      startDate: null,
       completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
       priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0') as CommonTask['priority'],
       recurrenceRule: this.extractProperty(data, 'RRULE') || '',

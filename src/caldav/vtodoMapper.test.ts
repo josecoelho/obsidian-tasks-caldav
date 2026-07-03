@@ -314,7 +314,7 @@ END:VTODO`;
 
       const task = mapper.vtodoToTask(vtodo);
 
-      expect(task.startDate).toBe('2025-01-10');
+      expect(task.scheduledDate).toBe('2025-01-10');
     });
 
     it('should map all VTODO statuses correctly', () => {
@@ -884,7 +884,7 @@ END:VTODO`;
 
       // Dates should be identical after round-trip
       expect(roundTrippedTask.dueDate).toBe('2026-02-11');
-      expect(roundTrippedTask.startDate).toBe('2026-02-10');
+      expect(roundTrippedTask.scheduledDate).toBe('2026-02-10');
     });
 
     it('should handle dates consistently across multiple syncs', () => {
@@ -1003,7 +1003,7 @@ END:VTODO`;
       };
 
       const task = mapper.vtodoToTask(vtodo);
-      expect(task.startDate).toBe('2026-02-14');
+      expect(task.scheduledDate).toBe('2026-02-14');
     });
 
     it('should still parse VALUE=DATE format', () => {
@@ -1088,7 +1088,7 @@ END:VTODO`;
 
       // TZID dates should extract date portion
       expect(task.dueDate).toBe('2026-02-14');
-      expect(task.startDate).toBe('2026-02-14');
+      expect(task.scheduledDate).toBe('2026-02-14');
 
       // Other properties should parse normally
       expect(task.status).toBe('TODO');
@@ -1125,7 +1125,7 @@ END:VTODO`;
       // Parse TZID dates
       const task = mapper.vtodoToTask(vtodo);
       expect(task.dueDate).toBe('2026-03-15');
-      expect(task.startDate).toBe('2026-03-10');
+      expect(task.scheduledDate).toBe('2026-03-10');
 
       // Round-trip: convert back to VTODO (will use VALUE=DATE format)
       const vtodoOut = mapper.taskToVTODO(task, 'round-trip-tzid');
@@ -1135,7 +1135,7 @@ END:VTODO`;
       // Parse again — dates should be stable
       const task2 = mapper.vtodoToTask({ data: vtodoOut, etag: 'e2', url: 'http://test' });
       expect(task2.dueDate).toBe('2026-03-15');
-      expect(task2.startDate).toBe('2026-03-10');
+      expect(task2.scheduledDate).toBe('2026-03-10');
     });
   });
 
@@ -1353,6 +1353,63 @@ END:VTODO`;
       expect((md.match(/#chores\/garden/g) || []).length).toBe(1);
       expect(md).toContain('water the plants');
       expect(md).not.toContain('plants #sync #');
+    });
+  });
+
+  describe('DTSTART maps to scheduledDate only (start date is local-only)', () => {
+    const baseTask: Omit<CommonTask, 'uid'> = {
+      title: 'Date mapping',
+      status: 'TODO',
+      dueDate: null,
+      scheduledDate: null,
+      startDate: null,
+      completedDate: null,
+      priority: 'none',
+      recurrenceRule: '',
+      tags: [],
+      body: '',
+    };
+
+    function roundTrip(task: Omit<CommonTask, 'uid'>) {
+      const data = mapper.taskToVTODO(task, 'rt-uid');
+      return mapper.vtodoToTask({ data, url: 'http://x/rt-uid.ics', etag: 'e' });
+    }
+
+    it('writes DTSTART from scheduledDate even when startDate is also set', () => {
+      const ics = mapper.taskToVTODO(
+        { ...baseTask, startDate: '2026-07-01', scheduledDate: '2026-07-10' },
+        'uid-1',
+      );
+      expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
+    });
+
+    it('does not write DTSTART for a start-only task', () => {
+      const ics = mapper.taskToVTODO({ ...baseTask, startDate: '2026-07-01' }, 'uid-1');
+      expect(ics).not.toContain('DTSTART');
+    });
+
+    it('round-trips a scheduled-only task back to scheduledDate', () => {
+      const back = roundTrip({ ...baseTask, scheduledDate: '2026-07-10' });
+      expect(back.scheduledDate).toBe('2026-07-10');
+      expect(back.startDate).toBeNull();
+    });
+
+    it('maps DTSTART written by another client to scheduledDate', () => {
+      const data = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VTODO',
+        'UID:other-client',
+        'SUMMARY:From another app',
+        'DTSTART;VALUE=DATE:20260710',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const back = mapper.vtodoToTask({ data, url: 'http://x/o.ics', etag: 'e' });
+
+      expect(back.scheduledDate).toBe('2026-07-10');
+      expect(back.startDate).toBeNull();
     });
   });
 });

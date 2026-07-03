@@ -522,4 +522,44 @@ describe('ObsidianAdapter', () => {
       }])).rejects.toThrow('obsidian-tasks API not available');
     });
   });
+
+  describe('applyChanges preserves the local-only start date (🛫)', () => {
+    it('keeps 🛫 when a CalDAV update rewrites the task line', async () => {
+      const localTask = makeTask({
+        description: 'Task with start',
+        id: '20250101-abc',
+        startDate: '2026-07-01',
+        originalMarkdown: '- [ ] Task with start 🛫 2026-07-01 🆔 20250101-abc #sync',
+      });
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      const wrapper = {
+        ...dummyWrapper,
+        updateTaskInVault,
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      adapter.normalize([withBody(localTask)], (task) => task.id || null);
+
+      await adapter.applyChanges([{
+        type: 'update',
+        task: {
+          uid: '20250101-abc',
+          title: 'Task with start (renamed on server)',
+          status: 'TODO',
+          dueDate: null,
+          startDate: null,
+          scheduledDate: null,
+          completedDate: null,
+          priority: 'none',
+          tags: [],
+          recurrenceRule: '',
+          body: '',
+        },
+      }]);
+
+      expect(updateTaskInVault).toHaveBeenCalledTimes(1);
+      const written = (updateTaskInVault.mock.calls[0] as [unknown, string])[1];
+      expect(written).toContain('🛫 2026-07-01');
+      expect(written).toContain('renamed on server');
+    });
+  });
 });
