@@ -172,7 +172,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 	secretStore(): SecretStore | undefined {
 		// Undefined on Obsidian < 1.11.4, where passwords stay in plain text.
-		return (this.app as Partial<App>).secretStorage;
+		return (this.app as unknown as { secretStorage?: SecretStore }).secretStorage;
 	}
 
 	private async dataFileExists(): Promise<boolean> {
