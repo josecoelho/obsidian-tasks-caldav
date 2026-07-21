@@ -150,6 +150,36 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].etag).toBeUndefined();
         });
 
+        it('should skip a tombstone response with an empty/self-closing calendar-data (Vikunja post-delete)', () => {
+            // After a delete, Vikunja's REPORT returns a response for the gone
+            // resource carrying an empty <calendar-data/>. Its textContent is ''
+            // — present but not a VTODO — so it must not become a phantom object.
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/dav/projects/3/deleted.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <C:calendar-data/>
+            </D:prop>
+            <D:status>HTTP/1.1 404 Not Found</D:status>
+        </D:propstat>
+    </D:response>
+    <D:response>
+        <D:href>/dav/projects/3/live.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <C:calendar-data>BEGIN:VCALENDAR&#xA;BEGIN:VTODO&#xA;UID:live-1&#xA;END:VTODO&#xA;END:VCALENDAR</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'http://localhost:3457');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].data).toContain('UID:live-1');
+        });
+
         it('should decode XML entities in calendar-data (Vikunja format)', () => {
             const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
     <D:response>

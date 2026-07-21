@@ -124,12 +124,16 @@ export class CalDAVClientDirect implements CalDAVClient {
       const response = responses[i];
 
       const href = firstChildText(response, 'href');
-      const calendarData = firstChildText(response, 'calendar-data');
-      if (href === undefined || calendarData === undefined) continue;
+      // Skip tombstone/error responses that carry an empty or self-closing
+      // <calendar-data/> (e.g. Vikunja's post-delete multistatus). Their
+      // textContent is '' — present but not a VTODO — so a bare presence check
+      // would emit a phantom object.
+      const calendarData = firstChildText(response, 'calendar-data')?.trim();
+      if (!href || !calendarData) continue;
 
       vtodos.push({
         url: resolveUrl(href, contextUrl),
-        data: calendarData.trim(),
+        data: calendarData,
         etag: stripQuotes(firstChildText(response, 'getetag')),
       });
     }
