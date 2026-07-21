@@ -92,6 +92,8 @@ export class SyncEngine {
 
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
+			this.assignPulledTaskIds(applicable.toObsidian, idMapping);
+
 			const progress: SyncProgress = {
 				pullDone: 0,
 				pullTotal: applicable.toObsidian.length,
@@ -100,7 +102,7 @@ export class SyncEngine {
 			};
 			onProgress?.({ ...progress });
 
-			const { createdMappings, completionRemappings } = await this.obsidianAdapter.applyChanges(
+			const { completionRemappings } = await this.obsidianAdapter.applyChanges(
 				applicable.toObsidian,
 				() => {
 					progress.pullDone++;
@@ -120,7 +122,7 @@ export class SyncEngine {
 				},
 			);
 
-			this.updateIdMapping(idMapping, createdMappings, completionRemappings, applicable);
+			this.updateIdMapping(idMapping, completionRemappings, applicable);
 			this.persistState(obsidianTasks, caldavTasks, applicable, idMapping);
 			await this.storage.save();
 
@@ -191,17 +193,35 @@ export class SyncEngine {
 		return baseline;
 	}
 
+	/**
+	 * Give every first-time pulled CalDAV task its stable local task ID at the
+	 * moment it is classified as a genuine "create in Obsidian".
+	 *
+	 * A `toObsidian` create is always CalDAV-sourced (it exists on the server
+	 * but not in the vault), and its `task.uid` still holds the raw CalDAV UID
+	 * from normalize's fallback. We mint the local ID here — after reconcile has
+	 * had its chance to pair the task with a pre-existing vault task — record it
+	 * in the mapping (preserving the raw UID so the server stays addressable),
+	 * and stamp it onto the change's task. Because that task is the same object
+	 * as the fetched caldavTasks entry, the new baseline becomes uniformly keyed
+	 * by the stable ID with no re-keying.
+	 */
+	private assignPulledTaskIds(toObsidian: SyncChange[], idMapping: IdMapping): void {
+		for (const change of toObsidian) {
+			if (change.type !== "create") continue;
+			const caldavUid = change.task.uid;
+			const taskId = this.obsidianAdapter.reserveTaskId();
+			idMapping.taskIdToCaldavUid[taskId] = caldavUid;
+			idMapping.caldavUidToTaskId[caldavUid] = taskId;
+			change.task.uid = taskId;
+		}
+	}
+
 	private updateIdMapping(
 		idMapping: IdMapping,
-		createdMappings: Array<{ taskId: string; caldavUID: string }>,
 		completionRemappings: Array<{ oldTaskId: string; newTaskId: string }>,
 		changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
 	): void {
-		for (const { taskId, caldavUID } of createdMappings) {
-			idMapping.taskIdToCaldavUid[taskId] = caldavUID;
-			idMapping.caldavUidToTaskId[caldavUID] = taskId;
-		}
-
 		for (const { oldTaskId, newTaskId } of completionRemappings) {
 			const caldavUID = idMapping.taskIdToCaldavUid[oldTaskId];
 			if (caldavUID) {
