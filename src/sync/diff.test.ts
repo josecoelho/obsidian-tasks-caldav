@@ -480,6 +480,61 @@ describe('diff', () => {
       expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(1);
       expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(1);
     });
+
+    it('should reconcile an unmapped vault task against a baselined CalDAV task instead of creating a duplicate', () => {
+      // The id-mapping drifted: the vault task carries a new, unmapped id
+      // ('obs-drifted'), while its content-identical CalDAV counterpart is
+      // still in the baseline mapped to a now-absent Obsidian id ('obs-gone').
+      const obsTask = makeCommonTask({ uid: 'obs-drifted', title: 'Buy milk' });
+      const calTask = makeCommonTask({ uid: 'obs-gone', caldavId: 'caldav-uid-1', title: 'Buy milk' });
+      const baseline = makeCommonTask({ uid: 'obs-gone', title: 'Buy milk' });
+
+      const result = diff([obsTask], [calTask], [baseline], 'caldav-wins');
+
+      // No duplicate is created on either side; instead both sides reconcile.
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(0);
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(0);
+      expect(result.toCalDAV.filter(c => c.type === 'delete')).toHaveLength(0);
+
+      const obsReconciles = result.toObsidian.filter(c => c.type === 'reconcile');
+      const calReconciles = result.toCalDAV.filter(c => c.type === 'reconcile');
+      expect(obsReconciles).toHaveLength(1);
+      expect(obsReconciles[0].task.uid).toBe('obs-drifted');
+      // The mapping must link to the real CalDAV server UID, not the stale key.
+      expect(obsReconciles[0].counterpartUid).toBe('caldav-uid-1');
+      expect(calReconciles).toHaveLength(1);
+      expect(calReconciles[0].counterpartUid).toBe('obs-drifted');
+    });
+
+    it('should not amplify: unmapped vault task + N identical baselined server tasks yields zero CalDAV creates', () => {
+      const obsTask = makeCommonTask({ uid: 'obs-drifted', title: 'Recurring dupe' });
+      const calTasks = Array.from({ length: 5 }, (_, i) =>
+        makeCommonTask({ uid: `obs-gone-${i}`, caldavId: `caldav-uid-${i}`, title: 'Recurring dupe' }),
+      );
+      const baseline = calTasks.map(c => makeCommonTask({ uid: c.uid, title: 'Recurring dupe' }));
+
+      const result = diff([obsTask], calTasks, baseline, 'caldav-wins');
+
+      // The vault task must never spawn a new CalDAV copy...
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(0);
+      // ...nor pull the surplus copies back into the vault (the other half of
+      // the amplifying loop). Exactly one pair reconciles.
+      expect(result.toObsidian.filter(c => c.type === 'create')).toHaveLength(0);
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(1);
+      expect(result.toCalDAV.filter(c => c.type === 'reconcile')).toHaveLength(1);
+    });
+
+    it('should still create a genuinely new vault task when no content-equal CalDAV task exists', () => {
+      const obsTask = makeCommonTask({ uid: 'obs-new', title: 'Truly new' });
+      const calTask = makeCommonTask({ uid: 'obs-gone', caldavId: 'caldav-uid-1', title: 'Unrelated' });
+      const baseline = makeCommonTask({ uid: 'obs-gone', title: 'Unrelated' });
+
+      const result = diff([obsTask], [calTask], [baseline], 'caldav-wins');
+
+      expect(result.toCalDAV.filter(c => c.type === 'create')).toHaveLength(1);
+      expect(result.toCalDAV.filter(c => c.type === 'create')[0].task.uid).toBe('obs-new');
+      expect(result.toObsidian.filter(c => c.type === 'reconcile')).toHaveLength(0);
+    });
   });
 
   describe('completion detection', () => {

@@ -461,6 +461,99 @@ describe('SyncEngine', () => {
       expect(mockDeleteVTODOByUID).toHaveBeenCalledTimes(1);
       expect(mockSetIdMapping).toHaveBeenCalled();
     });
+
+    it('heals an unmapped vault-originated task instead of writing an empty-uid baseline phantom', async () => {
+      // A vault-originated task (Obsidian id == CalDAV uid) whose id-mapping was
+      // lost: normalize() gives it uid:'' but caldavId equals the vault id, so
+      // diff() matches the pair as an unchanged no-op that no changeset touches.
+      const stableId = '20260416-843';
+      const title = 'Project docs';
+      const obsTask = makeObsidianTask({ description: title, id: stableId, tags: [] });
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([makeCalObj(stableId, title)]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} }); // mapping lost
+      mockGetBaseline.mockReturnValue([{
+        uid: stableId,
+        title,
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      }]);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync();
+
+      // Pure no-op: nothing created/updated/deleted/reconciled on either side.
+      expect(result.created).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(result.updated).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(result.deleted).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(result.reconciled).toBe(0);
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockCreateTask).not.toHaveBeenCalled();
+
+      // Baseline: exactly one entry keyed by the real uid, no '' phantom, and no
+      // caldavId leaked into the persisted snapshot.
+      const baselineCall = mockSetBaseline.mock.calls.at(-1) as [Array<Record<string, unknown>>] | undefined;
+      const persistedBaseline = baselineCall?.[0] ?? [];
+      expect(persistedBaseline).toHaveLength(1);
+      expect(persistedBaseline[0].uid).toBe(stableId);
+      expect(persistedBaseline.some((t) => t.uid === '')).toBe(false);
+      expect(persistedBaseline.every((t) => !('caldavId' in t))).toBe(true);
+
+      // Self-heal: the mapping is restored so subsequent syncs stay consistent.
+      const mappingCall = mockSetIdMapping.mock.calls.at(-1) as [IdMapping] | undefined;
+      const persistedMapping = mappingCall?.[0] as IdMapping;
+      expect(persistedMapping.taskIdToCaldavUid[stableId]).toBe(stableId);
+      expect(persistedMapping.caldavUidToTaskId[stableId]).toBe(stableId);
+    });
+
+    it('is idempotent after healing an unmapped vault-originated task', async () => {
+      const stableId = '20260416-843';
+      const title = 'Project docs';
+      const obsTask = makeObsidianTask({ description: title, id: stableId, tags: [] });
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(obsTask));
+      mockFetchVTODOs.mockResolvedValue([makeCalObj(stableId, title)]);
+
+      // Second sync starts from the healed state produced by the first.
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { [stableId]: stableId },
+        caldavUidToTaskId: { [stableId]: stableId },
+      });
+      mockGetBaseline.mockReturnValue([{
+        uid: stableId,
+        title,
+        status: 'TODO',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: null,
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      }]);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.created).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(result.updated).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(result.deleted).toEqual({ toObsidian: 0, toCalDAV: 0 });
+      expect(mockCreateVTODO).not.toHaveBeenCalled();
+      expect(mockDeleteVTODOByUID).not.toHaveBeenCalled();
+      const baselineCall = mockSetBaseline.mock.calls.at(-1) as [Array<Record<string, unknown>>] | undefined;
+      const persistedBaseline = baselineCall?.[0] ?? [];
+      expect(persistedBaseline).toHaveLength(1);
+      expect(persistedBaseline.every((t) => !('caldavId' in t))).toBe(true);
+    });
   });
 
   describe('result counting', () => {

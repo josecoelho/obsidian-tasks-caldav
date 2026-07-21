@@ -164,9 +164,20 @@ function reconcileOrphans(
     }
   }
 
+  // A CalDAV task is eligible for reconciliation whenever no *live* Obsidian
+  // task is currently paired with it (its map key is absent from the vault).
+  // We intentionally do NOT exclude tasks that are present in the baseline: the
+  // amplifying-duplication bug happens precisely when the vault's task IDs drift
+  // out of the id-mapping (interrupted sync, backup restore, multi-device), so
+  // the CalDAV counterpart still sits in the baseline mapped to an Obsidian ID
+  // that no longer exists. Excluding baselined tasks would leave the unmapped
+  // vault task nothing to reconcile against, and it would create a duplicate on
+  // CalDAV (which then gets pulled back, re-duplicated, and amplifies). Keeping
+  // the `!obsidianByUid.has(uid)` guard is what prevents a mis-merge: a CalDAV
+  // task a live vault task owns is never up for grabs.
   const calOrphanPool = new Map<string, CommonTask>();
   for (const [uid, task] of caldavByUid) {
-    if (!obsidianByUid.has(uid) && !baselineByUid.has(uid)) {
+    if (!obsidianByUid.has(uid)) {
       calOrphanPool.set(uid, task);
     }
   }
@@ -174,7 +185,12 @@ function reconcileOrphans(
   for (const obsTask of obsOrphans) {
     for (const [calUid, calTask] of calOrphanPool) {
       if (tasksEqual(obsTask, calTask)) {
-        toObsidian.push({ type: 'reconcile', task: obsTask, counterpartUid: calUid });
+        // Link the mapping to the real CalDAV server identity (`caldavId`), not
+        // the pool key: a baselined orphan is keyed by its stale mapped Obsidian
+        // ID, which is not a server UID. Fall back to the key for unmapped
+        // orphans whose fixtures carry no `caldavId`, keeping behavior unchanged.
+        const calServerUid = calTask.caldavId ?? calUid;
+        toObsidian.push({ type: 'reconcile', task: obsTask, counterpartUid: calServerUid });
         toCalDAV.push({ type: 'reconcile', task: calTask, counterpartUid: obsTask.uid });
         reconciledUids.add(obsTask.uid);
         reconciledUids.add(calUid);
