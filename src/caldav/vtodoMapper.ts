@@ -7,6 +7,7 @@ export interface CalendarObject {
   url: string;
 }
 
+import ICAL from 'ical.js';
 import { CommonTask } from '../sync/types';
 import { extractInlineTags, stripInlineTags } from '../utils/inlineTags';
 
@@ -14,7 +15,25 @@ import { extractInlineTags, stripInlineTags } from '../utils/inlineTags';
 type VTODOTaskFields = Omit<CommonTask, 'uid'>;
 
 /**
+ * The RRULE value serializer from ical.js' iCalendar design set. We drive it
+ * directly (instead of the `ICAL.Recur` object) so the rule survives as a
+ * verbatim string: `Recur.toString()` reorders parts, but `fromICAL`/`toICAL`
+ * preserve the author's original order. `design.*.value` is typed `any`, so we
+ * pin the two functions we use to a concrete shape here.
+ */
+interface RecurValueDesign {
+  fromICAL(value: string): object;
+  toICAL(value: object): string;
+}
+const RECUR_DESIGN = (ICAL.design.icalendar.value as Record<string, RecurValueDesign>).recur;
+
+/**
  * Maps between CommonTask fields and CalDAV VTODO iCalendar format.
+ *
+ * Parsing and serialization are delegated to ical.js (the Thunderbird engine):
+ * it owns line folding/unfolding, text escaping, VALUE=DATE handling and
+ * component scoping, so task fields are only ever read from the VTODO
+ * component — never from a sibling VTIMEZONE or a nested VALARM.
  */
 export class VTODOMapper {
   /**
@@ -24,66 +43,65 @@ export class VTODOMapper {
    * @returns VTODO iCalendar string
    */
   taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
-    const lines: string[] = [];
+    const calendar = new ICAL.Component(['vcalendar', [], []]);
+    calendar.updatePropertyWithValue('version', '2.0');
+    calendar.updatePropertyWithValue('prodid', '-//Obsidian//Tasks CalDAV Sync//EN');
 
-    lines.push('BEGIN:VCALENDAR');
-    lines.push('VERSION:2.0');
-    lines.push('PRODID:-//Obsidian//Tasks CalDAV Sync//EN');
-    lines.push('BEGIN:VTODO');
-    lines.push(`UID:${uid}`);
-    lines.push(`DTSTAMP:${this.formatDateTimeUTC(new Date())}`);
-    lines.push(`LAST-MODIFIED:${this.formatDateTimeUTC(new Date())}`);
-    lines.push(`SUMMARY:${this.escapeText(task.title)}`);
+    const vtodo = new ICAL.Component('vtodo');
+    calendar.addSubcomponent(vtodo);
 
-    // Description (body text), with optional obsidian link prepended
+    const now = ICAL.Time.fromJSDate(new Date(), true);
+    vtodo.updatePropertyWithValue('uid', uid);
+    vtodo.updatePropertyWithValue('dtstamp', now);
+    vtodo.updatePropertyWithValue('last-modified', now);
+    vtodo.updatePropertyWithValue('summary', task.title);
+
     const description = this.buildDescription(task.body, task.obsidianUrl);
     if (description) {
-      lines.push(`DESCRIPTION:${this.escapeText(description)}`);
+      vtodo.updatePropertyWithValue('description', description);
     }
 
     // Obsidian vault link. When set, this plugin owns the URL property —
     // any value previously set by another CalDAV client will be overwritten.
     if (task.obsidianUrl) {
-      lines.push(`URL:${task.obsidianUrl}`);
+      vtodo.updatePropertyWithValue('url', task.obsidianUrl);
     }
 
-    // Status mapping
-    lines.push(`STATUS:${this.mapStatusToVTODO(task.status)}`);
+    vtodo.updatePropertyWithValue('status', this.mapStatusToVTODO(task.status));
 
-    // Due date
     if (task.dueDate) {
-      lines.push(`DUE;VALUE=DATE:${this.formatDate(task.dueDate)}`);
+      vtodo.updatePropertyWithValue('due', this.toDateValue(task.dueDate));
     }
 
     // DTSTART carries the scheduled date (⏳) — the field CalDAV clients plan
     // by. The start date (🛫) has no CalDAV counterpart and never syncs.
     if (task.scheduledDate) {
-      lines.push(`DTSTART;VALUE=DATE:${this.formatDate(task.scheduledDate)}`);
+      vtodo.updatePropertyWithValue('dtstart', this.toDateValue(task.scheduledDate));
     }
 
-    // Completed date
     if (task.completedDate) {
-      lines.push(`COMPLETED:${this.formatDateTimeUTC(this.toCompletedInstant(task.completedDate))}`);
-      lines.push('PERCENT-COMPLETE:100');
+      // Anchor and format the completion instant ourselves (issue #43) — ical.js
+      // only serializes the already-resolved UTC instant, it does no timezone math.
+      vtodo.updatePropertyWithValue(
+        'completed',
+        ICAL.Time.fromJSDate(this.toCompletedInstant(task.completedDate), true),
+      );
+      vtodo.updatePropertyWithValue('percent-complete', 100);
     }
 
-    // Priority mapping (Obsidian: lowest/low/none/medium/high/highest -> VTODO: 0-9)
-    lines.push(`PRIORITY:${this.mapPriorityToVTODO(task.priority)}`);
+    vtodo.updatePropertyWithValue('priority', this.mapPriorityToVTODO(task.priority));
 
-    // Recurrence rule
     if (task.recurrenceRule) {
-      lines.push(`RRULE:${task.recurrenceRule}`);
+      vtodo.addProperty(this.buildRecurrenceProperty(task.recurrenceRule, vtodo));
     }
 
-    // Tags as categories
     if (task.tags.length > 0) {
-      lines.push(`CATEGORIES:${task.tags.map(t => this.escapeText(t)).join(',')}`);
+      const categories = new ICAL.Property('categories', vtodo);
+      categories.setValues(task.tags);
+      vtodo.addProperty(categories);
     }
 
-    lines.push('END:VTODO');
-    lines.push('END:VCALENDAR');
-
-    return lines.join('\r\n');
+    return calendar.toString();
   }
 
   /**
@@ -91,30 +109,24 @@ export class VTODOMapper {
    * @param vtodo The CalDAV calendar object containing VTODO
    */
   vtodoToTask(vtodo: CalendarObject): VTODOTaskFields {
-    const unfolded = this.unfold(vtodo.data);
-    // Extract only the VTODO section to avoid matching properties from VTIMEZONE or other components,
-    // then strip sub-components (VALARM etc.) so their properties don't bleed into task fields
-    // — a sub-component's DESCRIPTION is not the task's description.
-    const vtodoMatch = unfolded.match(/BEGIN:VTODO[\s\S]*?END:VTODO/);
-    const data = (vtodoMatch ? vtodoMatch[0] : unfolded)
-      .replace(/BEGIN:(?!VTODO\b)\w+[\s\S]*?END:\w+(\r?\n|$)/g, '');
+    const component = this.parseVTODO(vtodo.data);
 
     // Inline #tags in SUMMARY (written by older plugin versions or other
     // clients) move into tags[], so corrupted tasks heal instead of gaining
     // a duplicate tag on every sync — issue #114.
-    const summary = this.extractRawProperty(data, 'SUMMARY') || '';
+    const summary = this.stringValue(component, 'summary');
 
     return {
       title: stripInlineTags(summary) || 'Untitled Task',
-      status: this.mapStatusFromVTODO(this.extractProperty(data, 'STATUS') || 'NEEDS-ACTION') as CommonTask['status'],
-      dueDate: this.extractDateProperty(data, 'DUE'),
-      scheduledDate: this.extractDateProperty(data, 'DTSTART'),
+      status: this.mapStatusFromVTODO(this.stringValue(component, 'status') || 'NEEDS-ACTION') as CommonTask['status'],
+      dueDate: this.extractDate(component, 'due'),
+      scheduledDate: this.extractDate(component, 'dtstart'),
       startDate: null,
-      completedDate: this.extractDateTimeProperty(data, 'COMPLETED'),
-      priority: this.mapPriorityFromVTODO(this.extractProperty(data, 'PRIORITY') || '0') as CommonTask['priority'],
-      recurrenceRule: this.extractProperty(data, 'RRULE') || '',
-      tags: this.dedupeTags([...this.extractCategories(data), ...extractInlineTags(summary)]),
-      body: this.stripObsidianLinks(this.extractRawProperty(data, 'DESCRIPTION') || ''),
+      completedDate: this.extractDateTime(component, 'completed'),
+      priority: this.mapPriorityFromVTODO(this.stringValue(component, 'priority') || '0') as CommonTask['priority'],
+      recurrenceRule: this.extractRecurrence(component),
+      tags: this.dedupeTags([...this.extractCategories(component), ...extractInlineTags(summary)]),
+      body: this.stripObsidianLinks(this.stringValue(component, 'description')),
     };
   }
 
@@ -122,9 +134,7 @@ export class VTODOMapper {
    * Extract UID from VTODO data
    */
   extractUID(data: string): string {
-    const unfolded = this.unfold(data);
-    const match = unfolded.match(/^UID:(.+)$/m);
-    return match ? match[1].trim() : '';
+    return this.stringValue(this.parseVTODO(data), 'uid');
   }
 
   /**
@@ -132,19 +142,75 @@ export class VTODOMapper {
    * Returns ISO 8601 string or null if not present
    */
   extractLastModified(data: string): string | null {
-    const match = this.unfold(data).match(/^LAST-MODIFIED:(.+)$/m);
-    if (!match) return null;
+    return this.extractDateTime(this.parseVTODO(data), 'last-modified');
+  }
 
-    const timestamp = match[1].trim();
-    // Parse iCalendar datetime format (YYYYMMDDTHHMMSSZ)
-    const year = timestamp.substring(0, 4);
-    const month = timestamp.substring(4, 6);
-    const day = timestamp.substring(6, 8);
-    const hour = timestamp.substring(9, 11);
-    const minute = timestamp.substring(11, 13);
-    const second = timestamp.substring(13, 15);
+  /**
+   * Parse iCalendar data and return its VTODO component. Accepts both a full
+   * VCALENDAR wrapper and a bare VTODO. Falls back to an empty component so
+   * callers still read defaults from VTODO-less input.
+   */
+  private parseVTODO(data: string): ICAL.Component {
+    // ICAL.parse returns jCal typed as `any`; a component's jCal is an array.
+    const root = new ICAL.Component(ICAL.parse(data) as unknown[]);
+    if (root.name === 'vtodo') return root;
+    return root.getFirstSubcomponent('vtodo') ?? new ICAL.Component('vtodo');
+  }
 
-    return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+  /** First property value as a string, '' when the property is absent. */
+  private stringValue(component: ICAL.Component, name: string): string {
+    const value = component.getFirstPropertyValue(name);
+    return value === null ? '' : String(value);
+  }
+
+  /** A date-only ICAL.Time from a 'YYYY-MM-DD' string, emitted as VALUE=DATE. */
+  private toDateValue(date: string): ICAL.Time {
+    const [year, month, day] = date.split('-').map(Number);
+    return ICAL.Time.fromData({ year, month, day, isDate: true });
+  }
+
+  /**
+   * Read a date property as 'YYYY-MM-DD', taking only the calendar-day portion
+   * of VALUE=DATE, TZID and datetime forms alike.
+   */
+  private extractDate(component: ICAL.Component, name: string): string | null {
+    const time = component.getFirstPropertyValue(name);
+    if (!(time instanceof ICAL.Time)) return null;
+    return `${this.pad(time.year, 4)}-${this.pad(time.month, 2)}-${this.pad(time.day, 2)}`;
+  }
+
+  /** Read a datetime property as 'YYYY-MM-DDTHH:MM:SSZ' from its wall-clock components. */
+  private extractDateTime(component: ICAL.Component, name: string): string | null {
+    const time = component.getFirstPropertyValue(name);
+    if (!(time instanceof ICAL.Time) || time.isDate) return null;
+    return (
+      `${this.pad(time.year, 4)}-${this.pad(time.month, 2)}-${this.pad(time.day, 2)}` +
+      `T${this.pad(time.hour, 2)}:${this.pad(time.minute, 2)}:${this.pad(time.second, 2)}Z`
+    );
+  }
+
+  /**
+   * The RRULE is stored and round-tripped as a verbatim string (issue #8): the
+   * plugin translates natural-language recurrence elsewhere and never mutates
+   * the rule, so read it straight from the value serializer rather than an
+   * `ICAL.Recur` object (whose `toString()` reorders the parts).
+   */
+  private extractRecurrence(component: ICAL.Component): string {
+    const property = component.getFirstProperty('rrule');
+    if (!property) return '';
+    return RECUR_DESIGN.toICAL(property.jCal[3] as object);
+  }
+
+  private buildRecurrenceProperty(rule: string, parent: ICAL.Component): ICAL.Property {
+    return new ICAL.Property(['rrule', {}, 'recur', RECUR_DESIGN.fromICAL(rule)], parent);
+  }
+
+  /**
+   * Extract categories (tags). ical.js unescapes and splits multi-value
+   * CATEGORIES; multiple CATEGORIES lines are concatenated, as servers emit both.
+   */
+  private extractCategories(component: ICAL.Component): string[] {
+    return component.getAllProperties('categories').flatMap((property) => property.getValues() as string[]);
   }
 
   /**
@@ -217,118 +283,6 @@ export class VTODOMapper {
     return 'lowest';
   }
 
-  /**
-   * RFC 5545 Section 3.1: Unfold long content lines.
-   * Lines folded with CRLF+space/tab continuation are joined.
-   */
-  private unfold(data: string): string {
-    return data.replace(/\r?\n[ \t]/g, '');
-  }
-
-  /**
-   * Extract a simple property value from iCalendar data
-   */
-  private extractProperty(data: string, property: string): string | null {
-    const regex = new RegExp(`^${property}[;:](.+)$`, 'm');
-    const match = data.match(regex);
-
-    if (match) {
-      // Extract value after last colon (handles parameters like DUE;VALUE=DATE:20250105)
-      const fullValue = match[1];
-      const colonIndex = fullValue.lastIndexOf(':');
-      const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
-
-      // Unescape iCalendar special characters
-      return this.unescapeText(value);
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract a property value without splitting on colons within the value.
-   * Used for DESCRIPTION and other text properties where colons are valid content.
-   */
-  private extractRawProperty(data: string, property: string): string | null {
-    const regex = new RegExp(`^${property}:(.+)$`, 'm');
-    const match = data.match(regex);
-    if (!match) return null;
-    return this.unescapeText(match[1].trim());
-  }
-
-  /**
-   * Extract date property (VALUE=DATE format)
-   */
-  private extractDateProperty(data: string, property: string): string | null {
-    const value = this.extractProperty(data, property);
-    if (!value) return null;
-
-    // Parse YYYYMMDD format (VALUE=DATE)
-    if (value.length === 8 && /^\d{8}$/.test(value)) {
-      const year = value.substring(0, 4);
-      const month = value.substring(4, 6);
-      const day = value.substring(6, 8);
-      return `${year}-${month}-${day}`;
-    }
-
-    // Parse YYYYMMDDTHHMMSS format (TZID parameter or datetime without Z)
-    if (value.length >= 15 && value.includes('T')) {
-      const year = value.substring(0, 4);
-      const month = value.substring(4, 6);
-      const day = value.substring(6, 8);
-      return `${year}-${month}-${day}`;
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract datetime property
-   */
-  private extractDateTimeProperty(data: string, property: string): string | null {
-    const value = this.extractProperty(data, property);
-    if (!value) return null;
-
-    // Parse YYYYMMDDTHHMMSSZ format
-    if (value.length >= 15 && value.includes('T')) {
-      const year = value.substring(0, 4);
-      const month = value.substring(4, 6);
-      const day = value.substring(6, 8);
-      const hour = value.substring(9, 11);
-      const minute = value.substring(11, 13);
-      const second = value.substring(13, 15);
-      return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract categories (tags)
-   * Handles both comma-separated (CATEGORIES:a,b,c) and multiple lines
-   * (CATEGORIES:a\nCATEGORIES:b) as servers use both formats.
-   */
-  private extractCategories(data: string): string[] {
-    const regex = /^CATEGORIES[;:](.+)$/gm;
-    const categories: string[] = [];
-    let match;
-
-    while ((match = regex.exec(data)) !== null) {
-      // Extract value after last colon (handles parameters)
-      const fullValue = match[1];
-      const colonIndex = fullValue.lastIndexOf(':');
-      const value = colonIndex >= 0 ? fullValue.substring(colonIndex + 1).trim() : fullValue.trim();
-
-      // Split by unescaped commas: split on commas that aren't preceded by backslash
-      const parts = value.split(/(?<!\\),/);
-      for (const part of parts) {
-        categories.push(this.unescapeText(part.trim()));
-      }
-    }
-
-    return categories;
-  }
-
   /** Case-insensitive, order-preserving dedupe — Obsidian treats tags case-insensitively. */
   private dedupeTags(tags: string[]): string[] {
     const seen = new Set<string>();
@@ -340,23 +294,8 @@ export class VTODOMapper {
     });
   }
 
-  /**
-   * Format date as YYYYMMDD
-   * For date-only strings (YYYY-MM-DD), parses without timezone conversion
-   */
-  private formatDate(dateInput: Date | string): string {
-    // If it's already a YYYY-MM-DD string, parse it directly without timezone issues
-    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-      const [year, month, day] = dateInput.split('-');
-      return `${year}${month}${day}`;
-    }
-
-    // Otherwise treat as Date object (use local time)
-    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
+  private pad(value: number, length: number): string {
+    return String(value).padStart(length, '0');
   }
 
   /**
@@ -374,30 +313,6 @@ export class VTODOMapper {
     return new Date(completedDate);
   }
 
-  /**
-   * Format datetime as YYYYMMDDTHHMMSSZ (UTC)
-   */
-  private formatDateTimeUTC(date: Date): string {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hour = String(date.getUTCHours()).padStart(2, '0');
-    const minute = String(date.getUTCMinutes()).padStart(2, '0');
-    const second = String(date.getUTCSeconds()).padStart(2, '0');
-    return `${year}${month}${day}T${hour}${minute}${second}Z`;
-  }
-
-  /**
-   * Escape special characters in iCalendar text
-   */
-  private escapeText(text: string): string {
-    return text
-      .replace(/\\/g, '\\\\')
-      .replace(/;/g, '\\;')
-      .replace(/,/g, '\\,')
-      .replace(/\n/g, '\\n');
-  }
-
   private buildDescription(body: string, obsidianUrl?: string): string {
     if (!obsidianUrl && !body) return '';
     if (!obsidianUrl) return body;
@@ -409,16 +324,5 @@ export class VTODOMapper {
     const lines = body.split('\n');
     const filtered = lines.filter(line => !line.match(/^obsidian:\/\/open\?vault=/));
     return filtered.join('\n').replace(/^\n+/, '');
-  }
-
-  /**
-   * Unescape special characters from iCalendar text
-   */
-  private unescapeText(text: string): string {
-    return text
-      .replace(/\\n/g, '\n')
-      .replace(/\\,/g, ',')
-      .replace(/\\;/g, ';')
-      .replace(/\\\\/g, '\\');
   }
 }
