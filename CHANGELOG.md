@@ -14,7 +14,7 @@
 ### Bug Fixes
 
 - **Fixed a task-duplication loop.** When a task's ID drifts out of the id-mapping (an interrupted sync, a backup restore, multi-device use, or a from-scratch resync), the plugin now reconciles it to the task already on the server instead of creating a duplicate — which previously got pulled back into the vault and re-duplicated, amplifying on every sync (#149).
-- **Vault-side edits of pulled tasks are no longer reverted.** A task first pulled from the server now receives its stable Obsidian ID at discovery, so the sync baseline pairs with it correctly instead of treating later edits as no-baseline conflicts (#144).
+- **Vault-side edits of pulled tasks are no longer reverted.** A task first pulled from the server now receives its stable Obsidian ID at discovery, so the sync baseline pairs with it correctly instead of treating later edits as no-baseline conflicts (#144 — surfaced by @ebakerisu14's DavMail testing in #143).
 - VTODO sub-components (e.g. `VALARM`) are stripped before task properties are extracted, so reminder text no longer bleeds into the task summary or notes (#139).
 - `calendar-data` with attributes or an inline `xmlns` on the tag now parses correctly (Open-Xchange / mailbox.org / DavMail) (#137).
 - Convergent edits no longer trigger a conflict — when both sides independently change a task to the same value, the diff treats it as already resolved instead of forcing one side to overwrite the other (#106).
@@ -23,7 +23,7 @@
 ### Infrastructure
 
 - **iCalendar parsing and serialization moved to the [`ical.js`](https://github.com/kewisch/ical.js) library** (the engine Thunderbird uses), for more robust VTODO handling and automatic round-tripping of properties the plugin doesn't manage (#145, #147).
-- **WebDAV multistatus responses are parsed with the built-in `DOMParser`** instead of hand-rolled regex, handling namespaces, CDATA, and attributed tags natively (#148).
+- **WebDAV multistatus responses are parsed with the built-in `DOMParser`** instead of hand-rolled regex, handling namespaces, CDATA, and attributed tags natively (#148 — thanks @ebakerisu14, whose DavMail / Exchange (O365) testing in #143 exercised the attributed-tag path).
 - Migrations now record which ones have already run (`appliedMigrations` in settings), so each migration executes at most once per install regardless of its own idempotency checks (#107).
 - Dependency updates (#146).
 
