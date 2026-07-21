@@ -51,6 +51,7 @@
 		"wdio-obsidian-service": "^3.0.3"
 	},
 	"dependencies": {
+		"ical.js": "^2.2.1",
 		"rrule": "^2.8.1"
 	},
 	"overrides": {
