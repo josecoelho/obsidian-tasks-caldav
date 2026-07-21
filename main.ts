@@ -1,4 +1,4 @@
-import { App, Editor, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, Notice, Platform, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { calendarLabel } from './src/utils/calendarLabel';
@@ -167,6 +167,21 @@ export default class CalDAVSyncPlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * Whether this device talks to the CalDAV server. Stored per device (vault
+	 * localStorage, never in data.json) so exactly one device can own syncing
+	 * while the vault — settings, baseline, id mapping — syncs everywhere.
+	 * Defaults to on for desktop and off for mobile.
+	 */
+	syncsOnThisDevice(): boolean {
+		const stored: unknown = this.app.loadLocalStorage('tasks-caldav-sync:sync-on-this-device');
+		return typeof stored === 'boolean' ? stored : !Platform.isMobile;
+	}
+
+	setSyncsOnThisDevice(value: boolean): void {
+		this.app.saveLocalStorage('tasks-caldav-sync:sync-on-this-device', value);
+	}
+
 	private async dataFileExists(): Promise<boolean> {
 		const dir = this.manifest.dir;
 		if (!dir) return false;
@@ -257,6 +272,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 	}
 
 	private async syncAll(): Promise<void> {
+		if (!this.syncsOnThisDevice()) return;
 		// A tick that lands mid-sync skips silently; the next one catches up.
 		await this.runSync(async () => {
 			for (const engine of this.syncEngines) {
@@ -267,6 +283,10 @@ export default class CalDAVSyncPlugin extends Plugin {
 	}
 
 	private async syncAllEngines(dryRun: boolean): Promise<SyncResult[] | null> {
+		if (!this.syncsOnThisDevice()) {
+			new Notice('Syncing is off on this device — turn on sync from this device in the plugin settings.');
+			return null;
+		}
 		const results = await this.runSync(async () => {
 			const out: SyncResult[] = [];
 			for (const engine of this.syncEngines) {
@@ -321,6 +341,13 @@ class CalDAVSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Behavior')
 			.setHeading();
+
+		new Setting(containerEl)
+			.setName('Sync from this device')
+			.setDesc('Per-device switch, not synced with your vault. Leave it on for exactly one device so several devices never sync the same calendars over each other. Off by default on mobile.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.syncsOnThisDevice())
+				.onChange((value) => this.plugin.setSyncsOnThisDevice(value)));
 
 		new Setting(containerEl)
 			.setName('Sync interval')

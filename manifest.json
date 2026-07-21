@@ -2,9 +2,9 @@
 	"id": "tasks-caldav-sync",
 	"name": "Tasks CalDAV Sync",
 	"version": "1.5.0",
-	"minAppVersion": "0.15.0",
+	"minAppVersion": "1.8.7",
 	"description": "Bidirectional sync between tasks and CalDAV servers.",
 	"author": "José Coelho",
 	"authorUrl": "https://github.com/josecoelho",
-	"isDesktopOnly": true
+	"isDesktopOnly": false
 }
