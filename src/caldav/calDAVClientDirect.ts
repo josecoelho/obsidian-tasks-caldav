@@ -200,7 +200,11 @@ export class CalDAVClientDirect implements CalDAVClient {
       throw: false
     });
 
-    if (response.status !== 201 && response.status !== 204) {
+    // 200: some servers (e.g. DavMail) respond 200 OK when a PUT lands on an
+    // existing item name and is applied as an overwrite. Treating that as a
+    // failure aborts the sync before state is persisted, losing the id-mappings
+    // created earlier in the same run.
+    if (response.status !== 200 && response.status !== 201 && response.status !== 204) {
       throw new Error(`Create VTODO failed: ${response.status} for ${uid} at ${url} ${response.text}`);
     }
 
