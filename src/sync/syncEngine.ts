@@ -92,7 +92,7 @@ export class SyncEngine {
 
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
-			this.assignPulledTaskIds(applicable.toObsidian, idMapping);
+			this.completePulledIdentities(applicable, idMapping);
 
 			const progress: SyncProgress = {
 				pullDone: 0,
@@ -194,27 +194,44 @@ export class SyncEngine {
 	}
 
 	/**
-	 * Give every first-time pulled CalDAV task its stable local task ID at the
-	 * moment it is classified as a genuine "create in Obsidian".
+	 * Fill in the stable Obsidian `uid` on every CalDAV-sourced task that still
+	 * lacks one, before the new baseline is computed. A first-time-pulled task
+	 * arrives with `uid === ''` (only its `caldavId` is set); leaving it empty
+	 * would key the baseline by an empty or raw-CalDAV string and read as a
+	 * spurious delete on the next sync.
 	 *
-	 * A `toObsidian` create is always CalDAV-sourced (it exists on the server
-	 * but not in the vault), and its `task.uid` still holds the raw CalDAV UID
-	 * from normalize's fallback. We mint the local ID here — after reconcile has
-	 * had its chance to pair the task with a pre-existing vault task — record it
-	 * in the mapping (preserving the raw UID so the server stays addressable),
-	 * and stamp it onto the change's task. Because that task is the same object
-	 * as the fetched caldavTasks entry, the new baseline becomes uniformly keyed
-	 * by the stable ID with no re-keying.
+	 * The identity has two sources:
+	 *  - a genuine server create (`toObsidian` create): mint a fresh vault ID and
+	 *    register both mapping directions against the task's `caldavId`.
+	 *  - a reconcile (server task matched by content to an existing vault task):
+	 *    reuse the matched task's ID, carried on the change's `counterpartUid`.
+	 *
+	 * Each change's `task` is the same object as the fetched `caldavTasks` entry,
+	 * so stamping it here propagates straight into `computeNewBaseline` with no
+	 * re-keying. The server UID is always read from `caldavId`, never from `uid`.
 	 */
-	private assignPulledTaskIds(toObsidian: SyncChange[], idMapping: IdMapping): void {
-		for (const change of toObsidian) {
-			if (change.type !== "create") continue;
-			const caldavUid = change.task.uid;
-			const taskId = this.obsidianAdapter.reserveTaskId();
-			idMapping.taskIdToCaldavUid[taskId] = caldavUid;
-			idMapping.caldavUidToTaskId[caldavUid] = taskId;
-			change.task.uid = taskId;
+	private completePulledIdentities(
+		changeset: { toObsidian: SyncChange[]; toCalDAV: SyncChange[] },
+		idMapping: IdMapping,
+	): void {
+		for (const change of changeset.toObsidian) {
+			if (change.type === "create") {
+				change.task.uid = this.mintTaskIdForCaldav(change.task, idMapping);
+			}
 		}
+		for (const change of changeset.toCalDAV) {
+			if (change.type === "reconcile" && change.counterpartUid) {
+				change.task.uid = change.counterpartUid;
+			}
+		}
+	}
+
+	private mintTaskIdForCaldav(task: CommonTask, idMapping: IdMapping): string {
+		const caldavUid = task.caldavId ?? "";
+		const taskId = this.obsidianAdapter.reserveTaskId();
+		idMapping.taskIdToCaldavUid[taskId] = caldavUid;
+		idMapping.caldavUidToTaskId[caldavUid] = taskId;
+		return taskId;
 	}
 
 	private updateIdMapping(

@@ -1177,6 +1177,48 @@ describe('SyncEngine', () => {
       expect(uids).toContain('20250101-aaa');
       expect(uids).toContain(mappedId);
     });
+
+    it('keys a reconciled server task by the matched vault ID, with no empty or raw-CalDAV entry', async () => {
+      // A vault task and a server task independently hold the same content with
+      // no prior mapping — diff reconciles them. The pulled CalDAV task arrives
+      // with uid === '' (only caldavId set); the "complete identities" step must
+      // stamp it with the matched vault task's ID BEFORE the baseline is built,
+      // or the baseline gets a stale empty/raw-UID entry that reads as a delete.
+      const vaultTask = makeObsidianTask({
+        description: 'Shared task',
+        id: '20250101-rec',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Shared task [id::20250101-rec] #sync',
+      });
+      const serverTask = makeCalObj('caldav-rec', 'Shared task', ['CATEGORIES:sync']);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(vaultTask));
+      mockFetchVTODOs.mockResolvedValue([serverTask]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(result.reconciled).toBe(1);
+
+      const newBaseline = (mockSetBaseline.mock.calls[0] as [CommonTask[]])[0];
+      const uids = newBaseline.map((t: CommonTask) => t.uid).sort();
+
+      // Exactly one baseline entry, keyed by the matched vault ID — never the
+      // empty string and never the raw CalDAV UID.
+      expect(newBaseline.length).toBe(1);
+      expect(uids).toEqual(['20250101-rec']);
+      expect(uids).not.toContain('');
+      expect(uids).not.toContain('caldav-rec');
+
+      // The persisted mapping links the vault ID to the server UID both ways.
+      const idMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      expect(idMapping.taskIdToCaldavUid['20250101-rec']).toBe('caldav-rec');
+      expect(idMapping.caldavUidToTaskId['caldav-rec']).toBe('20250101-rec');
+    });
   });
 
   describe('idempotency', () => {

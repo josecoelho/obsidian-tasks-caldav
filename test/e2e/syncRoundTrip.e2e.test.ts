@@ -10,6 +10,14 @@ import { RADICALE, createIsolatedCalendar } from '../helpers/radicaleSetup';
 
 const emptyIdMapping: IdMapping = { taskIdToCaldavUid: {}, caldavUidToTaskId: {} };
 
+// A CalDAV task that has already been synced carries a stable Obsidian uid.
+// These fixtures reuse the server UID as that id (the real case for tasks we
+// created), which normalize now leaves in caldavId — so lift it into uid to
+// stand in for the already-assigned Obsidian identity.
+function synced(tasks: CommonTask[]): CommonTask[] {
+  return tasks.map(t => ({ ...t, uid: t.caldavId ?? t.uid }));
+}
+
 const httpClient = new FetchHttpClient();
 const obsidianMapper = new ObsidianMapper();
 
@@ -152,7 +160,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline (previous sync)
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
 
     // Simulate CalDAV update (mark completed)
     const updatedVTODO = buildVTODO(uid, 'Original task', [
@@ -188,7 +196,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
 
     // Delete on CalDAV
     await client.deleteVTODO(vtodos[0]);
@@ -217,7 +225,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
 
     // CalDAV side: updated description
     const updatedVTODO = buildVTODO(uid, 'CalDAV version');
@@ -257,7 +265,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
     expect(baseline).toHaveLength(1);
     expect(baseline[0].recurrenceRule).toBe('FREQ=WEEKLY');
 
@@ -301,7 +309,7 @@ describe('Sync round-trip E2E', () => {
 
     // Fetch and normalize
     const vtodos = await client.fetchVTODOs();
-    const tasks = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const tasks = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
     expect(tasks).toHaveLength(1);
     expect(tasks[0].recurrenceRule).toBe('FREQ=DAILY');
 
@@ -345,7 +353,7 @@ describe('Sync round-trip E2E', () => {
 
     // Establish baseline
     let vtodos = await client.fetchVTODOs();
-    const baseline = caldavAdapter.normalize(vtodos, emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(vtodos, emptyIdMapping));
     expect(baseline).toHaveLength(1);
     expect(baseline[0].dueDate).toBe('2026-02-17');
 
@@ -382,7 +390,7 @@ describe('Sync round-trip E2E', () => {
     await client.createVTODO(buildVTODO(delUid, 'Server task to delete locally'), delUid);
 
     // Baseline = what we last pulled.
-    const baseline = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    const baseline = synced(caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping));
 
     // Obsidian diverges: edit one task, delete the other — locally only.
     const obsidianTasks: CommonTask[] = baseline
@@ -400,7 +408,7 @@ describe('Sync round-trip E2E', () => {
     const applied = applicableChanges(changeset, 'pull');
     await caldavAdapter.applyChanges(applied.toCalDAV, emptyIdMapping);
 
-    const after = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    const after = synced(caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping));
     expect(after).toHaveLength(2);
     expect(after.find(t => t.uid === keepUid)?.title).toBe('Server task to edit'); // not 'Locally edited'
     expect(after.find(t => t.uid === delUid)).toBeDefined();                       // not deleted
@@ -441,7 +449,7 @@ describe('Sync round-trip E2E', () => {
 
     await caldavAdapter.applyChanges(applied.toCalDAV, emptyIdMapping);
 
-    const after = caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping);
+    const after = synced(caldavAdapter.normalize(await client.fetchVTODOs(), emptyIdMapping));
     expect(after).toHaveLength(2);                                                 // pushed task + untouched server task, nothing extra
     expect(after.find(t => t.title === 'Local task to push')).toBeDefined();      // push happened
     expect(after.find(t => t.uid === serverOnlyUid)).toBeDefined();               // untouched
