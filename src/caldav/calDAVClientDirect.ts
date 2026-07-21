@@ -128,7 +128,7 @@ export class CalDAVClientDirect implements CalDAVClient {
         : undefined;
 
       // Extract calendar data (VTODO) — handle optional CDATA wrapping, any namespace prefix
-      const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
+      const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data(?:\s[^>]*)?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
       if (!dataMatch) continue;
 
       const data = decodeXMLEntities(dataMatch[1].trim());

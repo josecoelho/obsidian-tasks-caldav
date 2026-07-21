@@ -221,6 +221,18 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].data).toContain('todo-1');
             expect(vtodos[1].data).toContain('todo-2');
         });
+
+        it('should parse calendar-data with inline xmlns attribute (Open-Xchange format)', () => {
+            const response = `<?xml version="1.0" encoding="UTF-8"?>\r\n<D:multistatus xmlns:D="DAV:" xmlns:CAL="urn:ietf:params:xml:ns:caldav">\r\n  <D:response>\r\n    <D:href>/caldav/user123/todo-ox-1.ics</D:href>\r\n    <D:propstat>\r\n      <D:prop>\r\n        <D:getetag>etag-ox-1</D:getetag>\r\n        <calendar-data xmlns="urn:ietf:params:xml:ns:caldav"><![CDATA[BEGIN:VCALENDAR\nPRODID:Open-Xchange\nBEGIN:VTODO\nUID:todo-ox-1\nSUMMARY:Test task\nSTATUS:IN-PROCESS\nEND:VTODO\nEND:VCALENDAR]]></calendar-data>\r\n      </D:prop>\r\n      <D:status>HTTP/1.1 200 OK</D:status>\r\n    </D:propstat>\r\n  </D:response>\r\n</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://dav.mailbox.org');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].url).toBe('https://dav.mailbox.org/caldav/user123/todo-ox-1.ics');
+            expect(vtodos[0].data).toContain('UID:todo-ox-1');
+            expect(vtodos[0].data).toContain('STATUS:IN-PROCESS');
+            expect(vtodos[0].etag).toBe('etag-ox-1');
+        });
     });
 
     describe('connect() and pinned fetch', () => {
