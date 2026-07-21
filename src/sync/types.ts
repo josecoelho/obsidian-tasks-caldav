@@ -1,4 +1,4 @@
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+export type TaskStatus = 'TODO' | 'DONE' | 'CANCELLED';
 export type TaskPriority = 'none' | 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 
 export interface CommonTask {

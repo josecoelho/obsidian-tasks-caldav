@@ -73,8 +73,10 @@ describe('CalDAVAdapter', () => {
       const done = makeCalObj('c-done', 'Done task', ['STATUS:COMPLETED']);
       expect(adapter.toCommonTask(done, 'id').status).toBe('DONE');
 
+      // IN-PROCESS reads back as TODO — obsidian-tasks has no in-progress
+      // checkbox, and the write path preserves the server's IN-PROCESS instead.
       const inProgress = makeCalObj('c-ip', 'In progress', ['STATUS:IN-PROCESS']);
-      expect(adapter.toCommonTask(inProgress, 'id').status).toBe('IN_PROGRESS');
+      expect(adapter.toCommonTask(inProgress, 'id').status).toBe('TODO');
 
       const cancelled = makeCalObj('c-can', 'Cancelled', ['STATUS:CANCELLED']);
       expect(adapter.toCommonTask(cancelled, 'id').status).toBe('CANCELLED');
@@ -458,7 +460,7 @@ describe('CalDAVAdapter', () => {
 
     it('should call update for update changes', async () => {
       const mockFetchVTODOByUID = jest.fn().mockResolvedValue({
-        data: 'old vtodo data',
+        data: buildVTODO('caldav-upd', 'Existing task'),
         url: 'http://example.com/task.ics',
         etag: 'old-etag',
       });

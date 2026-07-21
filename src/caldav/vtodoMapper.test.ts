@@ -1,3 +1,4 @@
+import ICAL from 'ical.js';
 import { VTODOMapper, CalendarObject } from './vtodoMapper';
 import { CommonTask, TaskStatus, TaskPriority } from '../sync/types';
 import { ObsidianMapper } from '../tasks/obsidianMapper';
@@ -72,9 +73,11 @@ describe('VTODOMapper - pure functions for VTODO<->Task conversion', () => {
     });
 
     it('should map all status values correctly', () => {
+      // IN_PROGRESS was removed from the status union: obsidian-tasks has no
+      // in-progress checkbox, so the plugin never produces it. On the fresh
+      // create path TODO is always written as NEEDS-ACTION.
       const statuses = [
         { obsidian: 'TODO', vtodo: 'NEEDS-ACTION' },
-        { obsidian: 'IN_PROGRESS', vtodo: 'IN-PROCESS' },
         { obsidian: 'DONE', vtodo: 'COMPLETED' },
         { obsidian: 'CANCELLED', vtodo: 'CANCELLED' }
       ];
@@ -318,9 +321,12 @@ END:VTODO`;
     });
 
     it('should map all VTODO statuses correctly', () => {
+      // IN-PROCESS reads back as TODO: obsidian-tasks has no in-progress
+      // checkbox, so mapping it to a distinct state produced a phantom diff
+      // that rewrote NEEDS-ACTION over the server's IN-PROCESS every sync.
       const statuses = [
         { vtodo: 'NEEDS-ACTION', obsidian: 'TODO' },
-        { vtodo: 'IN-PROCESS', obsidian: 'IN_PROGRESS' },
+        { vtodo: 'IN-PROCESS', obsidian: 'TODO' },
         { vtodo: 'COMPLETED', obsidian: 'DONE' },
         { vtodo: 'CANCELLED', obsidian: 'CANCELLED' }
       ];
@@ -1428,6 +1434,217 @@ END:VTODO`;
 
       expect(back.scheduledDate).toBe('2026-07-10');
       expect(back.startDate).toBeNull();
+    });
+  });
+
+  // Part A/B: on the update/complete path taskToVTODO parses the server body
+  // and mutates only plugin-owned properties, so foreign properties and
+  // sub-components survive. This subsumes PR #140 (jtx Board compatibility)
+  // via the ical.js component tree instead of document-wide regexes.
+  describe('foreign-property round-trip (existingData)', () => {
+    const openTask: Omit<CommonTask, 'uid'> = {
+      title: 'Edited title',
+      status: 'TODO',
+      dueDate: null,
+      scheduledDate: null,
+      startDate: null,
+      completedDate: null,
+      priority: 'none',
+      recurrenceRule: '',
+      tags: [],
+      body: '',
+    };
+
+    function parseVTODO(ics: string): ICAL.Component {
+      const root = new ICAL.Component(ICAL.parse(ics) as unknown[]);
+      return root.name === 'vtodo' ? root : root.getFirstSubcomponent('vtodo')!;
+    }
+
+    function serverVTODO(lines: string[]): string {
+      return [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Foreign App//EN',
+        'BEGIN:VTODO',
+        'UID:foreign-uid',
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Original title',
+        ...lines,
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+    }
+
+    it('preserves VALARM, RELATED-TO and X-* extension properties', () => {
+      const existing = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//jtx Board//EN',
+        'BEGIN:VTODO',
+        'UID:foreign-uid',
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Original title',
+        'STATUS:NEEDS-ACTION',
+        'RELATED-TO;RELTYPE=PARENT:parent-task-uid',
+        'X-JTX-BOARD-COLOR:#ff0000',
+        'BEGIN:VALARM',
+        'TRIGGER:-PT15M',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder text',
+        'END:VALARM',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+      const vtodo = parseVTODO(out);
+
+      expect(vtodo.getFirstPropertyValue('summary')).toBe('Edited title');
+      expect(vtodo.getFirstProperty('related-to')).not.toBeNull();
+      expect(vtodo.getFirstPropertyValue('related-to')).toBe('parent-task-uid');
+      expect(vtodo.getFirstPropertyValue('x-jtx-board-color')).toBe('#ff0000');
+      const valarm = vtodo.getFirstSubcomponent('valarm');
+      expect(valarm).not.toBeNull();
+      expect(valarm!.getFirstPropertyValue('trigger')).not.toBeNull();
+      expect(valarm!.getFirstPropertyValue('description')).toBe('Reminder text');
+    });
+
+    it('leaves an in-progress PERCENT-COMPLETE untouched on an open update', () => {
+      const existing = serverVTODO(['STATUS:IN-PROCESS', 'PERCENT-COMPLETE:42']);
+      const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+      const vtodo = parseVTODO(out);
+      expect(vtodo.getFirstPropertyValue('percent-complete')).toBe(42);
+    });
+
+    it('strips PERCENT-COMPLETE up to 100 on completion', () => {
+      const existing = serverVTODO(['STATUS:IN-PROCESS', 'PERCENT-COMPLETE:42']);
+      const completing = { ...openTask, status: 'DONE' as const, completedDate: '2026-03-01' };
+      const out = mapper.taskToVTODO(completing, 'foreign-uid', existing);
+      const vtodo = parseVTODO(out);
+      expect(vtodo.getFirstPropertyValue('percent-complete')).toBe(100);
+      expect(vtodo.getFirstPropertyValue('status')).toBe('COMPLETED');
+      expect(vtodo.getFirstPropertyValue('completed')).not.toBeNull();
+    });
+
+    describe('STATUS semantics on the round-trip', () => {
+      it('preserves the server STATUS:IN-PROCESS when an open task title is edited', () => {
+        const existing = serverVTODO(['STATUS:IN-PROCESS']);
+        const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+        const vtodo = parseVTODO(out);
+        expect(vtodo.getFirstPropertyValue('status')).toBe('IN-PROCESS');
+        expect(vtodo.getFirstPropertyValue('summary')).toBe('Edited title');
+      });
+
+      it('passes NEEDS-ACTION through for an open task', () => {
+        const existing = serverVTODO(['STATUS:NEEDS-ACTION']);
+        const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+        expect(parseVTODO(out).getFirstPropertyValue('status')).toBe('NEEDS-ACTION');
+      });
+
+      it('overrides STATUS to COMPLETED on a terminal DONE transition', () => {
+        const existing = serverVTODO(['STATUS:IN-PROCESS']);
+        const done = { ...openTask, status: 'DONE' as const, completedDate: '2026-03-01' };
+        const out = mapper.taskToVTODO(done, 'foreign-uid', existing);
+        expect(parseVTODO(out).getFirstPropertyValue('status')).toBe('COMPLETED');
+      });
+
+      it('overrides STATUS to CANCELLED on a terminal CANCELLED transition', () => {
+        const existing = serverVTODO(['STATUS:IN-PROCESS']);
+        const cancelled = { ...openTask, status: 'CANCELLED' as const };
+        const out = mapper.taskToVTODO(cancelled, 'foreign-uid', existing);
+        expect(parseVTODO(out).getFirstPropertyValue('status')).toBe('CANCELLED');
+      });
+    });
+
+    // F1 regression from PR #140: a document-wide DTSTART regex corrupts the
+    // task DTSTART by matching a VTIMEZONE rule's DTSTART. Reading the property
+    // off the VTODO component makes that structurally impossible.
+    describe('F1: VTIMEZONE DTSTART collision', () => {
+      const withTimezone = (line: string): string => [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//DAVx5//EN',
+        'BEGIN:VTIMEZONE',
+        'TZID:Europe/Berlin',
+        'BEGIN:DAYLIGHT',
+        'DTSTART:19700329T020000',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3',
+        'TZOFFSETFROM:+0100',
+        'TZOFFSETTO:+0200',
+        'END:DAYLIGHT',
+        'BEGIN:STANDARD',
+        'DTSTART:19701025T030000',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10',
+        'TZOFFSETFROM:+0200',
+        'TZOFFSETTO:+0100',
+        'END:STANDARD',
+        'END:VTIMEZONE',
+        'BEGIN:VTODO',
+        'UID:tz-task',
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Original',
+        'STATUS:NEEDS-ACTION',
+        line,
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      it('updates the DTSTART date while preserving TZID and time-of-day', () => {
+        const existing = withTimezone('DTSTART;TZID=Europe/Berlin:20260214T083000');
+        const rescheduled = { ...openTask, scheduledDate: '2026-07-20' };
+        const out = mapper.taskToVTODO(rescheduled, 'tz-task', existing);
+        const vtodo = parseVTODO(out);
+        const dtstart = vtodo.getFirstProperty('dtstart')!;
+        const value = dtstart.getFirstValue() as ICAL.Time;
+
+        expect(dtstart.getParameter('tzid')).toBe('Europe/Berlin');
+        expect(value.isDate).toBe(false);
+        // New date, original time-of-day — never the 02:00 VTIMEZONE rule time.
+        expect(value.year).toBe(2026);
+        expect(value.month).toBe(7);
+        expect(value.day).toBe(20);
+        expect(value.hour).toBe(8);
+        expect(value.minute).toBe(30);
+        // Not downgraded to VALUE=DATE, and not the VTIMEZONE rule's DTSTART.
+        expect(dtstart.toICALString()).toBe('DTSTART;TZID=Europe/Berlin:20260720T083000');
+      });
+
+      it('updates a UTC (Z) DUE date while preserving its time-of-day', () => {
+        const existing = withTimezone('DUE:20260215T093000Z');
+        const rescheduled = { ...openTask, dueDate: '2026-08-01' };
+        const out = mapper.taskToVTODO(rescheduled, 'tz-task', existing);
+        const vtodo = parseVTODO(out);
+        const due = vtodo.getFirstProperty('due')!;
+        const value = due.getFirstValue() as ICAL.Time;
+
+        expect(value.isDate).toBe(false);
+        expect(value.zone).toBe(ICAL.Timezone.utcTimezone);
+        expect(due.toICALString()).toBe('DUE:20260801T093000Z');
+      });
+
+      it('updates a TZID DUE date while preserving TZID and time-of-day', () => {
+        const existing = withTimezone('DUE;TZID=Europe/Berlin:20260215T170000');
+        const rescheduled = { ...openTask, dueDate: '2026-08-01' };
+        const out = mapper.taskToVTODO(rescheduled, 'tz-task', existing);
+        const due = parseVTODO(out).getFirstProperty('due')!;
+
+        expect(due.getParameter('tzid')).toBe('Europe/Berlin');
+        expect(due.toICALString()).toBe('DUE;TZID=Europe/Berlin:20260801T170000');
+      });
+
+      it('downgrades to VALUE=DATE when the server value was already date-only', () => {
+        const existing = withTimezone('DTSTART;VALUE=DATE:20260214');
+        const rescheduled = { ...openTask, scheduledDate: '2026-07-20' };
+        const out = mapper.taskToVTODO(rescheduled, 'tz-task', existing);
+        const dtstart = parseVTODO(out).getFirstProperty('dtstart')!;
+        expect(dtstart.toICALString()).toBe('DTSTART;VALUE=DATE:20260720');
+      });
+
+      it('removes DTSTART when the task no longer has a scheduled date', () => {
+        const existing = withTimezone('DTSTART;TZID=Europe/Berlin:20260214T083000');
+        const out = mapper.taskToVTODO(openTask, 'tz-task', existing);
+        expect(parseVTODO(out).getFirstProperty('dtstart')).toBeNull();
+      });
     });
   });
 });

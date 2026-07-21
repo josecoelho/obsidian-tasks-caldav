@@ -1,3 +1,4 @@
+import ICAL from 'ical.js';
 import { CalDAVClientDirect } from '../../src/caldav/calDAVClientDirect';
 import { CalDAVAdapter } from '../../src/sync/caldavAdapter';
 import { CommonTask } from '../../src/sync/types';
@@ -375,6 +376,187 @@ describe('CalDAVAdapter E2E', () => {
 
       const updated = tasks.find(t => t.title === 'Updated existing task');
       expect(updated?.status).toBe('DONE');
+    });
+  });
+
+  // Radicale is not jtx Board, so these fixtures prove the round-trip against a
+  // real server: create a VTODO carrying foreign properties, apply an update
+  // through the adapter, then fetch and assert the foreign data survived.
+  // This is the evidence that subsumes PR #140.
+  describe('foreign-property round-trip (issue #140 / jtx Board)', () => {
+    const openTask = (uid: string, title: string, extra: Partial<CommonTask> = {}): CommonTask => ({
+      uid,
+      title,
+      status: 'TODO',
+      dueDate: null,
+      startDate: null,
+      scheduledDate: null,
+      completedDate: null,
+      priority: 'none',
+      tags: [],
+      recurrenceRule: '',
+      body: '',
+      ...extra,
+    });
+
+    async function seedAndUpdate(
+      caldavUID: string,
+      rawVTODO: string,
+      task: CommonTask,
+      type: 'update' | 'complete' = 'update',
+    ): Promise<ICAL.Component> {
+      const client = makeClient();
+      const adapter = new CalDAVAdapter(client);
+      await client.connect();
+      await client.createVTODO(rawVTODO, caldavUID);
+
+      const idMapping: IdMapping = {
+        taskIdToCaldavUid: { [task.uid]: caldavUID },
+        caldavUidToTaskId: { [caldavUID]: task.uid },
+      };
+      await adapter.applyChanges([{ type, task }], idMapping);
+
+      const fetched = await client.fetchVTODOByUID(caldavUID);
+      const root = new ICAL.Component(ICAL.parse(fetched!.data) as unknown[]);
+      return root.name === 'vtodo' ? root : root.getFirstSubcomponent('vtodo')!;
+    }
+
+    it('preserves VALARM, RELATED-TO, X-* and an in-progress PERCENT-COMPLETE on an open update', async () => {
+      const uid = `e2e-foreign-${Date.now()}`;
+      const raw = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//jtx Board//EN',
+        'BEGIN:VTODO',
+        `UID:${uid}`,
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Original title',
+        'STATUS:IN-PROCESS',
+        'PERCENT-COMPLETE:42',
+        'RELATED-TO;RELTYPE=PARENT:parent-task-uid',
+        'X-JTX-BOARD-COLOR:#ff0000',
+        'BEGIN:VALARM',
+        'TRIGGER:-PT15M',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder text',
+        'END:VALARM',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const vtodo = await seedAndUpdate(uid, raw, openTask('obs-foreign', 'Edited title'));
+
+      expect(vtodo.getFirstPropertyValue('summary')).toBe('Edited title');
+      expect(vtodo.getFirstPropertyValue('status')).toBe('IN-PROCESS');
+      expect(vtodo.getFirstPropertyValue('percent-complete')).toBe(42);
+      expect(vtodo.getFirstPropertyValue('related-to')).toBe('parent-task-uid');
+      expect(vtodo.getFirstPropertyValue('x-jtx-board-color')).toBe('#ff0000');
+      const valarm = vtodo.getFirstSubcomponent('valarm');
+      expect(valarm).not.toBeNull();
+      expect(valarm!.getFirstPropertyValue('description')).toBe('Reminder text');
+    });
+
+    it('overrides STATUS to COMPLETED and forces PERCENT-COMPLETE to 100 on completion', async () => {
+      const uid = `e2e-foreign-done-${Date.now()}`;
+      const raw = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VTODO',
+        `UID:${uid}`,
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:In progress task',
+        'STATUS:IN-PROCESS',
+        'PERCENT-COMPLETE:42',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const task = openTask('obs-foreign-done', 'In progress task', {
+        status: 'DONE',
+        completedDate: '2026-03-01',
+      });
+      const vtodo = await seedAndUpdate(uid, raw, task, 'complete');
+
+      expect(vtodo.getFirstPropertyValue('status')).toBe('COMPLETED');
+      expect(vtodo.getFirstPropertyValue('percent-complete')).toBe(100);
+      expect(vtodo.getFirstPropertyValue('completed')).not.toBeNull();
+    });
+
+    // F1 from PR #140: a document-wide DTSTART regex matched a VTIMEZONE rule's
+    // DTSTART. The component-scoped read makes that impossible even after the
+    // server stores and returns the object.
+    it('F1: keeps DTSTART TZID and time-of-day when rescheduling with a VTIMEZONE present', async () => {
+      const uid = `e2e-f1-tzid-${Date.now()}`;
+      const raw = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//DAVx5//EN',
+        'BEGIN:VTIMEZONE',
+        'TZID:Europe/Berlin',
+        'BEGIN:DAYLIGHT',
+        'DTSTART:19700329T020000',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3',
+        'TZOFFSETFROM:+0100',
+        'TZOFFSETTO:+0200',
+        'END:DAYLIGHT',
+        'BEGIN:STANDARD',
+        'DTSTART:19701025T030000',
+        'RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10',
+        'TZOFFSETFROM:+0200',
+        'TZOFFSETTO:+0100',
+        'END:STANDARD',
+        'END:VTIMEZONE',
+        'BEGIN:VTODO',
+        `UID:${uid}`,
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Scheduled task',
+        'STATUS:NEEDS-ACTION',
+        'DTSTART;TZID=Europe/Berlin:20260214T083000',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const task = openTask('obs-f1-tzid', 'Scheduled task', { scheduledDate: '2026-07-20' });
+      const vtodo = await seedAndUpdate(uid, raw, task);
+      const dtstart = vtodo.getFirstProperty('dtstart')!;
+      const value = dtstart.getFirstValue() as ICAL.Time;
+
+      expect(dtstart.getParameter('tzid')).toBe('Europe/Berlin');
+      expect(value.isDate).toBe(false);
+      expect(value.year).toBe(2026);
+      expect(value.month).toBe(7);
+      expect(value.day).toBe(20);
+      // Original 08:30 time-of-day, never the 02:00 VTIMEZONE rule time.
+      expect(value.hour).toBe(8);
+      expect(value.minute).toBe(30);
+    });
+
+    it('F1: keeps a UTC (Z) DUE time-of-day when rescheduling', async () => {
+      const uid = `e2e-f1-utc-${Date.now()}`;
+      const raw = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VTODO',
+        `UID:${uid}`,
+        'DTSTAMP:20250101T000000Z',
+        'SUMMARY:Due task',
+        'STATUS:NEEDS-ACTION',
+        'DUE:20260215T093000Z',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n');
+
+      const task = openTask('obs-f1-utc', 'Due task', { dueDate: '2026-08-01' });
+      const vtodo = await seedAndUpdate(uid, raw, task);
+      const value = vtodo.getFirstProperty('due')!.getFirstValue() as ICAL.Time;
+
+      expect(value.isDate).toBe(false);
+      expect(value.zone).toBe(ICAL.Timezone.utcTimezone);
+      expect(value.year).toBe(2026);
+      expect(value.month).toBe(8);
+      expect(value.day).toBe(1);
+      expect(value.hour).toBe(9);
+      expect(value.minute).toBe(30);
     });
   });
 
