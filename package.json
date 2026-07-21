@@ -40,7 +40,7 @@
 		"globals": "^14.0.0",
 		"jest": "^30.2.0",
 		"jiti": "^2.6.1",
-		"obsidian": "latest",
+		"obsidian": "^1.12.3",
 		"obsidian-launcher": "^3.0.3",
 		"ts-jest": "^29.4.5",
 		"tslib": "2.4.0",

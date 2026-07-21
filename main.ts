@@ -3,6 +3,7 @@ import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { calendarLabel } from './src/utils/calendarLabel';
 import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
+import { clearStoredPassword, externalizePasswords, hasPasswordsToExternalize, hydratePasswords, SecretStore } from './src/utils/passwordStorage';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
 import { SyncEngine, SyncResult } from './src/sync/syncEngine';
 import { SyncGate } from './src/sync/syncGate';
@@ -144,8 +145,9 @@ export default class CalDAVSyncPlugin extends Plugin {
 	private async safeLoad(): Promise<void> {
 		try {
 			await this.loadSettings();
-			if (await runMigrations(this.app, this.settings)) {
-				await this.saveData(this.settings);
+			const migrated = await runMigrations(this.app, this.settings);
+			if (migrated || hasPasswordsToExternalize(this.settings, this.secretStore())) {
+				await this.persistSettings();
 			}
 		} catch (error) {
 			this.loadFailure = error instanceof Error ? error.message : String(error);
@@ -165,6 +167,12 @@ export default class CalDAVSyncPlugin extends Plugin {
 			loadData: () => this.loadData(),
 			dataFileExists: () => this.dataFileExists(),
 		});
+		hydratePasswords(this.settings, this.secretStore());
+	}
+
+	secretStore(): SecretStore | undefined {
+		// Undefined on Obsidian < 1.11.4, where passwords stay in plain text.
+		return (this.app as unknown as { secretStorage?: SecretStore }).secretStorage;
 	}
 
 	/**
@@ -193,9 +201,13 @@ export default class CalDAVSyncPlugin extends Plugin {
 			new Notice('Settings failed to load at startup, so saving is disabled to protect your stored configuration. Restart Obsidian and try again.', 8000);
 			return;
 		}
-		await this.saveData(this.settings);
+		await this.persistSettings();
 		await this.initializeEngines();
 		this.autoSync?.start(this.settings.syncInterval);
+	}
+
+	private async persistSettings(): Promise<void> {
+		await this.saveData(externalizePasswords(this.settings, this.secretStore()));
 	}
 
 	private async initializeEngines(): Promise<void> {
@@ -364,6 +376,16 @@ class CalDAVSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
+			.setName('Store passwords in plain text')
+			.setDesc("Keep passwords inside the plugin's settings file instead of Obsidian's secret storage. Plain text travels with vault sync and backups; secret storage stays on this device, so each device asks for the password once.")
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.storePasswordsInPlainText ?? false)
+				.onChange(async (value) => {
+					this.plugin.settings.storePasswordsInPlainText = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
 			.setName('New tasks destination')
 			.setDesc('File where new calendar tasks will be added')
 			.addText(text => text
@@ -430,7 +452,8 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setButtonText('Remove')
 				.setWarning()
 				.onClick(async () => {
-					this.plugin.settings.calendars.splice(index, 1);
+					const [removed] = this.plugin.settings.calendars.splice(index, 1);
+					clearStoredPassword(removed, this.plugin.secretStore());
 					await this.plugin.saveSettings();
 					this.display();
 				}));

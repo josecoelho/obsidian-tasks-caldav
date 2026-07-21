@@ -9,6 +9,12 @@ export interface CalendarMapping {
   serverUrl: string;
   username: string;
   password: string;
+  /**
+   * Id of this calendar's password in Obsidian's secret storage. When set, the
+   * persisted `password` is empty and the real value lives in secret storage;
+   * absent when the password is stored in plain text.
+   */
+  passwordSecretId?: string;
   /** Direction of sync for this calendar. Absent ⇒ 'bidirectional'. */
   syncDirection?: SyncDirection;
   /**
@@ -30,6 +36,12 @@ export interface CalDAVSettings {
   deleteBehavior: 'ask' | 'deleteCalDAV' | 'deleteObsidian' | 'keepBoth';
   includeObsidianLink: boolean;
   showAutoSyncNotifications: boolean;
+  /**
+   * Keep passwords inside data.json instead of Obsidian's secret storage.
+   * Absent ⇒ false. Plain text is also the fallback when the running Obsidian
+   * has no secret storage (added in 1.11.4).
+   */
+  storePasswordsInPlainText?: boolean;
   /**
    * Names of migrations that have already been applied to this vault. Used by
    * {@link runMigrations} to gate each migration to a single successful run,
