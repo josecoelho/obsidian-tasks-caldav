@@ -2,7 +2,15 @@ export type TaskStatus = 'TODO' | 'DONE' | 'CANCELLED';
 export type TaskPriority = 'none' | 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 
 export interface CommonTask {
+  // The stable Obsidian task ID. Empty ('') until one has been assigned —
+  // a first-time-pulled CalDAV task carries no `uid` until the sync engine
+  // mints or matches one. Never a CalDAV server identity.
   uid: string;
+  // The CalDAV server identity (the VTODO UID). Derived on every fetch by
+  // caldavAdapter.normalize() and NEVER persisted: the baseline and IdMapping
+  // are keyed by `uid`, so this field only lives for the duration of a sync.
+  // Absent on Obsidian-sourced tasks.
+  caldavId?: string;
   title: string;
   status: TaskStatus;
   dueDate: string | null;       // 'YYYY-MM-DD'

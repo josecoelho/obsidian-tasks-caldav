@@ -21,6 +21,16 @@ export function tasksEqual(a: CommonTask, b: CommonTask): boolean {
   );
 }
 
+/**
+ * Join key for a CalDAV task. A mapped task carries its stable Obsidian `uid`;
+ * a not-yet-assigned one carries only its server identity, so fall back to
+ * `caldavId`. This keeps unmapped server tasks uniquely keyed and prevents them
+ * from colliding with an Obsidian task under the empty string.
+ */
+function caldavKey(task: CommonTask): string {
+  return task.uid || task.caldavId || '';
+}
+
 function resolveChangeType(current: CommonTask, baseline: CommonTask): 'update' | 'complete' {
   if (baseline.status !== 'DONE' && current.status === 'DONE') {
     return 'complete';
@@ -50,7 +60,7 @@ export function diff(
   strategy: ConflictStrategy,
 ): Changeset {
   const obsidianByUid = new Map(obsidian.map(t => [t.uid, t]));
-  const caldavByUid = new Map(caldav.map(t => [t.uid, t]));
+  const caldavByUid = new Map(caldav.map(t => [caldavKey(t), t]));
   const baselineByUid = new Map(baseline.map(t => [t.uid, t]));
 
   const allUids = new Set([

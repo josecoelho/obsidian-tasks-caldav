@@ -95,7 +95,7 @@ describe('Vikunja sync: issue #60 — server-created task duplication', () => {
     // Build new baseline (what both sides agree on after sync 1)
     const baselineAfterSync1: CommonTask[] = caldavTasks1.map(t => ({
       ...t,
-      uid: idMapping1.caldavUidToTaskId[t.uid] ?? t.uid,
+      uid: idMapping1.caldavUidToTaskId[t.caldavId ?? ''] ?? t.uid,
     }));
 
     // Simulate: Obsidian now has the task with obsidianTaskId
@@ -133,7 +133,7 @@ describe('Vikunja sync: issue #60 — server-created task duplication', () => {
     };
     const baseline: CommonTask[] = caldavTasks0.map(t => ({
       ...t,
-      uid: idMapping.caldavUidToTaskId[t.uid] ?? t.uid,
+      uid: idMapping.caldavUidToTaskId[t.caldavId ?? ''] ?? t.uid,
     }));
     const obsidianTasks: CommonTask[] = baseline.map(t => ({ ...t }));
 
@@ -182,7 +182,7 @@ describe('Vikunja sync: issue #60 — server-created task duplication', () => {
     };
     const baseline: CommonTask[] = caldavTasks1.map(t => ({
       ...t,
-      uid: idMapping.caldavUidToTaskId[t.uid] ?? t.uid,
+      uid: idMapping.caldavUidToTaskId[t.caldavId ?? ''] ?? t.uid,
     }));
     const obsidianTasks: CommonTask[] = baseline.map(t => ({ ...t }));
 

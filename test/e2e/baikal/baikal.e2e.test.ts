@@ -121,7 +121,7 @@ describe('Baïkal sync: full adapter cycle', () => {
     };
     const baseline: CommonTask[] = caldavTasks1.map(t => ({
       ...t,
-      uid: idMapping.caldavUidToTaskId[t.uid] ?? t.uid,
+      uid: idMapping.caldavUidToTaskId[t.caldavId ?? ''] ?? t.uid,
     }));
 
     const obsidianTasks: CommonTask[] = baseline.map(t => ({

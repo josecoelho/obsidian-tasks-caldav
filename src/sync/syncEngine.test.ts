@@ -1152,10 +1152,72 @@ describe('SyncEngine', () => {
       expect(mockSetBaseline).toHaveBeenCalledTimes(1);
 
       const newBaseline = (mockSetBaseline.mock.calls[0] as [CommonTask[]])[0];
-      expect(newBaseline.length).toBe(2);
       const uids = newBaseline.map((t: CommonTask) => t.uid).sort();
+
+      // The baseline must be keyed by the STABLE Obsidian task ID, never by the
+      // raw CalDAV UID. The stable ID is minted at discovery (when the pulled
+      // task is classified as a toObsidian `create`) and stamped onto that same
+      // task object, which is also the fetched caldavTasks entry — so both
+      // baseline sources already agree and collapse into a SINGLE entry.
+      // length === 2 is the duplicate guard.
+      expect(newBaseline.length).toBe(2);
+
+      // The raw CalDAV UID must NOT survive into the baseline: the next sync's
+      // fetch translates raw UIDs through the (now complete) mapping, so a
+      // raw-keyed baseline entry would never pair with the resolved fetch. The
+      // diff would then see no baseline and, under caldav-wins, silently revert
+      // any Obsidian-side edit of this server-originated task.
+      expect(uids).not.toContain('caldav-bbb');
+
+      // Instead the pulled task is keyed by the stable task ID that was minted
+      // for it during this sync and recorded in the persisted mapping.
+      const idMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      const mappedId = idMapping.caldavUidToTaskId['caldav-bbb'];
+      expect(mappedId).toBeDefined();
       expect(uids).toContain('20250101-aaa');
-      expect(uids).toContain('caldav-bbb');
+      expect(uids).toContain(mappedId);
+    });
+
+    it('keys a reconciled server task by the matched vault ID, with no empty or raw-CalDAV entry', async () => {
+      // A vault task and a server task independently hold the same content with
+      // no prior mapping — diff reconciles them. The pulled CalDAV task arrives
+      // with uid === '' (only caldavId set); the "complete identities" step must
+      // stamp it with the matched vault task's ID BEFORE the baseline is built,
+      // or the baseline gets a stale empty/raw-UID entry that reads as a delete.
+      const vaultTask = makeObsidianTask({
+        description: 'Shared task',
+        id: '20250101-rec',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Shared task [id::20250101-rec] #sync',
+      });
+      const serverTask = makeCalObj('caldav-rec', 'Shared task', ['CATEGORIES:sync']);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(vaultTask));
+      mockFetchVTODOs.mockResolvedValue([serverTask]);
+      mockGetBaseline.mockReturnValue([]);
+      mockGetIdMapping.mockReturnValue({ taskIdToCaldavUid: {}, caldavUidToTaskId: {} });
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(result.reconciled).toBe(1);
+
+      const newBaseline = (mockSetBaseline.mock.calls[0] as [CommonTask[]])[0];
+      const uids = newBaseline.map((t: CommonTask) => t.uid).sort();
+
+      // Exactly one baseline entry, keyed by the matched vault ID — never the
+      // empty string and never the raw CalDAV UID.
+      expect(newBaseline.length).toBe(1);
+      expect(uids).toEqual(['20250101-rec']);
+      expect(uids).not.toContain('');
+      expect(uids).not.toContain('caldav-rec');
+
+      // The persisted mapping links the vault ID to the server UID both ways.
+      const idMapping = (mockSetIdMapping.mock.calls[0] as [IdMapping])[0];
+      expect(idMapping.taskIdToCaldavUid['20250101-rec']).toBe('caldav-rec');
+      expect(idMapping.caldavUidToTaskId['caldav-rec']).toBe('20250101-rec');
     });
   });
 

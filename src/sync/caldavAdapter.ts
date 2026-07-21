@@ -36,17 +36,19 @@ export class CalDAVAdapter {
   }
 
   /**
-   * Normalize VTODOs into CommonTask[], using IdMapping to resolve
-   * CalDAV UIDs to Obsidian task IDs where a mapping exists.
+   * Normalize VTODOs into CommonTask[]. The server identity always lands in
+   * `caldavId`; `uid` holds the mapped Obsidian task ID, or '' when the task
+   * has no local identity yet (the sync engine assigns one at discovery). The
+   * raw CalDAV UID is never used as a `uid` — the two keyspaces stay separate.
    */
   normalize(vtodos: CalendarObject[], idMapping: IdMapping): CommonTask[] {
     const tasks: CommonTask[] = [];
 
     for (const vtodo of vtodos) {
-      const caldavUid = this.mapper.extractUID(vtodo.data);
-      if (!caldavUid) continue;
+      const caldavId = this.mapper.extractUID(vtodo.data);
+      if (!caldavId) continue;
 
-      const uid = idMapping.caldavUidToTaskId[caldavUid] ?? caldavUid;
+      const uid = idMapping.caldavUidToTaskId[caldavId] ?? '';
       tasks.push(this.toCommonTask(vtodo, uid));
     }
 
@@ -54,7 +56,9 @@ export class CalDAVAdapter {
   }
 
   /**
-   * Convert a single VTODO CalendarObject to a CommonTask.
+   * Convert a single VTODO CalendarObject to a CommonTask. `uid` is the
+   * Obsidian task ID ('' when unmapped); `caldavId` is the server identity,
+   * derived here straight from the VTODO so it is always populated.
    */
   toCommonTask(vtodo: CalendarObject, uid: string): CommonTask {
     const parsed = this.mapper.vtodoToTask(vtodo);
@@ -62,6 +66,7 @@ export class CalDAVAdapter {
     return {
       ...parsed,
       uid,
+      caldavId: this.mapper.extractUID(vtodo.data),
       completedDate: parsed.completedDate ? this.toLocalDate(parsed.completedDate) : null,
     };
   }

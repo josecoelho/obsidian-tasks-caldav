@@ -146,7 +146,7 @@ describe('Nextcloud sync: full adapter cycle (issue #64)', () => {
     };
     const baseline: CommonTask[] = caldavTasks1.map(t => ({
       ...t,
-      uid: idMapping.caldavUidToTaskId[t.uid] ?? t.uid,
+      uid: idMapping.caldavUidToTaskId[t.caldavId ?? ''] ?? t.uid,
     }));
 
     // Simulate Obsidian modified the task

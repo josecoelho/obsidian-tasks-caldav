@@ -79,7 +79,9 @@ describe('CalDAVAdapter E2E', () => {
       const tasks = adapter.normalize(vtodos, emptyIdMapping);
 
       expect(tasks).toHaveLength(1);
-      expect(tasks[0].uid).toBe(uid);
+      // Unmapped: the server identity lands in caldavId, uid stays empty.
+      expect(tasks[0].uid).toBe('');
+      expect(tasks[0].caldavId).toBe(uid);
       expect(tasks[0].title).toBe('Buy milk');
       expect(tasks[0].status).toBe('TODO');
       expect(tasks[0].dueDate).toBe('2025-06-15');

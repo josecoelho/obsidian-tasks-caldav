@@ -51,6 +51,7 @@ describe('CalDAVAdapter', () => {
       const task = adapter.toCommonTask(vtodo, 'my-task-id');
 
       expect(task.uid).toBe('my-task-id');
+      expect(task.caldavId).toBe('caldav-001');
       expect(task.title).toBe('Buy groceries');
       expect(task.status).toBe('TODO');
       expect(task.priority).toBe('none');
@@ -134,8 +135,12 @@ describe('CalDAVAdapter', () => {
 
       expect(tasks).toHaveLength(2);
       expect(tasks[0].uid).toBe('obsidian-id-123');
+      expect(tasks[0].caldavId).toBe('caldav-aaa');
       expect(tasks[0].title).toBe('Mapped task');
-      expect(tasks[1].uid).toBe('caldav-bbb');
+      // Unmapped: uid stays empty (never the raw CalDAV UID); the server
+      // identity lives only in caldavId.
+      expect(tasks[1].uid).toBe('');
+      expect(tasks[1].caldavId).toBe('caldav-bbb');
       expect(tasks[1].title).toBe('Unmapped task');
     });
 

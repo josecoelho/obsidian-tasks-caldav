@@ -11,7 +11,6 @@ import { stripTagIdentifier } from "../utils/tagIdentifier";
 export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
 
 export interface ApplyChangesResult {
-	createdMappings: Array<{ taskId: string; caldavUID: string }>;
 	completionRemappings: Array<{ oldTaskId: string; newTaskId: string }>;
 }
 
@@ -45,6 +44,16 @@ export class ObsidianAdapter {
 
 	isReady(): boolean {
 		return this.wrapper.initialize();
+	}
+
+	/**
+	 * Mint a fresh, collision-free task ID drawn from this run's used-ID set
+	 * (populated from the whole vault during fetchTasks). Used by the sync
+	 * engine to give a first-time pulled CalDAV task its stable local identity
+	 * at discovery, before it is written to the vault.
+	 */
+	reserveTaskId(): string {
+		return generateTaskId(this.usedIds);
 	}
 
 	async fetchTasks(): Promise<CommonTask[]> {
@@ -113,10 +122,6 @@ export class ObsidianAdapter {
 		changes: SyncChange[],
 		onApplied?: () => void,
 	): Promise<ApplyChangesResult> {
-		const createdMappings: Array<{
-			taskId: string;
-			caldavUID: string;
-		}> = [];
 		const completionRemappings: Array<{
 			oldTaskId: string;
 			newTaskId: string;
@@ -128,13 +133,10 @@ export class ObsidianAdapter {
 			try {
 				switch (change.type) {
 					case "create": {
-						const taskId = generateTaskId(this.usedIds);
-						const taskWithId: CommonTask = {
-							...change.task,
-							uid: taskId,
-						};
+						// change.task.uid is already the stable local task ID,
+						// minted and mapped at discovery by the sync engine.
 						const markdown = this.mapper.toMarkdown(
-							taskWithId,
+							change.task,
 							this.settings.syncTag,
 							format,
 							globalFilter,
@@ -145,11 +147,6 @@ export class ObsidianAdapter {
 							this.settings.newTasksDestination,
 							this.settings.newTasksSection,
 						);
-
-						createdMappings.push({
-							taskId,
-							caldavUID: change.task.uid,
-						});
 						break;
 					}
 
@@ -226,7 +223,7 @@ export class ObsidianAdapter {
 			onApplied?.();
 		}
 
-		return { createdMappings, completionRemappings };
+		return { completionRemappings };
 	}
 
 	/**
