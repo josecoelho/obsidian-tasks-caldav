@@ -93,6 +93,7 @@ export class SyncEngine {
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 
 			this.completePulledIdentities(applicable, idMapping);
+			this.healUnmappedVaultMatches(caldavTasks, obsidianTasks, idMapping);
 
 			const progress: SyncProgress = {
 				pullDone: 0,
@@ -226,6 +227,32 @@ export class SyncEngine {
 		}
 	}
 
+	/**
+	 * Heal a vault-originated task whose id-mapping was lost. `normalize()` leaves
+	 * it with `uid: ""` (unmapped), but its CalDAV `caldavId` equals the vault
+	 * task's own id, so `diff()` still matches the pair in the main loop via the
+	 * `uid || caldavId` join — as an unchanged no-op that no changeset touches.
+	 * Left alone, that CalDAV CommonTask keeps `uid: ""` and lands in the baseline
+	 * as an empty-uid phantom (and drags its derived `caldavId` onto disk). Stamp
+	 * the stable identity back on and restore the mapping so the pair self-heals
+	 * rather than duplicating on the next sync.
+	 */
+	private healUnmappedVaultMatches(
+		caldavTasks: CommonTask[],
+		obsidianTasks: CommonTask[],
+		idMapping: IdMapping,
+	): void {
+		const obsidianUids = new Set(obsidianTasks.map((t) => t.uid));
+		for (const task of caldavTasks) {
+			if (task.uid !== "") continue;
+			const caldavUid = task.caldavId ?? "";
+			if (!caldavUid || !obsidianUids.has(caldavUid)) continue;
+			task.uid = caldavUid;
+			idMapping.taskIdToCaldavUid[caldavUid] = caldavUid;
+			idMapping.caldavUidToTaskId[caldavUid] = caldavUid;
+		}
+	}
+
 	private mintTaskIdForCaldav(task: CommonTask, idMapping: IdMapping): string {
 		const caldavUid = task.caldavId ?? "";
 		const taskId = this.obsidianAdapter.reserveTaskId();
@@ -303,6 +330,11 @@ export class SyncEngine {
 			baselineMap.set(task.uid, task);
 		}
 		for (const task of caldavTasks) {
+			// An unmapped CalDAV task has no stable Obsidian identity to persist;
+			// keying the baseline by "" would write a phantom duplicate. Matched
+			// tasks were already stamped by healUnmappedVaultMatches; anything
+			// still empty here (e.g. a mapping-less delete) must not be persisted.
+			if (task.uid === "") continue;
 			if (!baselineMap.has(task.uid)) {
 				baselineMap.set(task.uid, task);
 			}
@@ -323,7 +355,19 @@ export class SyncEngine {
 			}
 		}
 
-		return Array.from(baselineMap.values());
+		return Array.from(baselineMap.values()).map((task) => this.forBaseline(task));
+	}
+
+	/**
+	 * Strip fields that are derived per fetch and must never reach `baseline.json`.
+	 * `caldavId` is re-derived by caldavAdapter.normalize() on every sync, so a
+	 * persisted copy is both dead weight and a leak of server identity.
+	 */
+	private forBaseline(task: CommonTask): CommonTask {
+		if (task.caldavId === undefined) return task;
+		const copy = { ...task };
+		delete copy.caldavId;
+		return copy;
 	}
 
 	private buildResult(
