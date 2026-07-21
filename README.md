@@ -123,7 +123,7 @@ Use the "Inject task IDs" command to add IDs to existing tasks, or the plugin wi
 | Task text | SUMMARY | ↔ |
 | Indented bullets | DESCRIPTION | ↔ |
 | `📅` due date | DUE | ↔ |
-| `🛫` start date | DTSTART | ↔ |
+| `⏳` scheduled date | DTSTART | ↔ |
 | `✅` done date | COMPLETED | ↔ |
 | `🔁` recurrence | RRULE | ↔ |
 | Priority emoji | PRIORITY (1-9) | ↔ |
