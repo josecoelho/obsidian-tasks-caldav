@@ -37,71 +37,165 @@ const RECUR_DESIGN = (ICAL.design.icalendar.value as Record<string, RecurValueDe
  */
 export class VTODOMapper {
   /**
-   * Convert a CommonTask to VTODO iCalendar string.
+   * Convert a CommonTask to a VTODO iCalendar string.
+   *
    * @param task The common task
-   * @param uid The CalDAV UID (use for updates, generate new for creates)
+   * @param uid The CalDAV UID (reused on update, freshly generated on create)
+   * @param existingData The untouched server VTODO body on the update/complete
+   *   path. When present the plugin mutates only its own properties on the
+   *   parsed component tree and lets every foreign property and sub-component
+   *   (VALARM, RELATED-TO, X-*, VTIMEZONE, …) pass through verbatim. When
+   *   absent a fresh VTODO is built from scratch.
    * @returns VTODO iCalendar string
    */
-  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
+  taskToVTODO(task: Omit<CommonTask, 'uid'>, uid: string, existingData?: string): string {
+    return existingData
+      ? this.mergeIntoExisting(task, existingData)
+      : this.buildFreshVTODO(task, uid);
+  }
+
+  private buildFreshVTODO(task: Omit<CommonTask, 'uid'>, uid: string): string {
     const calendar = new ICAL.Component(['vcalendar', [], []]);
     calendar.updatePropertyWithValue('version', '2.0');
     calendar.updatePropertyWithValue('prodid', '-//Obsidian//Tasks CalDAV Sync//EN');
 
     const vtodo = new ICAL.Component('vtodo');
     calendar.addSubcomponent(vtodo);
-
-    const now = ICAL.Time.fromJSDate(new Date(), true);
     vtodo.updatePropertyWithValue('uid', uid);
+    this.applyOwnedProperties(vtodo, task, false);
+
+    return calendar.toString();
+  }
+
+  /**
+   * Round-trip write: parse the server body, mutate only the plugin-owned
+   * properties on its VTODO component, and serialize. Because every edit is
+   * scoped to the VTODO component, a sibling VTIMEZONE rule's DTSTART can never
+   * be mistaken for the task's DTSTART, and foreign lines/sub-components are
+   * preserved and folded by ical.js rather than hand-spliced.
+   */
+  private mergeIntoExisting(task: Omit<CommonTask, 'uid'>, existingData: string): string {
+    // ICAL.parse returns jCal typed as `any`; a component's jCal is an array.
+    const root = new ICAL.Component(ICAL.parse(existingData) as unknown[]);
+    const vtodo = root.name === 'vtodo' ? root : (root.getFirstSubcomponent('vtodo') ?? root);
+    this.applyOwnedProperties(vtodo, task, true);
+    return root.toString();
+  }
+
+  /**
+   * Set every plugin-owned property on the VTODO component. On the update path
+   * (`isUpdate`) the server's value is preserved for the few properties the
+   * plugin can't fully own: STATUS while the task is still open, PERCENT-COMPLETE
+   * while it isn't completing, and the time-of-day/TZID of DUE and DTSTART.
+   */
+  private applyOwnedProperties(vtodo: ICAL.Component, task: Omit<CommonTask, 'uid'>, isUpdate: boolean): void {
+    const now = ICAL.Time.fromJSDate(new Date(), true);
     vtodo.updatePropertyWithValue('dtstamp', now);
     vtodo.updatePropertyWithValue('last-modified', now);
     vtodo.updatePropertyWithValue('summary', task.title);
 
-    const description = this.buildDescription(task.body, task.obsidianUrl);
-    if (description) {
-      vtodo.updatePropertyWithValue('description', description);
-    }
+    this.setOrRemove(vtodo, 'description', this.buildDescription(task.body, task.obsidianUrl));
 
-    // Obsidian vault link. When set, this plugin owns the URL property —
-    // any value previously set by another CalDAV client will be overwritten.
+    // Obsidian vault link. When set, this plugin owns the URL property — any
+    // value previously set by another CalDAV client is overwritten. When unset
+    // the plugin isn't managing URL, so a foreign URL is left untouched.
     if (task.obsidianUrl) {
       vtodo.updatePropertyWithValue('url', task.obsidianUrl);
     }
 
-    vtodo.updatePropertyWithValue('status', this.mapStatusToVTODO(task.status));
-
-    if (task.dueDate) {
-      vtodo.updatePropertyWithValue('due', this.toDateValue(task.dueDate));
-    }
-
-    // DTSTART carries the scheduled date (⏳) — the field CalDAV clients plan
-    // by. The start date (🛫) has no CalDAV counterpart and never syncs.
-    if (task.scheduledDate) {
-      vtodo.updatePropertyWithValue('dtstart', this.toDateValue(task.scheduledDate));
-    }
-
-    if (task.completedDate) {
-      // Anchor and format the completion instant ourselves (issue #43) — ical.js
-      // only serializes the already-resolved UTC instant, it does no timezone math.
-      vtodo.updatePropertyWithValue(
-        'completed',
-        ICAL.Time.fromJSDate(this.toCompletedInstant(task.completedDate), true),
-      );
-      vtodo.updatePropertyWithValue('percent-complete', 100);
-    }
-
+    this.applyStatus(vtodo, task.status, isUpdate);
+    // DUE and DTSTART carry the plugin's date-only values; DTSTART is the
+    // scheduled date (⏳) that CalDAV clients plan by. The start date (🛫) has
+    // no CalDAV counterpart and never syncs.
+    this.applyDate(vtodo, 'due', task.dueDate);
+    this.applyDate(vtodo, 'dtstart', task.scheduledDate);
+    this.applyCompletion(vtodo, task.completedDate);
     vtodo.updatePropertyWithValue('priority', this.mapPriorityToVTODO(task.priority));
+    this.applyRecurrence(vtodo, task.recurrenceRule);
+    this.applyCategories(vtodo, task.tags);
+  }
 
-    if (task.recurrenceRule) {
-      vtodo.addProperty(this.buildRecurrenceProperty(task.recurrenceRule, vtodo));
+  private setOrRemove(vtodo: ICAL.Component, name: string, value: string): void {
+    if (value) {
+      vtodo.updatePropertyWithValue(name, value);
+    } else {
+      vtodo.removeAllProperties(name);
+    }
+  }
+
+  /**
+   * An open task (TODO) never overwrites the server's STATUS on update:
+   * obsidian-tasks has no in-progress checkbox, so IN-PROCESS is kept as-is
+   * and NEEDS-ACTION passes through. Only terminal states are written
+   * (DONE→COMPLETED, CANCELLED→CANCELLED). A fresh VTODO always states TODO as
+   * NEEDS-ACTION since there is nothing to preserve.
+   */
+  private applyStatus(vtodo: ICAL.Component, status: CommonTask['status'], isUpdate: boolean): void {
+    if (isUpdate && status === 'TODO') return;
+    vtodo.updatePropertyWithValue('status', this.mapStatusToVTODO(status));
+  }
+
+  /**
+   * Write a date-only value, preserving the time-of-day and TZID of an existing
+   * DATE-TIME property so a server's `DUE;TZID=…:…T…` keeps its clock time and
+   * zone and is only moved to the new calendar day. The existing property is
+   * read off the VTODO component, never a document-wide search, so a sibling
+   * VTIMEZONE rule's DTSTART cannot be picked up. A date-only or absent existing
+   * value is written as VALUE=DATE; removing the date removes the property.
+   */
+  private applyDate(vtodo: ICAL.Component, name: string, date: string | null): void {
+    if (!date) {
+      vtodo.removeAllProperties(name);
+      return;
     }
 
-    if (task.tags.length > 0) {
-      const categories = new ICAL.Property('categories', vtodo);
-      categories.setValues(task.tags);
-      vtodo.addProperty(categories);
+    const existing = vtodo.getFirstProperty(name);
+    const existingTime = existing?.getFirstValue();
+    if (existing && existingTime instanceof ICAL.Time && !existingTime.isDate) {
+      const [year, month, day] = date.split('-').map(Number);
+      existingTime.year = year;
+      existingTime.month = month;
+      existingTime.day = day;
+      existing.setValue(existingTime);
+      return;
     }
 
-    return calendar.toString();
+    vtodo.removeAllProperties(name);
+    vtodo.updatePropertyWithValue(name, this.toDateValue(date));
+  }
+
+  /**
+   * On completion, anchor and format the completion instant ourselves (issue
+   * #43) — ical.js only serializes the already-resolved UTC instant — and force
+   * PERCENT-COMPLETE to 100. While the task is open, COMPLETED is cleared but
+   * PERCENT-COMPLETE is left untouched so a server's in-progress value survives.
+   */
+  private applyCompletion(vtodo: ICAL.Component, completedDate: string | null): void {
+    if (!completedDate) {
+      vtodo.removeAllProperties('completed');
+      return;
+    }
+    vtodo.updatePropertyWithValue(
+      'completed',
+      ICAL.Time.fromJSDate(this.toCompletedInstant(completedDate), true),
+    );
+    vtodo.removeAllProperties('percent-complete');
+    vtodo.updatePropertyWithValue('percent-complete', 100);
+  }
+
+  private applyRecurrence(vtodo: ICAL.Component, rule: string): void {
+    vtodo.removeAllProperties('rrule');
+    if (rule) {
+      vtodo.addProperty(this.buildRecurrenceProperty(rule, vtodo));
+    }
+  }
+
+  private applyCategories(vtodo: ICAL.Component, tags: string[]): void {
+    vtodo.removeAllProperties('categories');
+    if (tags.length === 0) return;
+    const categories = new ICAL.Property('categories', vtodo);
+    categories.setValues(tags);
+    vtodo.addProperty(categories);
   }
 
   /**
@@ -220,8 +314,6 @@ export class VTODOMapper {
     switch (status) {
       case 'TODO':
         return 'NEEDS-ACTION';
-      case 'IN_PROGRESS':
-        return 'IN-PROCESS';
       case 'DONE':
         return 'COMPLETED';
       case 'CANCELLED':
@@ -232,14 +324,17 @@ export class VTODOMapper {
   }
 
   /**
-   * Map VTODO status to Obsidian task status
+   * Map VTODO status to Obsidian task status. IN-PROCESS maps to TODO because
+   * obsidian-tasks has no in-progress checkbox: mapping it to a distinct state
+   * created a permanent phantom diff that rewrote NEEDS-ACTION over the server's
+   * IN-PROCESS on every sync. The write path preserves IN-PROCESS instead.
    */
   private mapStatusFromVTODO(status: string): string {
     switch (status) {
       case 'NEEDS-ACTION':
         return 'TODO';
       case 'IN-PROCESS':
-        return 'IN_PROGRESS';
+        return 'TODO';
       case 'COMPLETED':
         return 'DONE';
       case 'CANCELLED':

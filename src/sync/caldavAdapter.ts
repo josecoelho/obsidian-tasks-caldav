@@ -80,11 +80,13 @@ export class CalDAVAdapter {
   /**
    * Convert a CommonTask back to a VTODO iCal string. Injects the configured
    * caldavCategory into the outgoing CATEGORIES so the task stays identifiable
-   * on the server even if user content tags don't include it.
+   * on the server even if user content tags don't include it. On update/complete
+   * `existingData` is the untouched server body; the mapper mutates only
+   * plugin-owned properties and lets foreign properties pass through.
    */
-  fromCommonTask(task: CommonTask, caldavUID: string): string {
+  fromCommonTask(task: CommonTask, caldavUID: string, existingData?: string): string {
     const tags = injectTagIdentifier(task.tags, this.caldavCategory);
-    return this.mapper.taskToVTODO({ ...task, tags }, caldavUID);
+    return this.mapper.taskToVTODO({ ...task, tags }, caldavUID, existingData);
   }
 
   /**
@@ -107,7 +109,7 @@ export class CalDAVAdapter {
             console.error(`[CalDAVAdapter] VTODO ${caldavUID} not found for update, skipping`);
             continue;
           }
-          const newData = this.fromCommonTask(change.task, caldavUID);
+          const newData = this.fromCommonTask(change.task, caldavUID, existing.data);
           await this.client.updateVTODO(existing, newData);
           break;
         }
@@ -121,7 +123,7 @@ export class CalDAVAdapter {
             ...change.task,
             recurrenceRule: '',
           };
-          const newData = this.fromCommonTask(completedTask, caldavUID);
+          const newData = this.fromCommonTask(completedTask, caldavUID, existing.data);
           await this.client.updateVTODO(existing, newData);
           break;
         }
