@@ -104,36 +104,38 @@ export class CalDAVClientDirect implements CalDAVClient {
   }
 
   /**
-   * Parse VTODOs from calendar-query XML response (static for testing)
+   * Parse VTODOs from a WebDAV multistatus (calendar-query) XML response.
+   *
+   * Uses the platform `DOMParser` (native in Electron; shimmed in Node tests),
+   * so namespaces, CDATA, and XML entities are decoded by the parser itself
+   * rather than by hand-rolled regex. Element lookup is namespace-prefix-agnostic
+   * (`d:`/`D:`/`c:`/`C:`/none) via `getElementsByTagNameNS('*', …)`. A response
+   * missing an `href` or `calendar-data` is skipped, and malformed XML yields an
+   * empty result instead of throwing. Static for testing.
    */
   static parseVTODOsFromXML(xmlText: string, contextUrl: string): CalendarObject[] {
+    const doc = parseXmlDocument(xmlText);
+    if (!doc) return [];
+
     const vtodos: CalendarObject[] = [];
-    const responseRegex = /<(?:\w+:)?response>([\s\S]*?)<\/(?:\w+:)?response>/g;
-    let match;
+    const responses = doc.getElementsByTagNameNS('*', 'response');
 
-    while ((match = responseRegex.exec(xmlText)) !== null) {
-      const responseBlock = match[1];
+    for (let i = 0; i < responses.length; i++) {
+      const response = responses[i];
 
-      // Extract href (any namespace prefix or none)
-      const hrefMatch = responseBlock.match(/<(?:\w+:)?href>([^<]+)<\/(?:\w+:)?href>/);
-      if (!hrefMatch) continue;
+      const href = firstChildText(response, 'href');
+      // Skip tombstone/error responses that carry an empty or self-closing
+      // <calendar-data/> (e.g. Vikunja's post-delete multistatus). Their
+      // textContent is '' — present but not a VTODO — so a bare presence check
+      // would emit a phantom object.
+      const calendarData = firstChildText(response, 'calendar-data')?.trim();
+      if (!href || !calendarData) continue;
 
-      const url = resolveUrl(hrefMatch[1], contextUrl);
-
-      // Extract etag (any namespace prefix or none)
-      // Nextcloud returns ETags with XML-encoded quotes: &quot;abc123&quot;
-      const etagMatch = responseBlock.match(/<(?:\w+:)?getetag>([^<]+)<\/(?:\w+:)?getetag>/);
-      const etag = etagMatch
-        ? etagMatch[1].replace(/&quot;/g, '').replace(/"/g, '')
-        : undefined;
-
-      // Extract calendar data (VTODO) — handle optional CDATA wrapping, any namespace prefix
-      const dataMatch = responseBlock.match(/<(?:\w+:)?calendar-data(?:\s[^>]*)?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:\w+:)?calendar-data>/);
-      if (!dataMatch) continue;
-
-      const data = decodeXMLEntities(dataMatch[1].trim());
-
-      vtodos.push({ data, url, etag });
+      vtodos.push({
+        url: resolveUrl(href, contextUrl),
+        data: calendarData,
+        etag: stripQuotes(firstChildText(response, 'getetag')),
+      });
     }
 
     return vtodos;
@@ -294,16 +296,35 @@ export class CalDAVClientDirect implements CalDAVClient {
 }
 
 /**
- * Decode XML character entities in calendar-data.
- * Some servers (e.g. Vikunja) return iCal data with XML-escaped newlines
- * (&#xA;) instead of actual newlines or CDATA wrapping.
+ * Parse a WebDAV XML payload into a document, returning null on any failure.
+ * `DOMParser` implementations diverge on malformed input: Electron's native
+ * parser returns a document containing a `<parsererror>` element, while
+ * `@xmldom/xmldom` (used in tests) throws. Handle both so a bad response never
+ * propagates an exception — matching the previous regex parser's resilience.
  */
-function decodeXMLEntities(text: string): string {
-  return text
-    .replace(/&#xA;/g, '\n')
-    .replace(/&#xD;/g, '\r')
-    .replace(/&#x9;/g, '\t')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+function parseXmlDocument(xmlText: string): Document | null {
+  try {
+    const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (doc.getElementsByTagNameNS('*', 'parsererror').length > 0) return null;
+    return doc;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Text content of the first descendant element with the given local name,
+ * across any namespace prefix. Returns undefined when absent.
+ */
+function firstChildText(element: Element, localName: string): string | undefined {
+  const match = element.getElementsByTagNameNS('*', localName)[0];
+  return match ? match.textContent ?? undefined : undefined;
+}
+
+/**
+ * Strip surrounding quotes from an etag value. Nextcloud XML-encodes them as
+ * `&quot;` (decoded to `"` by the parser); other servers use literal quotes.
+ */
+function stripQuotes(value: string | undefined): string | undefined {
+  return value?.replace(/"/g, '');
 }

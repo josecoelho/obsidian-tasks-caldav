@@ -150,6 +150,36 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].etag).toBeUndefined();
         });
 
+        it('should skip a tombstone response with an empty/self-closing calendar-data (Vikunja post-delete)', () => {
+            // After a delete, Vikunja's REPORT returns a response for the gone
+            // resource carrying an empty <calendar-data/>. Its textContent is ''
+            // — present but not a VTODO — so it must not become a phantom object.
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/dav/projects/3/deleted.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <C:calendar-data/>
+            </D:prop>
+            <D:status>HTTP/1.1 404 Not Found</D:status>
+        </D:propstat>
+    </D:response>
+    <D:response>
+        <D:href>/dav/projects/3/live.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <C:calendar-data>BEGIN:VCALENDAR&#xA;BEGIN:VTODO&#xA;UID:live-1&#xA;END:VTODO&#xA;END:VCALENDAR</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'http://localhost:3457');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].data).toContain('UID:live-1');
+        });
+
         it('should decode XML entities in calendar-data (Vikunja format)', () => {
             const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
     <D:response>
@@ -232,6 +262,42 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].data).toContain('UID:todo-ox-1');
             expect(vtodos[0].data).toContain('STATUS:IN-PROCESS');
             expect(vtodos[0].etag).toBe('etag-ox-1');
+        });
+
+        it('should parse calendar-data with attributes on the opening tag (DavMail format)', () => {
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/users/user@example.com/calendar/davmail-1.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <D:getetag>"davmail-etag-1"</D:getetag>
+                <C:calendar-data xmlns:C="urn:ietf:params:xml:ns:caldav" C:content-type="text/calendar" C:version="2.0">BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//DavMail//EN
+BEGIN:VTODO
+UID:davmail-task-1
+SUMMARY:Review report
+STATUS:NEEDS-ACTION
+END:VTODO
+END:VCALENDAR</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://dav.example.com');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].url).toBe('https://dav.example.com/users/user@example.com/calendar/davmail-1.ics');
+            expect(vtodos[0].data).toContain('UID:davmail-task-1');
+            expect(vtodos[0].data).toContain('SUMMARY:Review report');
+            expect(vtodos[0].data).not.toContain('content-type');
+            expect(vtodos[0].etag).toBe('davmail-etag-1');
+        });
+
+        it('should return an empty array for malformed XML instead of throwing', () => {
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML('<D:multistatus><D:response></broken>', 'https://dav.example.com');
+            expect(vtodos).toEqual([]);
         });
     });
 
