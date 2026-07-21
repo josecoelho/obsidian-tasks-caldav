@@ -10,6 +10,10 @@ const shared = {
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: { '^.+\\.ts$': ['ts-jest', { diagnostics: false }] },
   moduleNameMapper: { '^obsidian$': '<rootDir>/__mocks__/obsidian.ts' },
+  // Electron provides `DOMParser` as a global in production; Node's default Jest
+  // environment does not. Shim it for both projects so code using the global
+  // `DOMParser` (WebDAV XML parsing) runs under test.
+  setupFiles: ['<rootDir>/test/setup/domparser.ts'],
 };
 
 module.exports = {

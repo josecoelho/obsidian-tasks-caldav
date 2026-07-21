@@ -233,6 +233,42 @@ END:VCALENDAR</c:calendar-data>
             expect(vtodos[0].data).toContain('STATUS:IN-PROCESS');
             expect(vtodos[0].etag).toBe('etag-ox-1');
         });
+
+        it('should parse calendar-data with attributes on the opening tag (DavMail format)', () => {
+            const response = `<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:response>
+        <D:href>/users/user@example.com/calendar/davmail-1.ics</D:href>
+        <D:propstat>
+            <D:prop>
+                <D:getetag>"davmail-etag-1"</D:getetag>
+                <C:calendar-data xmlns:C="urn:ietf:params:xml:ns:caldav" C:content-type="text/calendar" C:version="2.0">BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//DavMail//EN
+BEGIN:VTODO
+UID:davmail-task-1
+SUMMARY:Review report
+STATUS:NEEDS-ACTION
+END:VTODO
+END:VCALENDAR</C:calendar-data>
+            </D:prop>
+        </D:propstat>
+    </D:response>
+</D:multistatus>`;
+
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML(response, 'https://dav.example.com');
+
+            expect(vtodos).toHaveLength(1);
+            expect(vtodos[0].url).toBe('https://dav.example.com/users/user@example.com/calendar/davmail-1.ics');
+            expect(vtodos[0].data).toContain('UID:davmail-task-1');
+            expect(vtodos[0].data).toContain('SUMMARY:Review report');
+            expect(vtodos[0].data).not.toContain('content-type');
+            expect(vtodos[0].etag).toBe('davmail-etag-1');
+        });
+
+        it('should return an empty array for malformed XML instead of throwing', () => {
+            const vtodos = CalDAVClientDirect.parseVTODOsFromXML('<D:multistatus><D:response></broken>', 'https://dav.example.com');
+            expect(vtodos).toEqual([]);
+        });
     });
 
     describe('connect() and pinned fetch', () => {
