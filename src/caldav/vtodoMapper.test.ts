@@ -723,6 +723,24 @@ END:VTODO`;
       expect(task.title).toBe('follow up on https://aurl.com');
     });
 
+    it('should not bleed VALARM DESCRIPTION into task body', () => {
+      const vtodoData = `BEGIN:VTODO\r\nUID:valarm-test\r\nSUMMARY:My task\r\nSTATUS:NEEDS-ACTION\r\nBEGIN:VALARM\r\nTRIGGER:-PT15M\r\nACTION:DISPLAY\r\nDESCRIPTION:Reminder text\r\nEND:VALARM\r\nEND:VTODO`;
+
+      const vtodo: CalendarObject = { data: vtodoData, etag: 'etag-1', url: 'http://example.com/test.ics' };
+      const task = mapper.vtodoToTask(vtodo);
+
+      expect(task.body).toBe('');
+    });
+
+    it('should read VTODO DESCRIPTION when VALARM is also present', () => {
+      const vtodoData = `BEGIN:VTODO\r\nUID:valarm-with-desc\r\nSUMMARY:My task\r\nDESCRIPTION:My notes\r\nSTATUS:NEEDS-ACTION\r\nBEGIN:VALARM\r\nTRIGGER:-PT15M\r\nACTION:DISPLAY\r\nDESCRIPTION:Reminder text\r\nEND:VALARM\r\nEND:VTODO`;
+
+      const vtodo: CalendarObject = { data: vtodoData, etag: 'etag-1', url: 'http://example.com/test.ics' };
+      const task = mapper.vtodoToTask(vtodo);
+
+      expect(task.body).toBe('My notes');
+    });
+
     it('should handle folded DESCRIPTION lines', () => {
       const vtodoData = `BEGIN:VTODO\r\nUID:folded-desc\r\nSUMMARY:Task\r\nDESCRIPTION:A very long description that has been \r\n folded by the server into multiple lines\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO`;
 

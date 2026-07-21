@@ -92,9 +92,12 @@ export class VTODOMapper {
    */
   vtodoToTask(vtodo: CalendarObject): VTODOTaskFields {
     const unfolded = this.unfold(vtodo.data);
-    // Extract only the VTODO section to avoid matching properties from VTIMEZONE or other components
+    // Extract only the VTODO section to avoid matching properties from VTIMEZONE or other components,
+    // then strip sub-components (VALARM etc.) so their properties don't bleed into task fields
+    // — a sub-component's DESCRIPTION is not the task's description.
     const vtodoMatch = unfolded.match(/BEGIN:VTODO[\s\S]*?END:VTODO/);
-    const data = vtodoMatch ? vtodoMatch[0] : unfolded;
+    const data = (vtodoMatch ? vtodoMatch[0] : unfolded)
+      .replace(/BEGIN:(?!VTODO\b)\w+[\s\S]*?END:\w+(\r?\n|$)/g, '');
 
     // Inline #tags in SUMMARY (written by older plugin versions or other
     // clients) move into tags[], so corrupted tasks heal instead of gaining
