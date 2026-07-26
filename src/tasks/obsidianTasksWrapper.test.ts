@@ -722,6 +722,50 @@ More content`;
 
             expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(0);
         });
+
+        it('should match the sync tag in raw markdown when the Tasks global filter consumed it', () => {
+            // Tasks strips its global filter from task.tags. If the global filter
+            // equals the sync tag, matching on tags alone drops every task.
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({
+                    description: 'Task 1',
+                    tags: [],
+                    originalMarkdown: '- [ ] Task 1 #sync',
+                })),
+                withBody(createMockTask({
+                    description: 'Task 2',
+                    tags: ['#work'],
+                    originalMarkdown: '- [ ] Task 2 #work #sync',
+                })),
+            ];
+
+            const result = wrapper.filterByTag(inputs, 'sync');
+            expect(result).toHaveLength(2);
+        });
+
+        it('should exclude tasks when the tag is in neither tags nor raw markdown', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: [], originalMarkdown: '- [ ] Task without the tag' })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(0);
+        });
+
+        it('should not match a raw-markdown tag that merely starts with the sync tag', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: [], originalMarkdown: '- [ ] Task #syncing' })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(0);
+        });
+
+        it('should match the raw-markdown tag case-insensitively', () => {
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({ tags: [], originalMarkdown: '- [ ] Task #SYNC' })),
+            ];
+
+            expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(1);
+        });
     });
 
     describe('extractBodyFromFile', () => {
