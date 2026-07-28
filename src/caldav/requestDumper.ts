@@ -358,7 +358,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step5.exchange);
 
-		if (step5.response.status !== 201 && step5.response.status !== 204) {
+		if (step5.response.status !== 200 && step5.response.status !== 201 && step5.response.status !== 204) {
 			throw new Error(`Create VTODO failed: ${step5.response.status}`);
 		}
 		addLog(`  Created (${step5.response.status})`);
