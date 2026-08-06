@@ -366,6 +366,59 @@ describe('ObsidianAdapter', () => {
     });
   });
 
+  describe('applyChanges — delete', () => {
+    function makeDeleteWrapper(task: ObsidianTask | null) {
+      return {
+        ...(dummyWrapper as unknown as Record<string, unknown>),
+        findTaskById: jest.fn().mockReturnValue(task),
+        removeTaskFromVault: jest.fn().mockResolvedValue(undefined),
+      } as unknown as ObsidianTasksWrapper;
+    }
+
+    const commonTask: CommonTask = {
+      uid: '20250105-a4f',
+      title: 'Buy groceries',
+      status: 'NEEDS-ACTION',
+      tags: [],
+    } as unknown as CommonTask;
+
+    it('removes the vault line when deleteBehavior is deleteObsidian', async () => {
+      const existing = makeTask();
+      const wrapper = makeDeleteWrapper(existing);
+      const adapter = new ObsidianAdapter(wrapper, {
+        ...defaultSettings,
+        deleteBehavior: 'deleteObsidian',
+      });
+
+      await adapter.applyChanges([{ type: 'delete', task: commonTask }]);
+
+      expect(wrapper.removeTaskFromVault).toHaveBeenCalledWith(existing);
+    });
+
+    it('leaves the vault untouched when deleteBehavior is not deleteObsidian', async () => {
+      const wrapper = makeDeleteWrapper(makeTask());
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+
+      await adapter.applyChanges([{ type: 'delete', task: commonTask }]);
+
+      expect(wrapper.removeTaskFromVault).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the task cannot be found in the vault', async () => {
+      const wrapper = makeDeleteWrapper(null);
+      const adapter = new ObsidianAdapter(wrapper, {
+        ...defaultSettings,
+        deleteBehavior: 'deleteObsidian',
+      });
+
+      await expect(
+        adapter.applyChanges([{ type: 'delete', task: commonTask }])
+      ).resolves.toBeDefined();
+
+      expect(wrapper.removeTaskFromVault).not.toHaveBeenCalled();
+    });
+  });
+
   describe('applyChanges — complete', () => {
     it('calls executeToggleTaskDoneCommand for complete changes', async () => {
       const toggleFn = jest.fn().mockReturnValue(
