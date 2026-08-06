@@ -398,11 +398,19 @@ export class ObsidianTasksWrapper {
         if (!syncTag || syncTag.trim() === '') return inputs;
 
         const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        // obsidian-tasks consumes its globalFilter tag out of task.tags; when the
+        // global filter equals the sync tag, tag-array matching sees an empty
+        // vault and every baseline task becomes a server-side delete. Fall back
+        // to the raw markdown line before giving up on a task.
         return inputs.filter(({ task }) => {
-            if (!task.tags || task.tags.length === 0) return false;
-            return task.tags.some((tag: string) =>
+            if (task.tags && task.tags.some((tag: string) =>
                 tag.toLowerCase().replace(/^#/, '') === tagLower
-            );
+            )) return true;
+            const raw = String(task.originalMarkdown || '');
+            return new RegExp(
+                '(^|\\s)#' + tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\s|$)',
+                'i'
+            ).test(raw);
         });
     }
 
