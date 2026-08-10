@@ -98,7 +98,6 @@ function buildTestVTODO(uid: string, completed: boolean): string {
 		completed ? 'PRIORITY:1' : 'PRIORITY:5',
 		'CATEGORIES:sync,test,dump',
 		'DESCRIPTION:Test task created by CalDAV request dumper for fixture generation.',
-		'RRULE:FREQ=WEEKLY;BYDAY=MO',
 	];
 
 	if (completed) {
@@ -200,113 +199,123 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 	}
 
 	try {
-		// ── Step 1: Well-known discovery ──
-		addLog('Step 1: PROPFIND well-known CalDAV endpoint');
-		const baseUrl = new URL(calendar.serverUrl);
-		const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
+		let calendarUrl: string;
 
-		const wk = await capturedRequest(
-			'01-propfind-well-known',
-			'Discover CalDAV via /.well-known/caldav',
-			'PROPFIND',
-			wellKnownUrl,
-			xmlHeaders,
-			propfindPrincipalBody
-		);
-		await saveExchange(wk.exchange);
-
-		let principalXml: string;
-		let principalContextUrl: string;
-
-		if (wk.response.status === 207) {
-			addLog('  Well-known succeeded');
-			principalXml = wk.response.text;
-			principalContextUrl = wellKnownUrl;
+		if (calendar.calendarUrl) {
+			// URL-pinned mode: calendar URL already known, skip discovery.
+			calendarUrl = calendar.calendarUrl;
+			addLog(`Using pinned calendar URL: ${calendarUrl}`);
 		} else {
-			// Step 1b: Fallback to direct PROPFIND
-			addLog('  Well-known failed, trying direct PROPFIND');
-			const direct = await capturedRequest(
-				'01b-propfind-direct',
-				'Fallback: PROPFIND on server URL for current-user-principal',
+			// Legacy discovery mode: walk well-known → principal → home → calendar list.
+
+			// ── Step 1: Well-known discovery ──
+			addLog('Step 1: PROPFIND well-known CalDAV endpoint');
+			const baseUrl = new URL(calendar.serverUrl);
+			const wellKnownUrl = `${baseUrl.protocol}//${baseUrl.host}/.well-known/caldav`;
+
+			const wk = await capturedRequest(
+				'01-propfind-well-known',
+				'Discover CalDAV via /.well-known/caldav',
 				'PROPFIND',
-				calendar.serverUrl,
+				wellKnownUrl,
 				xmlHeaders,
 				propfindPrincipalBody
 			);
-			await saveExchange(direct.exchange);
+			await saveExchange(wk.exchange);
 
-			if (direct.response.status !== 207) {
-				throw new Error(`PROPFIND failed: ${direct.response.status}`);
+			let principalXml: string;
+			let principalContextUrl: string;
+
+			if (wk.response.status === 207) {
+				addLog('  Well-known succeeded');
+				principalXml = wk.response.text;
+				principalContextUrl = wellKnownUrl;
+			} else {
+				// Step 1b: Fallback to direct PROPFIND
+				addLog('  Well-known failed, trying direct PROPFIND');
+				const direct = await capturedRequest(
+					'01b-propfind-direct',
+					'Fallback: PROPFIND on server URL for current-user-principal',
+					'PROPFIND',
+					calendar.serverUrl,
+					xmlHeaders,
+					propfindPrincipalBody
+				);
+				await saveExchange(direct.exchange);
+
+				if (direct.response.status !== 207) {
+					throw new Error(`PROPFIND failed: ${direct.response.status}`);
+				}
+
+				principalXml = direct.response.text;
+				principalContextUrl = calendar.serverUrl;
 			}
 
-			principalXml = direct.response.text;
-			principalContextUrl = calendar.serverUrl;
-		}
+			// Extract principal URL
+			const principalMatch = principalXml.match(/<d:current-user-principal>\s*<d:href>([^<]+)<\/d:href>/);
+			if (!principalMatch) {
+				throw new Error('Could not find current-user-principal in response');
+			}
+			let principalUrl = principalMatch[1];
+			if (!principalUrl.startsWith('http')) {
+				const pu = new URL(principalContextUrl);
+				principalUrl = `${pu.protocol}//${pu.host}${principalUrl}`;
+			}
+			addLog(`  Principal URL: ${principalUrl}`);
 
-		// Extract principal URL
-		const principalMatch = principalXml.match(/<d:current-user-principal>\s*<d:href>([^<]+)<\/d:href>/);
-		if (!principalMatch) {
-			throw new Error('Could not find current-user-principal in response');
-		}
-		let principalUrl = principalMatch[1];
-		if (!principalUrl.startsWith('http')) {
-			const pu = new URL(principalContextUrl);
-			principalUrl = `${pu.protocol}//${pu.host}${principalUrl}`;
-		}
-		addLog(`  Principal URL: ${principalUrl}`);
+			// ── Step 2: Get calendar-home-set ──
+			addLog('Step 2: PROPFIND principal for calendar-home-set');
+			const step2 = await capturedRequest(
+				'02-propfind-principal',
+				'Get calendar-home-set from principal',
+				'PROPFIND',
+				principalUrl,
+				xmlHeaders,
+				propfindHomeBody
+			);
+			await saveExchange(step2.exchange);
 
-		// ── Step 2: Get calendar-home-set ──
-		addLog('Step 2: PROPFIND principal for calendar-home-set');
-		const step2 = await capturedRequest(
-			'02-propfind-principal',
-			'Get calendar-home-set from principal',
-			'PROPFIND',
-			principalUrl,
-			xmlHeaders,
-			propfindHomeBody
-		);
-		await saveExchange(step2.exchange);
+			if (step2.response.status !== 207) {
+				throw new Error(`Failed to get calendar-home-set: ${step2.response.status}`);
+			}
 
-		if (step2.response.status !== 207) {
-			throw new Error(`Failed to get calendar-home-set: ${step2.response.status}`);
+			const homeMatch = step2.response.text.match(/<c:calendar-home-set>\s*<d:href>([^<]+)<\/d:href>/);
+			if (!homeMatch) {
+				throw new Error('Could not find calendar-home-set in principal response');
+			}
+			let homeUrl = homeMatch[1];
+			if (!homeUrl.startsWith('http')) {
+				const hu = new URL(principalUrl);
+				homeUrl = `${hu.protocol}//${hu.host}${homeUrl}`;
+			}
+			addLog(`  Calendar home: ${homeUrl}`);
+
+			// ── Step 3: List calendars ──
+			addLog('Step 3: PROPFIND calendars (Depth: 1)');
+			const step3 = await capturedRequest(
+				'03-propfind-calendars',
+				'List calendars (Depth: 1)',
+				'PROPFIND',
+				homeUrl,
+				{ ...xmlHeaders, 'Depth': '1' },
+				propfindCalendarsBody
+			);
+			await saveExchange(step3.exchange);
+
+			if (step3.response.status !== 207) {
+				throw new Error(`PROPFIND calendars failed: ${step3.response.status}`);
+			}
+
+			const discoveredCalendars = CalDAVDiscoverer.parseCalendarsFromXML(step3.response.text, calendar.serverUrl);
+			addLog(`  Found ${discoveredCalendars.length} calendars: ${discoveredCalendars.map(c => c.displayName).join(', ')}`);
+
+			const matchedCalendar = discoveredCalendars.find(c => c.displayName === calendar.calendarName);
+			if (!matchedCalendar) {
+				throw new Error(`Calendar '${calendar.calendarName}' not found. Available: ${discoveredCalendars.map(c => c.displayName).join(', ')}`);
+			}
+			calendarUrl = matchedCalendar.url;
+			addLog(`  Using calendar: ${calendarUrl}`);
 		}
-
-		const homeMatch = step2.response.text.match(/<c:calendar-home-set>\s*<d:href>([^<]+)<\/d:href>/);
-		if (!homeMatch) {
-			throw new Error('Could not find calendar-home-set in principal response');
-		}
-		let homeUrl = homeMatch[1];
-		if (!homeUrl.startsWith('http')) {
-			const hu = new URL(principalUrl);
-			homeUrl = `${hu.protocol}//${hu.host}${homeUrl}`;
-		}
-		addLog(`  Calendar home: ${homeUrl}`);
-
-		// ── Step 3: List calendars ──
-		addLog('Step 3: PROPFIND calendars (Depth: 1)');
-		const step3 = await capturedRequest(
-			'03-propfind-calendars',
-			'List calendars (Depth: 1)',
-			'PROPFIND',
-			homeUrl,
-			{ ...xmlHeaders, 'Depth': '1' },
-			propfindCalendarsBody
-		);
-		await saveExchange(step3.exchange);
-
-		if (step3.response.status !== 207) {
-			throw new Error(`PROPFIND calendars failed: ${step3.response.status}`);
-		}
-
-		const calendars = CalDAVDiscoverer.parseCalendarsFromXML(step3.response.text, calendar.serverUrl);
-		addLog(`  Found ${calendars.length} calendars: ${calendars.map(c => c.displayName).join(', ')}`);
-
-		const matchedCalendar = calendars.find(c => c.displayName === calendar.calendarName);
-		if (!matchedCalendar) {
-			throw new Error(`Calendar '${calendar.calendarName}' not found. Available: ${calendars.map(c => c.displayName).join(', ')}`);
-		}
-		const calendarUrl = matchedCalendar.url;
-		addLog(`  Using calendar: ${calendarUrl}`);
 
 		const reportHeaders = {
 			'Authorization': authHeader,
@@ -326,7 +335,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step4.exchange);
 
-		const initialVtodos = CalDAVClientDirect.parseVTODOsFromXML(step4.response.text, calendar.serverUrl);
+		const initialVtodos = CalDAVClientDirect.parseVTODOsFromXML(step4.response.text, calendarUrl);
 		addLog(`  Found ${initialVtodos.length} VTODOs`);
 
 		// Clean up any leftover test VTODO from previous run
@@ -375,7 +384,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step6.exchange);
 
-		const afterCreateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step6.response.text, calendar.serverUrl);
+		const afterCreateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step6.response.text, calendarUrl);
 		const created = afterCreateVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (!created) {
 			throw new Error('Test VTODO not found after creation');
@@ -402,7 +411,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step7.exchange);
 
-		if (step7.response.status !== 204 && step7.response.status !== 200) {
+		if (step7.response.status !== 200 && step7.response.status !== 201 && step7.response.status !== 204) {
 			throw new Error(`Update VTODO failed: ${step7.response.status}`);
 		}
 		addLog(`  Updated (${step7.response.status})`);
@@ -419,7 +428,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step8.exchange);
 
-		const afterUpdateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step8.response.text, calendar.serverUrl);
+		const afterUpdateVtodos = CalDAVClientDirect.parseVTODOsFromXML(step8.response.text, calendarUrl);
 		const updated = afterUpdateVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (!updated) {
 			throw new Error('Test VTODO not found after update');
@@ -441,7 +450,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step9.exchange);
 
-		if (step9.response.status !== 204 && step9.response.status !== 200) {
+		if (step9.response.status !== 200 && step9.response.status !== 201 && step9.response.status !== 204) {
 			throw new Error(`Delete VTODO failed: ${step9.response.status}`);
 		}
 		addLog(`  Deleted (${step9.response.status})`);
@@ -458,7 +467,7 @@ export async function dumpCalDAVRequests(app: App, calendar: CalendarMapping): P
 		);
 		await saveExchange(step10.exchange);
 
-		const finalVtodos = CalDAVClientDirect.parseVTODOsFromXML(step10.response.text, calendar.serverUrl);
+		const finalVtodos = CalDAVClientDirect.parseVTODOsFromXML(step10.response.text, calendarUrl);
 		const stillExists = finalVtodos.find(v => mapper.extractUID(v.data) === TEST_UID);
 		if (stillExists) {
 			addLog('  WARNING: Test VTODO still exists after delete!');
