@@ -13,7 +13,7 @@ function makeObsidianTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     description: 'Test task',
     status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
     isDone: false,
-    priority: '0',
+    priority: '3',
     tags: ['#sync'],
     taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Test task [id::20250101-abc] #sync',

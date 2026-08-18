@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- **Fixed off-by-one priority mapping.** obsidian-tasks encodes priority as an enum where `None` sits mid-range, so every level was shifted: tasks without a priority were pushed as `PRIORITY:5` (arriving as `!!` in Apple Reminders, and coming back on every sync), and 🔺 Highest tasks lost their priority entirely (#161).
+
 ## 1.6.0
 
 ### Features
