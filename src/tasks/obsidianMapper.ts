@@ -4,6 +4,19 @@ import { ObsidianTask } from './obsidianTasksWrapper';
 import { stripInlineTags } from '../utils/inlineTags';
 
 /**
+ * obsidian-tasks priority signifiers, in its own emoji format. 'none' carries
+ * no signifier — obsidian-tasks writes nothing for an unprioritized task.
+ */
+const PRIORITY_SIGNIFIERS: Record<TaskPriority, string> = {
+  none: '',
+  lowest: '⏬',
+  low: '🔽',
+  medium: '🔼',
+  high: '⏫',
+  highest: '🔺',
+};
+
+/**
  * Maps between obsidian-tasks Task objects and CommonTask.
  * Parallel to VTODOMapper on the CalDAV side.
  *
@@ -64,6 +77,11 @@ export class ObsidianMapper {
       line += ` #${tag}`;
     }
 
+    const signifier = PRIORITY_SIGNIFIERS[task.priority];
+    if (signifier) {
+      line += ` ${signifier}`;
+    }
+
     if (task.startDate) {
       line += ` 🛫 ${task.startDate}`;
     }
@@ -100,6 +118,10 @@ export class ObsidianMapper {
     const globalFilterName = this.bareTagName(globalFilter);
     for (const tag of this.nonReservedTags(task.tags, syncTagName, globalFilterName)) {
       line += ` #${tag}`;
+    }
+
+    if (task.priority !== 'none') {
+      line += ` [priority:: ${task.priority}]`;
     }
 
     // Dates in obsidian-tasks order: start, scheduled, due, completed
