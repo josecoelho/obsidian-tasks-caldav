@@ -7,7 +7,7 @@ function makeTask(overrides: Partial<ObsidianTask> = {}): ObsidianTask {
     description: 'Buy groceries',
     status: { configuration: { symbol: ' ', name: 'Todo', type: 'TODO' } },
     isDone: false,
-    priority: '0',
+    priority: '3',
     tags: ['#sync'],
     taskLocation: { path: 'Tasks.md', _lineNumber: 1 },
     originalMarkdown: '- [ ] Buy groceries 🆔 20250105-a4f #sync',
@@ -51,11 +51,12 @@ describe('ObsidianMapper', () => {
     });
 
     it('should map priorities', () => {
-      expect(mapper.toCommonTask(makeTask({ priority: '1' }), 'id').priority).toBe('highest');
-      expect(mapper.toCommonTask(makeTask({ priority: '2' }), 'id').priority).toBe('high');
-      expect(mapper.toCommonTask(makeTask({ priority: '3' }), 'id').priority).toBe('medium');
-      expect(mapper.toCommonTask(makeTask({ priority: '5' }), 'id').priority).toBe('low');
-      expect(mapper.toCommonTask(makeTask({ priority: '6' }), 'id').priority).toBe('lowest');
+      expect(mapper.toCommonTask(makeTask({ priority: '0' }), 'id').priority).toBe('highest');
+      expect(mapper.toCommonTask(makeTask({ priority: '1' }), 'id').priority).toBe('high');
+      expect(mapper.toCommonTask(makeTask({ priority: '2' }), 'id').priority).toBe('medium');
+      expect(mapper.toCommonTask(makeTask({ priority: '3' }), 'id').priority).toBe('none');
+      expect(mapper.toCommonTask(makeTask({ priority: '4' }), 'id').priority).toBe('low');
+      expect(mapper.toCommonTask(makeTask({ priority: '5' }), 'id').priority).toBe('lowest');
       expect(mapper.toCommonTask(makeTask({ priority: '' }), 'id').priority).toBe('none');
     });
 
