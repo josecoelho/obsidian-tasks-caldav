@@ -394,6 +394,55 @@ describe('ObsidianTasksWrapper', () => {
         });
     });
 
+    describe('removeTaskFromVault', () => {
+        let mockFile: MockTFile;
+
+        beforeEach(() => {
+            mockFile = new MockTFile('test.md');
+            jest.clearAllMocks();
+        });
+
+        it('removes the task line and its indented note lines', async () => {
+            const fileContent = [
+                '- [ ] First task',
+                '- [ ] Target task to remove',
+                '  - note line under target',
+                '- [ ] Another task',
+            ].join('\n');
+
+            const task = createMockTask({
+                originalMarkdown: '- [ ] Target task to remove',
+                taskLocation: {
+                    path: 'test.md',
+                    _lineNumber: 9, // stale cache line number — must find by markdown
+                },
+            });
+
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue(fileContent);
+            mockApp.vault.modify.mockResolvedValue(undefined);
+
+            await wrapper.removeTaskFromVault(task);
+
+            const updated = (mockApp.vault.modify.mock.calls[0] as [unknown, string])[1];
+            expect(updated.split('\n')).toEqual([
+                '- [ ] First task',
+                '- [ ] Another task',
+            ]);
+        });
+
+        it('is a no-op when the task line is already gone', async () => {
+            mockApp.vault.getAbstractFileByPath.mockReturnValue(mockFile);
+            mockApp.vault.read.mockResolvedValue('- [ ] Something else');
+
+            await wrapper.removeTaskFromVault(
+                createMockTask({ originalMarkdown: '- [ ] Gone task' })
+            );
+
+            expect(mockApp.vault.modify).not.toHaveBeenCalled();
+        });
+    });
+
     describe('updateTaskInVault', () => {
         let mockFile: MockTFile;
 
