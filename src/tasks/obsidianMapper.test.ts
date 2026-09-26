@@ -178,6 +178,34 @@ describe('ObsidianMapper', () => {
       expect(md.indexOf('⏳')).toBeLessThan(md.indexOf('📅'));
     });
 
+    it('emits the priority signifier for every prioritized level', () => {
+      const signifiers: Array<[CommonTask['priority'], string]> = [
+        ['highest', '\u{1F53A}'],
+        ['high', '\u23EB'],
+        ['medium', '\u{1F53C}'],
+        ['low', '\u{1F53D}'],
+        ['lowest', '\u23EC'],
+      ];
+      for (const [priority, signifier] of signifiers) {
+        expect(mapper.toMarkdown({ ...baseTask, priority }, 'sync'))
+          .toBe(`- [ ] Test task ${signifier} \u{1F194} test-id #sync`);
+      }
+    });
+
+    it('emits no signifier for priority none', () => {
+      expect(mapper.toMarkdown({ ...baseTask, priority: 'none' }, 'sync'))
+        .toBe('- [ ] Test task \u{1F194} test-id #sync');
+    });
+
+    it('places the priority signifier after tags and before the dates', () => {
+      const task: CommonTask = {
+        ...baseTask, priority: 'high', tags: ['shopping'], dueDate: '2025-01-15',
+      };
+      const md = mapper.toMarkdown(task, 'sync');
+      expect(md.indexOf('#shopping')).toBeLessThan(md.indexOf('\u23EB'));
+      expect(md.indexOf('\u23EB')).toBeLessThan(md.indexOf('\u{1F4C5}'));
+    });
+
     it('should work without sync tag', () => {
       const md = mapper.toMarkdown(baseTask, '');
       expect(md).toBe('- [ ] Test task 🆔 test-id');
@@ -256,6 +284,18 @@ describe('ObsidianMapper', () => {
       const task = { ...baseTask, status: 'DONE' as const };
       expect(mapper.toMarkdown(task, 'sync', 'dataview'))
         .toBe('- [x] Test task [id:: test-id] #sync');
+    });
+
+    it('emits the priority field for every prioritized level', () => {
+      for (const priority of ['highest', 'high', 'medium', 'low', 'lowest'] as const) {
+        expect(mapper.toMarkdown({ ...baseTask, priority }, 'sync', 'dataview'))
+          .toBe(`- [ ] Test task [priority:: ${priority}] [id:: test-id] #sync`);
+      }
+    });
+
+    it('emits no priority field for priority none', () => {
+      expect(mapper.toMarkdown({ ...baseTask, priority: 'none' }, 'sync', 'dataview'))
+        .toBe('- [ ] Test task [id:: test-id] #sync');
     });
 
     it('works without a sync tag', () => {
