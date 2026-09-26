@@ -2,6 +2,8 @@ export type SyncDirection = 'bidirectional' | 'pull' | 'push';
 
 export interface CalendarMapping {
   obsidianTag: string;
+  /** Also match obsidianTag on the immediately preceding heading. Absent ⇒ false. */
+  syncHeadingTags?: boolean;
   caldavCategory: string;
   /** Internal: legacy name-match key, storage key, and label. Empty for URL-pinned calendars. */
   calendarName: string;

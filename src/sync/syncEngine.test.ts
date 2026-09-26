@@ -212,6 +212,27 @@ describe('SyncEngine', () => {
     });
   });
 
+  it.each([undefined, false, true])('uses the calendar heading-tag option: %s', async syncHeadingTags => {
+    const { ObsidianTasksWrapper } = jest.requireActual<typeof import('../tasks/obsidianTasksWrapper')>(
+      '../tasks/obsidianTasksWrapper',
+    );
+    const wrapper = new ObsidianTasksWrapper(new App());
+    mockFilterByTag.mockImplementation(wrapper.filterByTag.bind(wrapper));
+    mockGetAllTasksWithBody.mockResolvedValue(withBody(
+      makeObsidianTask({ id: 'direct', heading: 'Personal' }),
+      makeObsidianTask({ id: 'heading-only', tags: [], heading: 'Work #sync' }),
+      makeObsidianTask({ id: 'other', tags: [], heading: 'Meeting' }),
+    ));
+    const engine = new SyncEngine(new App(), makeCalendarMapping({ obsidianTag: 'sync', syncHeadingTags }), makeSettings());
+    await engine.initialize();
+
+    const result = await engine.sync({ dryRun: true });
+
+    expect(result.success).toBe(true);
+    expect(result.details.toCalDAV.map(change => change.task.uid).sort())
+      .toEqual(syncHeadingTags ? ['direct', 'heading-only'] : ['direct']);
+  });
+
   describe('error handling', () => {
     it('should return failure result when CalDAV connection fails', async () => {
       mockConnect.mockRejectedValue(new Error('Connection refused'));

@@ -6,7 +6,7 @@ import {
 } from "../tasks/obsidianTasksWrapper";
 import { ObsidianMapper } from "../tasks/obsidianMapper";
 import { generateTaskId } from "../utils/taskIdGenerator";
-import { stripTagIdentifier } from "../utils/tagIdentifier";
+import { normalizeTagIdentifier, stripTagIdentifier } from "../utils/tagIdentifier";
 
 export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
 
@@ -16,6 +16,7 @@ export interface ApplyChangesResult {
 
 export interface ObsidianSyncSettings {
 	syncTag?: string;
+	syncHeadingTags?: boolean;
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
@@ -63,7 +64,7 @@ export class ObsidianAdapter {
 				.map(({ task }) => this.wrapper.extractId(task))
 				.filter((id): id is string => id !== null),
 		);
-		const filtered = this.wrapper.filterByTag(allInputs, this.settings.syncTag);
+		const filtered = this.wrapper.filterByTag(allInputs, this.settings.syncTag, this.settings.syncHeadingTags);
 		const normalized = this.normalize(
 			filtered,
 			(task) => this.wrapper.extractId(task),
@@ -108,6 +109,14 @@ export class ObsidianAdapter {
 		}
 
 		return tasks;
+	}
+
+	/** Preserve heading-only selection without adding the sync tag to the task. */
+	private getTaskSyncTag(original: ObsidianTask): string | undefined {
+		if (!this.settings.syncHeadingTags) return this.settings.syncTag;
+		const syncTag = normalizeTagIdentifier(this.settings.syncTag);
+		const hasExplicitTag = original.tags.some(tag => normalizeTagIdentifier(tag) === syncTag);
+		return hasExplicitTag ? this.settings.syncTag : undefined;
 	}
 
 	private buildObsidianUrl(vaultName: string, filePath: string): string {
@@ -161,7 +170,7 @@ export class ObsidianAdapter {
 						const localStart = this.mapper.toCommonTask(existingTask, change.task.uid).startDate;
 						const markdown = this.mapper.toMarkdown(
 							{ ...change.task, startDate: localStart },
-							this.settings.syncTag,
+							this.getTaskSyncTag(existingTask),
 							format,
 							globalFilter,
 						);
@@ -242,7 +251,7 @@ export class ObsidianAdapter {
 			try {
 				const markdown = this.mapper.toMarkdown(
 					task,
-					this.settings.syncTag,
+					this.getTaskSyncTag(original),
 					format,
 					globalFilter,
 				);

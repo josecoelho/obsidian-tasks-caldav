@@ -562,4 +562,46 @@ describe('ObsidianAdapter', () => {
       expect(written).toContain('renamed on server');
     });
   });
+
+  describe.each(['emoji', 'dataview'] as const)('heading-tag sync in %s format', format => {
+    it.each([false, true])('preserves whether the task has an explicit sync tag: %s', async explicitTag => {
+      const original = makeTask({
+        id: '',
+        tags: explicitTag ? ['#sync', '#urgent'] : ['#urgent'],
+        heading: 'Work #sync',
+      });
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      const createTask = jest.fn().mockResolvedValue(undefined);
+      const wrapper = {
+        ...dummyWrapper,
+        getAllTasksWithBody: jest.fn().mockResolvedValue([withBody(original)]),
+        filterByTag: (inputs: TaskWithBody[], syncTag?: string, syncHeadingTags?: boolean) =>
+          ObsidianTasksWrapper.prototype.filterByTag(inputs, syncTag, syncHeadingTags),
+        extractId: (task: ObsidianTask) => task.id || null,
+        getTasksPluginConfig: jest.fn().mockResolvedValue({ format, globalFilter: '#task' }),
+        updateTaskInVault,
+        createTask,
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, { ...defaultSettings, syncHeadingTags: true });
+      const [task] = await adapter.fetchTasks();
+      expect(task.tags).toEqual(['urgent']);
+
+      await adapter.writeBackIds([task]);
+      await adapter.applyChanges([{ type: 'update', task: { ...task, title: 'Updated on server' } }]);
+
+      expect(updateTaskInVault).toHaveBeenCalledTimes(2);
+      for (const call of updateTaskInVault.mock.calls) {
+        const [, markdown] = call as [ObsidianTask, string];
+        expect(markdown.includes('#sync')).toBe(explicitTag);
+        expect(markdown).toContain('#urgent');
+        expect(markdown).toContain('#task');
+        expect(markdown).toContain(task.uid);
+      }
+
+      // Pulled tasks still receive their own sync tag regardless of destination heading.
+      await adapter.applyChanges([{ type: 'create', task }]);
+      expect(createTask).toHaveBeenCalledWith(expect.stringContaining('#sync'), 'Inbox.md', undefined);
+    });
+  });
+
 });

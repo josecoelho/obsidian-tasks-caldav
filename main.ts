@@ -2,6 +2,7 @@ import { App, Editor, Notice, Platform, Plugin, PluginSettingTab, Setting } from
 import { CalDAVSettings, CalendarMapping, SyncDirection } from './src/types';
 import { describeIncompleteCalendar } from './src/utils/calendarConfig';
 import { calendarLabel } from './src/utils/calendarLabel';
+import { normalizeTagIdentifier } from './src/utils/tagIdentifier';
 import { loadSettingsFrom, resolveSettings } from './src/utils/settingsLoader';
 import { clearStoredPassword, externalizePasswords, hasPasswordsToExternalize, hydratePasswords, SecretStore } from './src/utils/passwordStorage';
 import { extractTaskId, isValidTaskId } from './src/utils/taskIdGenerator';
@@ -491,9 +492,21 @@ class CalDAVSettingTab extends PluginSettingTab {
 				.setValue(calendar.obsidianTag)
 				.onChange(async (value) => {
 					calendar.obsidianTag = value;
+					headingTagSetting.setDisabled(!normalizeTagIdentifier(value));
 					await this.plugin.saveSettings();
 					updateHint();
 				}));
+
+		const headingTagSetting = new Setting(containerEl)
+			.setName('Also sync tasks under tagged headings')
+			.setDesc('Include tasks whose immediately preceding heading contains the configured Obsidian tag.')
+			.addToggle(toggle => toggle
+				.setValue(calendar.syncHeadingTags ?? false)
+				.onChange(async value => {
+					calendar.syncHeadingTags = value;
+					await this.plugin.saveSettings();
+				}))
+			.setDisabled(!normalizeTagIdentifier(calendar.obsidianTag));
 
 		new Setting(containerEl)
 			.setName('Server category')

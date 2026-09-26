@@ -58,6 +58,7 @@ export class SyncEngine {
 		);
 		this.obsidianAdapter = new ObsidianAdapter(wrapper, {
 			syncTag: calendar.obsidianTag,
+			syncHeadingTags: calendar.syncHeadingTags,
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 			includeObsidianLink: settings.includeObsidianLink,

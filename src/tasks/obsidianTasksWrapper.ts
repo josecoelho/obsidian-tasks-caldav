@@ -1,4 +1,6 @@
 import { App, TFile } from 'obsidian';
+import { extractInlineTags } from '../utils/inlineTags';
+import { normalizeTagIdentifier } from '../utils/tagIdentifier';
 
 /**
  * Represents a task from obsidian-tasks plugin
@@ -16,6 +18,8 @@ export interface ObsidianTask {
     isDone: boolean;
     priority: string;
     tags: string[];
+    /** Text of the immediately preceding heading, supplied by Tasks. */
+    heading?: string | null;
     taskLocation: {
         /** Public obsidian-tasks accessor for the containing file path. */
         path: string;
@@ -391,18 +395,17 @@ export class ObsidianTasksWrapper {
 
     /**
      * Filter task inputs by sync tag.
-     * Keeps only tasks whose tags include the given sync tag (case-insensitive).
+     * Match task tags, optionally also matching Tasks' preceding heading.
      * Returns all inputs when syncTag is empty or undefined.
      */
-    filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
-        if (!syncTag || syncTag.trim() === '') return inputs;
+    filterByTag(inputs: TaskWithBody[], syncTag?: string, syncHeadingTags = false): TaskWithBody[] {
+        const tagIdentifier = normalizeTagIdentifier(syncTag);
+        if (!tagIdentifier) return inputs;
 
-        const tagLower = syncTag.toLowerCase().replace(/^#/, '');
         return inputs.filter(({ task }) => {
-            if (!task.tags || task.tags.length === 0) return false;
-            return task.tags.some((tag: string) =>
-                tag.toLowerCase().replace(/^#/, '') === tagLower
-            );
+            const matches = (tag: string) => normalizeTagIdentifier(tag) === tagIdentifier;
+            return (task.tags ?? []).some(matches) ||
+                (syncHeadingTags && extractInlineTags(task.heading ?? '').some(matches));
         });
     }
 

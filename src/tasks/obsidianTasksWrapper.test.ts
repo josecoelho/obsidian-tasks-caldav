@@ -722,6 +722,39 @@ More content`;
 
             expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(0);
         });
+
+        it('adds all tasks whose preceding heading has the tag without changing task tags', () => {
+            const inputs = [
+                withBody(createMockTask({ tags: [], heading: 'Work #sync' })),
+                withBody(createMockTask({ tags: ['#urgent'], heading: 'Work #SYNC' })),
+                withBody(createMockTask({ tags: [], heading: 'Untagged subsection' })),
+                withBody(createMockTask({ tags: ['#sync'], heading: 'Personal' })),
+            ];
+            expect(wrapper.filterByTag(inputs, ' #sync ', true)).toEqual([inputs[0], inputs[1], inputs[3]]);
+            expect(inputs[0].task.tags).toEqual([]);
+            expect(inputs[1].task.tags).toEqual(['#urgent']);
+            // Existing configurations still require a tag on the task itself.
+            expect(wrapper.filterByTag(inputs, 'sync')).toEqual([inputs[3]]);
+            expect(wrapper.filterByTag(inputs, 'sync', false)).toEqual([inputs[3]]);
+        });
+
+        it.each([undefined, null, '', 'Work', 'Work #syncing', 'Work #sync/project'])(
+            'does not match missing or different heading tags: %s', heading => {
+                const inputs = [withBody(createMockTask({ tags: [], heading }))];
+                expect(wrapper.filterByTag(inputs, 'sync', true)).toEqual([]);
+            },
+        );
+
+        it('matches complete heading tags among other tags and punctuation', () => {
+            const inputs = [withBody(createMockTask({ heading: 'Work (#sync) #urgent' }))];
+            expect(wrapper.filterByTag(inputs, '#SYNC', true)).toEqual(inputs);
+        });
+
+        it('keeps empty-tag selection unchanged when heading tags are enabled', () => {
+            const inputs = [withBody(createMockTask({ heading: null, tags: [] }))];
+            expect(wrapper.filterByTag(inputs, '', true)).toBe(inputs);
+            expect(wrapper.filterByTag(inputs, undefined, true)).toBe(inputs);
+        });
     });
 
     describe('extractBodyFromFile', () => {
@@ -953,5 +986,3 @@ More content`;
     });
 
 });
-
-
