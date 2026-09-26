@@ -124,15 +124,28 @@ export class VTODOMapper {
   }
 
   /**
-   * An open task (TODO) never overwrites the server's STATUS on update:
+   * An open task (TODO) leaves a non-terminal server STATUS alone on update:
    * obsidian-tasks has no in-progress checkbox, so IN-PROCESS is kept as-is
-   * and NEEDS-ACTION passes through. Only terminal states are written
-   * (DONE→COMPLETED, CANCELLED→CANCELLED). A fresh VTODO always states TODO as
-   * NEEDS-ACTION since there is nothing to preserve.
+   * and NEEDS-ACTION passes through. A terminal server STATUS is a different
+   * story — the task was completed or cancelled and has since been reopened in
+   * the vault, so it must be written back as NEEDS-ACTION. Leaving COMPLETED
+   * standing made the server keep reporting the task as done, which pulled the
+   * completion back into the vault on the next sync. Terminal states are always
+   * written (DONE→COMPLETED, CANCELLED→CANCELLED), and a fresh VTODO always
+   * states TODO as NEEDS-ACTION since there is nothing to preserve.
    */
   private applyStatus(vtodo: ICAL.Component, status: CommonTask['status'], isUpdate: boolean): void {
-    if (isUpdate && status === 'TODO') return;
+    if (isUpdate && status === 'TODO' && !this.hasTerminalStatus(vtodo)) return;
+    if (isUpdate && status === 'TODO') {
+      vtodo.removeAllProperties('percent-complete');
+    }
     vtodo.updatePropertyWithValue('status', this.mapStatusToVTODO(status));
+  }
+
+  /** A server STATUS the task can only leave by being reopened. */
+  private hasTerminalStatus(vtodo: ICAL.Component): boolean {
+    const status = vtodo.getFirstPropertyValue('status');
+    return status === 'COMPLETED' || status === 'CANCELLED';
   }
 
   /**

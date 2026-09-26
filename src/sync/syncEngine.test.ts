@@ -1966,6 +1966,60 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('reopening a completed task', () => {
+    it('pushes the vault un-completion to the server as NEEDS-ACTION', () => {
+      // The task was completed on the server, pulled into the vault as done,
+      // then unchecked in Obsidian. Leaving STATUS:COMPLETED standing made the
+      // next fetch read the task as done again and re-complete it in the vault.
+      const reopened = makeObsidianTask({
+        description: 'Reopened task',
+        id: 'task-001',
+        tags: ['#sync'],
+        originalMarkdown: '- [ ] Reopened task 🆔 task-001 #sync',
+      });
+      const vtodo = makeCalObj('caldav-uid-001', 'Reopened task', [
+        'STATUS:COMPLETED',
+        'COMPLETED:20260301T090000Z',
+        'PERCENT-COMPLETE:100',
+      ]);
+
+      mockGetAllTasksWithBody.mockResolvedValue(withBody(reopened));
+      mockFetchVTODOs.mockResolvedValue([vtodo]);
+      mockGetBaseline.mockReturnValue([{
+        uid: 'task-001',
+        title: 'Reopened task',
+        status: 'DONE',
+        dueDate: null,
+        startDate: null,
+        scheduledDate: null,
+        completedDate: '2026-03-01',
+        priority: 'none',
+        tags: [],
+        recurrenceRule: '',
+        body: '',
+      }]);
+      mockGetIdMapping.mockReturnValue({
+        taskIdToCaldavUid: { 'task-001': 'caldav-uid-001' },
+        caldavUidToTaskId: { 'caldav-uid-001': 'task-001' },
+      });
+      mockFetchVTODOByUID.mockResolvedValue(vtodo);
+
+      const engine = new SyncEngine(new App(), makeCalendarMapping(), makeSettings());
+
+      return engine.initialize().then(() => engine.sync()).then((result) => {
+        expect(result.success).toBe(true);
+        expect(result.details.toCalDAV.map(c => c.type)).toEqual(['update']);
+        expect(result.details.toObsidian).toEqual([]);
+
+        const [, pushed] = mockUpdateVTODO.mock.calls[0] as [unknown, string];
+        expect(pushed).toContain('STATUS:NEEDS-ACTION');
+        expect(pushed).not.toContain('STATUS:COMPLETED');
+        expect(pushed).not.toContain('COMPLETED:');
+        expect(pushed).not.toContain('PERCENT-COMPLETE');
+      });
+    });
+  });
+
   describe('id write-back happens before the CalDAV push', () => {
     it('stamps generated IDs into the vault even when the CalDAV apply fails', async () => {
       mockCreateVTODO.mockRejectedValue(new Error('Create VTODO failed: 412'));

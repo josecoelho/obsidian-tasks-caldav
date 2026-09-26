@@ -1548,6 +1548,25 @@ END:VTODO`;
         expect(parseVTODO(out).getFirstPropertyValue('status')).toBe('COMPLETED');
       });
 
+      it('reopens a COMPLETED task to NEEDS-ACTION when it is unchecked in Obsidian', () => {
+        const existing = serverVTODO([
+          'STATUS:COMPLETED',
+          'COMPLETED:20260301T090000Z',
+          'PERCENT-COMPLETE:100',
+        ]);
+        const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+        const vtodo = parseVTODO(out);
+        expect(vtodo.getFirstPropertyValue('status')).toBe('NEEDS-ACTION');
+        expect(vtodo.getFirstProperty('completed')).toBeNull();
+        expect(vtodo.getFirstProperty('percent-complete')).toBeNull();
+      });
+
+      it('reopens a CANCELLED task to NEEDS-ACTION when it is unchecked in Obsidian', () => {
+        const existing = serverVTODO(['STATUS:CANCELLED']);
+        const out = mapper.taskToVTODO(openTask, 'foreign-uid', existing);
+        expect(parseVTODO(out).getFirstPropertyValue('status')).toBe('NEEDS-ACTION');
+      });
+
       it('overrides STATUS to CANCELLED on a terminal CANCELLED transition', () => {
         const existing = serverVTODO(['STATUS:IN-PROCESS']);
         const cancelled = { ...openTask, status: 'CANCELLED' as const };
