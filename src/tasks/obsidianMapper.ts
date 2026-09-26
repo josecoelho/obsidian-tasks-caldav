@@ -188,14 +188,15 @@ export class ObsidianMapper {
     return 'TODO';
   }
 
+  /** obsidian-tasks encodes priority as an enum where None ('3') sits mid-range. */
   private mapPriority(priority: string): TaskPriority {
     const map: Record<string, TaskPriority> = {
-      '1': 'highest',
-      '2': 'high',
-      '3': 'medium',
-      '4': 'medium',
-      '5': 'low',
-      '6': 'lowest',
+      '0': 'highest',
+      '1': 'high',
+      '2': 'medium',
+      '3': 'none',
+      '4': 'low',
+      '5': 'lowest',
     };
     return map[priority] || 'none';
   }
