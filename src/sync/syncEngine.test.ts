@@ -86,6 +86,7 @@ const mockGetAllTasksWithBody = jest.fn().mockResolvedValue([]);
 const mockFindTaskById = jest.fn().mockReturnValue(null);
 const mockCreateTask = jest.fn().mockResolvedValue(undefined);
 const mockUpdateTaskInVault = jest.fn().mockResolvedValue(undefined);
+const mockRemoveTaskFromVault = jest.fn().mockResolvedValue(undefined);
 const mockGetTaskId = jest.fn().mockImplementation((task: ObsidianTask) => task.id || null);
 const mockFilterByTag = jest.fn().mockImplementation(
   (inputs: Array<{ task: ObsidianTask }>, syncTag?: string) => {
@@ -113,6 +114,7 @@ jest.mock('../tasks/obsidianTasksWrapper', () => ({
     findTaskById: mockFindTaskById,
     createTask: mockCreateTask,
     updateTaskInVault: mockUpdateTaskInVault,
+    removeTaskFromVault: mockRemoveTaskFromVault,
     getTaskId: mockGetTaskId,
     filterByTag: mockFilterByTag,
     extractId: mockExtractId,
@@ -2014,6 +2016,71 @@ describe('SyncEngine', () => {
       expect(result.success).toBe(true);
       expect(updates[0]).toEqual({ pullDone: 0, pullTotal: 1, pushDone: 0, pushTotal: 1 });
       expect(updates[updates.length - 1]).toEqual({ pullDone: 1, pullTotal: 1, pushDone: 1, pushTotal: 1 });
+    });
+  });
+
+  describe('deleteObsidian behavior', () => {
+    const vaultTask = () => ({
+      task: makeObsidianTask({
+        description: 'Completed on phone',
+        originalMarkdown: '- [ ] Completed on phone [id::20250101-abc] #sync',
+      }),
+      body: '',
+    });
+
+    const baselineEntry = (uid: string, title: string): CommonTask => ({
+      uid,
+      title,
+      status: 'NEEDS-ACTION',
+      tags: [],
+      body: '',
+    } as unknown as CommonTask);
+
+    it('removes the vault line when a baseline task disappears from a non-empty server report', async () => {
+      // Server still lists another task (report healthy), but the baseline
+      // task the vault holds is gone — completed on the phone.
+      mockFetchVTODOs.mockResolvedValue([makeCalObj('other-uid', 'Still active')]);
+      mockGetAllTasksWithBody.mockResolvedValue([vaultTask()]);
+      mockGetBaseline.mockReturnValue([
+        baselineEntry('20250101-abc', 'Completed on phone'),
+        baselineEntry('other-uid', 'Still active'),
+      ]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ deleteBehavior: 'deleteObsidian' }),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(mockRemoveTaskFromVault).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppresses vault-line deletes when the server report is empty and baseline is populated', async () => {
+      // A transient empty REPORT must not wipe the vault's task lines; the
+      // suppressed delete stays in baseline and is re-derived next sync.
+      mockFetchVTODOs.mockResolvedValue([]);
+      mockGetAllTasksWithBody.mockResolvedValue([vaultTask()]);
+      mockGetBaseline.mockReturnValue([
+        baselineEntry('20250101-abc', 'Completed on phone'),
+        baselineEntry('b1', 'One'),
+        baselineEntry('b2', 'Two'),
+        baselineEntry('b3', 'Three'),
+        baselineEntry('b4', 'Four'),
+      ]);
+
+      const engine = new SyncEngine(
+        new App(),
+        makeCalendarMapping(),
+        makeSettings({ deleteBehavior: 'deleteObsidian' }),
+      );
+      await engine.initialize();
+      const result = await engine.sync();
+
+      expect(result.success).toBe(true);
+      expect(mockRemoveTaskFromVault).not.toHaveBeenCalled();
     });
   });
 });

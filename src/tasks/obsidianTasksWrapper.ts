@@ -224,6 +224,40 @@ export class ObsidianTasksWrapper {
     }
 
     /**
+     * Remove a task's line (and its indented note lines) from the vault.
+     * A missing line is success: the desired end state is already in place.
+     */
+    async removeTaskFromVault(task: ObsidianTask): Promise<void> {
+        const filePath = task.taskLocation.path;
+
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!file || !(file instanceof TFile)) {
+            throw new Error(`File not found: ${filePath}`);
+        }
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+
+        // Find the task by its original markdown (don't trust line numbers from cache)
+        const originalMarkdown = task.originalMarkdown;
+        const taskIndex = lines.findIndex(line => line.trim() === originalMarkdown.trim());
+        if (taskIndex === -1) return;
+
+        // Count indented note lines below the task
+        let noteLineCount = 0;
+        for (let i = taskIndex + 1; i < lines.length; i++) {
+            if (/^(?:\s{2,}|\t)- /.test(lines[i])) {
+                noteLineCount++;
+            } else {
+                break;
+            }
+        }
+
+        lines.splice(taskIndex, 1 + noteLineCount);
+        await this.app.vault.modify(file, lines.join('\n'));
+    }
+
+    /**
      * Create a new task in the destination file
      * @param taskContent The task markdown (e.g., "- [ ] New task")
      * @param destinationPath Path to the file where task should be added

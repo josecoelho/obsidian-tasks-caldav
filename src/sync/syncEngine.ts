@@ -7,6 +7,7 @@ import { CalDAVAdapter } from "./caldavAdapter";
 import { ObsidianAdapter } from "./obsidianAdapter";
 import { diff } from "./diff";
 import { applicableChanges } from "./applicableChanges";
+import { guardDeletes } from "./deleteGuard";
 import { SyncProgress } from "./progress";
 import { CommonTask, Conflict, ConflictStrategy, SyncChange } from "./types";
 import { storageIdForCalendar } from "../utils/calendarStorageId";
@@ -61,6 +62,7 @@ export class SyncEngine {
 			newTasksDestination: settings.newTasksDestination,
 			newTasksSection: settings.newTasksSection,
 			includeObsidianLink: settings.includeObsidianLink,
+			deleteBehavior: settings.deleteBehavior,
 			getVaultName: () => app.vault.getName(),
 		});
 	}
@@ -88,7 +90,22 @@ export class SyncEngine {
 			const baseline = this.getOrSeedBaseline(obsidianTasks, caldavTasks, idMapping);
 
 			const changeset = diff(obsidianTasks, caldavTasks, baseline, this.conflictStrategy());
-			const applicable = applicableChanges(changeset, this.direction());
+			// Guard before apply AND before the baseline update: suppressed
+			// deletes stay in baseline, so they are re-derived (and re-judged)
+			// on the next sync instead of leaking as spurious creates.
+			const guarded = guardDeletes(
+				applicableChanges(changeset, this.direction()),
+				{
+					obsidianCount: obsidianTasks.length,
+					caldavCount: caldavTasks.length,
+					baselineCount: baseline.length,
+				},
+			);
+			const applicable = guarded.changes;
+			for (const warning of guarded.warnings) {
+				console.error(`[tasks-caldav-sync] delete guard: ${warning}`);
+				new Notice(`CalDAV sync (${calendarLabel(this.calendar)}): ${warning}`);
+			}
 
 			if (dryRun) return this.buildResult(applicable, obsidianTasks, caldavTasks, baseline, true, showProgress);
 

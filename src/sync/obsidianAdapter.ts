@@ -19,6 +19,9 @@ export interface ObsidianSyncSettings {
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
+	// Only 'deleteObsidian' makes a CalDAV-side deletion remove the vault line;
+	// every other value keeps the historical leave-the-line behavior.
+	deleteBehavior?: string;
 	// Called at normalize time so vault renames are picked up without reconstructing the adapter.
 	getVaultName?: () => string;
 }
@@ -207,7 +210,19 @@ export class ObsidianAdapter {
 					}
 
 					case "delete": {
-						// Return mapping removal info — SyncEngine handles storage
+						// Mapping/baseline removal is SyncEngine's job; the vault
+						// line is ours, and only under an explicit opt-in. Servers
+						// that hide completed VTODOs (DavMail/Exchange) surface
+						// completions as deletions — leaving the line makes the
+						// task re-push as new on the next sync (resurrection).
+						if (this.settings.deleteBehavior !== "deleteObsidian") break;
+
+						const existingTask =
+							this.tasksById.get(change.task.uid) ??
+							this.wrapper.findTaskById(change.task.uid);
+						if (!existingTask) break;
+
+						await this.wrapper.removeTaskFromVault(existingTask);
 						break;
 					}
 					case "reconcile":
