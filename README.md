@@ -74,8 +74,37 @@ Global settings:
 | **Sync interval** | Auto-sync period in minutes | `5` |
 | **New tasks destination** | File where incoming CalDAV tasks are created | `Inbox.md` |
 | **New tasks section** | Optional heading within the destination file | — |
+| **Note date format for tasks without due date** | Infer a due date from the containing note's filename or path — see [Note dates](#note-dates) | disabled |
 | **Sync completed tasks** | Include completed tasks in sync | off |
 | **Delete behavior** | What happens when a task is deleted on one side | `ask` |
+
+### Note dates
+
+Set **Note date format for tasks without due date** to use a dated note as the
+fallback due date for its tasks. For example, `YYYY-MM-DD` gives an undated task
+in `Daily/2026-09-21.md` a due date of September 21, 2026. Similarly, `YYYY/MM/DD`
+uses the date in `Daily/2026/09/21.md`.
+
+Explicit task due dates always take precedence, so existing functionality is
+retained. Changing the due date in an external CalDAV client to a different date
+writes an explicit due date to a task in Markdown.
+
+The setting is disabled by default.
+
+Use exactly one `YYYY` year token and either:
+
+- One month token (`M`, `MM`, `MMM`, or `MMMM`) and one day-of-month token (`D`, `DD`, or `Do`).
+- One day-of-year token (`DDD` or `DDDD`), without a month token.
+
+`MMM` and `MMMM` use abbreviated and full month names, while `Do` uses an ordinal
+day such as `21st`; these follow Obsidian's Moment locale. `DDDD` pads the day of
+year to three digits. Tokens can be joined directly or separated by spaces,
+hyphens, dots, or slashes. Examples: `YYYY-MM-DD`, `DD.MM.YYYY`, `Do MMMM YYYY`,
+`YYYYMMDD`, and `YYYY/DDD`. A slash can span folders, so `YYYY/MM/DD` matches
+`Daily/2026/09/21.md`.
+
+Times, weekdays, week dates, localized shortcuts such as `L`, bracketed text,
+backslash escapes, and other tokens are unsupported. 
 
 ### Sync direction
 

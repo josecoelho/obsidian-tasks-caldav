@@ -129,6 +129,16 @@ describe('ObsidianMapper', () => {
       expect(mapper.toCommonTask(task, 'id').dueDate).toBe('2025-01-15');
     });
 
+    it('should use fallbackDueDate when task has no due date', () => {
+      const task = makeTask({ dueDate: null });
+      expect(mapper.toCommonTask(task, 'id', '', '2026-09-21').dueDate).toBe('2026-09-21');
+    });
+
+    it('should prioritize explicit dueDate over fallbackDueDate', () => {
+      const task = makeTask({ dueDate: '2025-01-15' });
+      expect(mapper.toCommonTask(task, 'id', '', '2026-09-21').dueDate).toBe('2025-01-15');
+    });
+
     it('should extract recurrence rule from toText()', () => {
       const task = makeTask({ recurrence: { toText: () => 'every day' } });
       expect(mapper.toCommonTask(task, 'id').recurrenceRule).toBe('FREQ=DAILY');

@@ -43,6 +43,13 @@ export interface CalDAVSettings {
    */
   storePasswordsInPlainText?: boolean;
   /**
+   * Optional date-only format (e.g. 'YYYY-MM-DD') for daily notes.
+   * When set, tasks lacking an explicit due date inherit the date of their
+   * containing note if its filename or path matches. Supported tokens and
+   * complete-date combinations are defined by isDayFormat.
+   */
+  noteDateFormat?: string;
+  /**
    * Names of migrations that have already been applied to this vault. Used by
    * {@link runMigrations} to gate each migration to a single successful run,
    * independent of the migration's own pre-state idempotency checks.
@@ -55,6 +62,7 @@ export const DEFAULT_CALDAV_SETTINGS: CalDAVSettings = {
   syncInterval: 5,
   newTasksDestination: 'Inbox.md',
   newTasksSection: undefined,
+  noteDateFormat: undefined,
   requireManualConflictResolution: true,
   autoResolveObsidianWins: false,
   syncCompletedTasks: false,

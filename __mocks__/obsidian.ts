@@ -1,6 +1,6 @@
-/**
- * Mock implementation of Obsidian API for testing
- */
+// Obsidian provides Moment at runtime; tests use its existing development dependency.
+// eslint-disable-next-line no-restricted-imports, import/no-extraneous-dependencies
+export { default as moment } from 'moment';
 
 export class App {
     vault: Vault = new Vault();

@@ -7,6 +7,7 @@ import {
 import { ObsidianMapper } from "../tasks/obsidianMapper";
 import { generateTaskId } from "../utils/taskIdGenerator";
 import { stripTagIdentifier } from "../utils/tagIdentifier";
+import { extractDateFromNotePath } from "../utils/noteDate";
 
 export type { TaskWithBody } from "../tasks/obsidianTasksWrapper";
 
@@ -19,6 +20,7 @@ export interface ObsidianSyncSettings {
 	newTasksDestination: string;
 	newTasksSection?: string;
 	includeObsidianLink?: boolean;
+	noteDateFormat?: string;
 	// Called at normalize time so vault renames are picked up without reconstructing the adapter.
 	getVaultName?: () => string;
 }
@@ -90,12 +92,19 @@ export class ObsidianAdapter {
 		extractId: (task: ObsidianTask) => string | null,
 	): CommonTask[] {
 		const tasks: CommonTask[] = [];
+		const noteDates = new Map<string, string | null>();
 		this.tasksById = new Map();
 
 		for (const { task, body } of inputs) {
 			const taskId = extractId(task) ?? generateTaskId(this.usedIds);
 			this.tasksById.set(taskId, task);
-			const common = this.mapper.toCommonTask(task, taskId, body);
+			let fallbackDueDate: string | null = null;
+			if (!task.dueDate && this.settings.noteDateFormat) {
+				const path = task.taskLocation.path;
+				if (!noteDates.has(path)) noteDates.set(path, this.getFallbackDueDate(task));
+				fallbackDueDate = noteDates.get(path) ?? null;
+			}
+			const common = this.mapper.toCommonTask(task, taskId, body, fallbackDueDate);
 
 			if (this.settings.includeObsidianLink && this.settings.getVaultName) {
 				common.obsidianUrl = this.buildObsidianUrl(
@@ -108,6 +117,15 @@ export class ObsidianAdapter {
 		}
 
 		return tasks;
+	}
+
+	private getFallbackDueDate(task: ObsidianTask): string | null {
+		return task.dueDate ? null : extractDateFromNotePath(task.taskLocation.path, this.settings.noteDateFormat);
+	}
+
+	/** Keep inferred dates implicit in Markdown; preserve explicit and changed dates. */
+	private getMarkdownDueDate(original: ObsidianTask, dueDate: CommonTask['dueDate']): CommonTask['dueDate'] {
+		return dueDate === this.getFallbackDueDate(original) ? null : dueDate;
 	}
 
 	private buildObsidianUrl(vaultName: string, filePath: string): string {
@@ -159,8 +177,11 @@ export class ObsidianAdapter {
 						// startDate (🛫) is local-only and never syncs; carry the
 						// vault's value so a CalDAV rewrite doesn't erase it.
 						const localStart = this.mapper.toCommonTask(existingTask, change.task.uid).startDate;
+
+						const dueDate = this.getMarkdownDueDate(existingTask, change.task.dueDate);
+
 						const markdown = this.mapper.toMarkdown(
-							{ ...change.task, startDate: localStart },
+							{ ...change.task, startDate: localStart, dueDate },
 							this.settings.syncTag,
 							format,
 							globalFilter,
@@ -241,7 +262,7 @@ export class ObsidianAdapter {
 
 			try {
 				const markdown = this.mapper.toMarkdown(
-					task,
+					{ ...task, dueDate: this.getMarkdownDueDate(original, task.dueDate) },
 					this.settings.syncTag,
 					format,
 					globalFilter,

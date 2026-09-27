@@ -562,4 +562,116 @@ describe('ObsidianAdapter', () => {
       expect(written).toContain('renamed on server');
     });
   });
+
+  describe('noteDateFormat handling', () => {
+    const settingsWithDateFormat: ObsidianSyncSettings = {
+      ...defaultSettings,
+      noteDateFormat: 'YYYY-MM-DD',
+    };
+
+    it('derives dueDate from note path during normalize when task has no explicit due date', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, settingsWithDateFormat);
+      const taskInDailyNote = makeTask({
+        id: 'task-1',
+        taskLocation: { path: 'Daily/2026-09-21.md', _lineNumber: 1 },
+        dueDate: null,
+      });
+
+      const [normalized] = adapter.normalize([withBody(taskInDailyNote)], extractId);
+      expect(normalized.dueDate).toBe('2026-09-21');
+    });
+
+    it('prefers explicit dueDate over note date during normalize', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, settingsWithDateFormat);
+      const taskWithExplicitDue = makeTask({
+        id: 'task-1',
+        taskLocation: { path: 'Daily/2026-09-21.md', _lineNumber: 1 },
+        dueDate: '2026-10-05',
+      });
+
+      const [normalized] = adapter.normalize([withBody(taskWithExplicitDue)], extractId);
+      expect(normalized.dueDate).toBe('2026-10-05');
+    });
+
+    it('leaves dueDate null when note path does not match noteDateFormat', () => {
+      const adapter = new ObsidianAdapter(dummyWrapper, settingsWithDateFormat);
+      const taskInNonDailyNote = makeTask({
+        id: 'task-1',
+        taskLocation: { path: 'Inbox.md', _lineNumber: 1 },
+        dueDate: null,
+      });
+
+      const [normalized] = adapter.normalize([withBody(taskInNonDailyNote)], extractId);
+      expect(normalized.dueDate).toBeNull();
+    });
+
+    it('does not write due date emoji when writing back ID to an undated task in a daily note', async () => {
+      let written = '';
+      const updateTaskInVault = jest.fn().mockImplementation((_t: unknown, markdown: string) => {
+        written = markdown;
+        return Promise.resolve();
+      });
+      const wrapper = {
+        ...dummyWrapper,
+        extractId: jest.fn().mockReturnValue(null),
+        updateTaskInVault,
+      } as unknown as ObsidianTasksWrapper;
+      const adapter = new ObsidianAdapter(wrapper, settingsWithDateFormat);
+
+      const undatedTask = makeTask({
+        id: '',
+        originalMarkdown: '- [ ] Undated daily task #sync',
+        taskLocation: { path: 'Daily/2026-09-21.md', _lineNumber: 1 },
+        dueDate: null,
+      });
+
+      const [normalized] = adapter.normalize([withBody(undatedTask)], () => null);
+      expect(normalized.dueDate).toBe('2026-09-21');
+
+      await adapter.writeBackIds([normalized]);
+
+      expect(updateTaskInVault).toHaveBeenCalledTimes(1);
+      expect(written).toContain('🆔');
+      expect(written).not.toContain('📅');
+    });
+
+    describe.each(['emoji', 'dataview'] as const)('%s due-date writeback', format => {
+      it.each([
+        { originalDate: null, serverDate: '2026-09-21', expectedDate: null },
+        { originalDate: null, serverDate: '2026-09-25', expectedDate: '2026-09-25' },
+        { originalDate: '2026-09-21', serverDate: '2026-09-21', expectedDate: '2026-09-21' },
+        { originalDate: '2026-09-25', serverDate: '2026-09-21', expectedDate: '2026-09-21' },
+        { originalDate: '2026-09-25', serverDate: null, expectedDate: null },
+      ])('preserves explicit dates: $originalDate → $serverDate', async ({ originalDate, serverDate, expectedDate }) => {
+        const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+        const wrapper = {
+          ...dummyWrapper,
+          updateTaskInVault,
+          getTasksPluginConfig: jest.fn().mockResolvedValue({ format, globalFilter: '' }),
+        } as unknown as ObsidianTasksWrapper;
+        const adapter = new ObsidianAdapter(wrapper, settingsWithDateFormat);
+        const original = makeTask({
+          id: 'daily-task',
+          dueDate: originalDate,
+          taskLocation: { path: 'Daily/2026-09-21.md', _lineNumber: 1 },
+        });
+        const [normalized] = adapter.normalize([withBody(original)], extractId);
+
+        await adapter.applyChanges([{
+          type: 'update',
+          task: { ...normalized, title: 'Updated on server', dueDate: serverDate },
+        }]);
+
+        expect(updateTaskInVault).toHaveBeenCalledTimes(1);
+        const [, markdown] = updateTaskInVault.mock.calls[0] as [ObsidianTask, string];
+        expect(markdown).toContain('Updated on server');
+        if (expectedDate) {
+          expect(markdown).toContain(format === 'emoji' ? `📅 ${expectedDate}` : `[due:: ${expectedDate}]`);
+        } else {
+          expect(markdown).not.toContain('📅');
+          expect(markdown).not.toContain('[due::');
+        }
+      });
+    });
+  });
 });

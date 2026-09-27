@@ -60,6 +60,7 @@ describe('settings evolution: historical data.json → latest shape', () => {
       syncInterval: 10,
       newTasksDestination: 'Tasks/Inbox.md',
       newTasksSection: undefined,
+      noteDateFormat: undefined,
       requireManualConflictResolution: true,
       autoResolveObsidianWins: false,
       syncCompletedTasks: false,
@@ -129,6 +130,7 @@ describe('settings evolution: historical data.json → latest shape', () => {
       syncInterval: 5,
       newTasksDestination: 'Inbox.md',
       newTasksSection: undefined,
+      noteDateFormat: undefined,
       requireManualConflictResolution: true,
       autoResolveObsidianWins: false,
       syncCompletedTasks: false,
@@ -163,7 +165,7 @@ describe('settings evolution: historical data.json → latest shape', () => {
     const { settings, migrated } = await loadAndMigrate(v1_3_dataJson);
 
     expect(migrated).toBe(false);
-    expect(settings).toEqual({ ...v1_3_dataJson, newTasksSection: undefined });
+    expect(settings).toEqual({ ...v1_3_dataJson, newTasksSection: undefined, noteDateFormat: undefined });
   });
 
   it('v1.4 URL-pinned file with sync direction passes through unchanged', async () => {
@@ -193,6 +195,6 @@ describe('settings evolution: historical data.json → latest shape', () => {
     const { settings, migrated } = await loadAndMigrate(v1_4_dataJson);
 
     expect(migrated).toBe(false);
-    expect(settings).toEqual(v1_4_dataJson);
+    expect(settings).toEqual({ ...v1_4_dataJson, noteDateFormat: undefined });
   });
 });

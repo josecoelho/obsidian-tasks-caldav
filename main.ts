@@ -11,6 +11,7 @@ import { SyncProgress } from './src/sync/progress';
 import { dumpCalDAVRequests } from './src/caldav/requestDumper';
 import { SyncResultModal } from './src/ui/syncResultModal';
 import { BrowseCalendarsModal } from './src/ui/browseCalendarsModal';
+import { NoteDateSetting } from './src/ui/noteDateSetting';
 import { AutoSyncScheduler } from './src/sync/autoSync';
 import { runMigrations } from './src/migrations/migrationRunner';
 
@@ -316,6 +317,7 @@ export default class CalDAVSyncPlugin extends Plugin {
 
 class CalDAVSettingTab extends PluginSettingTab {
 	plugin: CalDAVSyncPlugin;
+	private noteDateSetting?: NoteDateSetting;
 
 	constructor(app: App, plugin: CalDAVSyncPlugin) {
 		super(app, plugin);
@@ -323,6 +325,7 @@ class CalDAVSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
+		this.hide();
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -407,6 +410,15 @@ class CalDAVSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		this.noteDateSetting = this.plugin.addChild(new NoteDateSetting(
+			containerEl,
+			this.plugin.settings.noteDateFormat,
+			async format => {
+				this.plugin.settings.noteDateFormat = format;
+				await this.plugin.saveSettings();
+			},
+		));
+
 		new Setting(containerEl)
 			.setName('Include Obsidian link in synced tasks')
 			.setDesc('Embed a deep link to each synced task so you can open it in Obsidian from your calendar client. The link refreshes only when the task itself changes, so moving the source file will not update already-synced tasks. Existing link lines inside task bodies are stripped on sync-back.')
@@ -450,6 +462,13 @@ class CalDAVSettingTab extends PluginSettingTab {
 					this.plugin.settings.autoResolveObsidianWins = value;
 					await this.plugin.saveSettings();
 				}));
+	}
+
+	hide(): void {
+		if (this.noteDateSetting) {
+			this.plugin.removeChild(this.noteDateSetting);
+			this.noteDateSetting = undefined;
+		}
 	}
 
 	private renderCalendarMapping(containerEl: HTMLElement, index: number): void {

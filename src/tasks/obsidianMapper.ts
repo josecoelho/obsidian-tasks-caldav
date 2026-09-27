@@ -21,12 +21,12 @@ export class ObsidianMapper {
    * any stray text form). `toMarkdown` re-emits it on writeback so the
    * rewritten line stays recognised under the filter — issue #93.
    */
-  toCommonTask(task: ObsidianTask, taskId: string, body: string = ''): CommonTask {
+  toCommonTask(task: ObsidianTask, taskId: string, body: string = '', fallbackDueDate?: string | null): CommonTask {
     return {
       uid: taskId,
       title: this.cleanDescription(task.description),
       status: this.mapStatus(task),
-      dueDate: this.formatDate(task.dueDate),
+      dueDate: this.formatDate(task.dueDate) ?? fallbackDueDate ?? null,
       startDate: this.formatDate(task.startDate),
       scheduledDate: this.formatDate(task.scheduledDate),
       completedDate: this.formatDate(task.doneDate),
