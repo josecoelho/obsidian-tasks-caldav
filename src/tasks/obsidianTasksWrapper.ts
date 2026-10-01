@@ -393,16 +393,26 @@ export class ObsidianTasksWrapper {
      * Filter task inputs by sync tag.
      * Keeps only tasks whose tags include the given sync tag (case-insensitive).
      * Returns all inputs when syncTag is empty or undefined.
+     *
+     * Falls back to matching the tag in the task's raw markdown. When the Tasks
+     * plugin's global filter is set to the same tag as the sync tag, Tasks
+     * consumes it as the filter and it never appears in `task.tags`. Matching
+     * only against `task.tags` then drops every task, the adapter reports an
+     * empty vault, and a bidirectional sync deletes the entire remote list.
      */
     filterByTag(inputs: TaskWithBody[], syncTag?: string): TaskWithBody[] {
         if (!syncTag || syncTag.trim() === '') return inputs;
 
         const tagLower = syncTag.toLowerCase().replace(/^#/, '');
+        const escaped = tagLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const rawTagPattern = new RegExp(`(^|\\s)#${escaped}(\\s|$)`, 'i');
+
         return inputs.filter(({ task }) => {
-            if (!task.tags || task.tags.length === 0) return false;
-            return task.tags.some((tag: string) =>
+            const matchedTag = task.tags?.some((tag: string) =>
                 tag.toLowerCase().replace(/^#/, '') === tagLower
             );
+            if (matchedTag) return true;
+            return rawTagPattern.test(task.originalMarkdown ?? '');
         });
     }
 
