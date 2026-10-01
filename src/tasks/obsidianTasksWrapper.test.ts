@@ -707,6 +707,32 @@ More content`;
             expect(wrapper.filterByTag(inputs, 'sync')).toHaveLength(2);
         });
 
+        it('falls back to originalMarkdown when the global filter consumed the sync tag from tags[]', () => {
+            // obsidian-tasks strips its globalFilter tag out of task.tags; when the
+            // global filter equals the sync tag, tag-array matching alone sees nothing.
+            const inputs: TaskWithBody[] = [
+                withBody(createMockTask({
+                    description: 'Stripped',
+                    tags: [],
+                    originalMarkdown: '- [ ] Stripped #mstodo 🆔 20260806-0001',
+                })),
+                withBody(createMockTask({
+                    description: 'Unrelated',
+                    tags: [],
+                    originalMarkdown: '- [ ] Unrelated #other',
+                })),
+                withBody(createMockTask({
+                    description: 'Prefix only',
+                    tags: [],
+                    originalMarkdown: '- [ ] Prefix only #mstodo2',
+                })),
+            ];
+
+            const result = wrapper.filterByTag(inputs, '#mstodo');
+            expect(result).toHaveLength(1);
+            expect(result[0].task.description).toBe('Stripped');
+        });
+
         it('should handle syncTag with # prefix', () => {
             const inputs: TaskWithBody[] = [
                 withBody(createMockTask({ tags: ['#sync'] })),
