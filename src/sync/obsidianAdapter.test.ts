@@ -367,6 +367,47 @@ describe('ObsidianAdapter', () => {
   });
 
   describe('applyChanges — complete', () => {
+    it('writes the server version of a non-recurring task, body and fields included', async () => {
+      // A task completed on the server can carry other edits made at the same
+      // time. Only toggling the vault line dropped them — and the note lines
+      // with them — while the baseline took the server version, so the next
+      // sync pushed the stripped vault task back over the server's edits.
+      const toggleFn = jest.fn().mockReturnValue('- [x] Buy groceries 🆔 20250105-a4f #sync ✅ 2026-02-18');
+      const updateTaskInVault = jest.fn().mockResolvedValue(undefined);
+      const wrapper = {
+        ...dummyWrapper,
+        getToggleCommand: jest.fn().mockReturnValue(toggleFn),
+        updateTaskInVault,
+      } as unknown as ObsidianTasksWrapper;
+
+      const adapter = new ObsidianAdapter(wrapper, defaultSettings);
+      const existingTask = makeTask();
+      adapter.normalize([withBody(existingTask, 'First note\nSecond note')], (t) => t.id || null);
+
+      await adapter.applyChanges([{
+        type: 'complete',
+        task: {
+          uid: '20250105-a4f',
+          title: 'Buy groceries',
+          status: 'DONE',
+          dueDate: '2026-02-17',
+          startDate: null,
+          scheduledDate: null,
+          completedDate: '2026-02-17',
+          priority: 'none',
+          tags: [],
+          recurrenceRule: '',
+          body: 'First note',
+        },
+      }]);
+
+      expect(toggleFn).not.toHaveBeenCalled();
+      expect(updateTaskInVault).toHaveBeenCalledWith(
+        existingTask,
+        '- [x] Buy groceries 📅 2026-02-17 ✅ 2026-02-17 🆔 20250105-a4f #sync\n    - First note',
+      );
+    });
+
     it('calls executeToggleTaskDoneCommand for complete changes', async () => {
       const toggleFn = jest.fn().mockReturnValue(
         '- [x] Weekly review 🔁 every week 📅 2026-02-17 ✅ 2026-02-17 🆔 task-001'
@@ -384,6 +425,7 @@ describe('ObsidianAdapter', () => {
         description: 'Weekly review',
         originalMarkdown: '- [ ] Weekly review 🔁 every week 📅 2026-02-17 🆔 task-001',
         id: 'task-001',
+        recurrence: { toText: () => 'every week' },
       });
       adapter.normalize([withBody(existingTask)], (t) => t.id || null);
 
@@ -427,6 +469,7 @@ describe('ObsidianAdapter', () => {
         description: 'Weekly review',
         originalMarkdown: '- [ ] Weekly review 🔁 every week 📅 2026-02-17 🆔 task-001',
         id: 'task-001',
+        recurrence: { toText: () => 'every week' },
       });
       adapter.normalize([withBody(existingTask)], (t) => t.id || null);
 
@@ -468,6 +511,7 @@ describe('ObsidianAdapter', () => {
         description: 'Weekly review',
         originalMarkdown: '- [ ] Weekly review [repeat:: every week] [due:: 2026-02-17] [id:: task-001]',
         id: 'task-001',
+        recurrence: { toText: () => 'every week' },
       });
       adapter.normalize([withBody(existingTask)], (t) => t.id || null);
 
@@ -501,7 +545,10 @@ describe('ObsidianAdapter', () => {
       } as unknown as ObsidianTasksWrapper;
 
       const adapter = new ObsidianAdapter(wrapper, defaultSettings);
-      const existingTask = makeTask({ id: 'task-001' });
+      const existingTask = makeTask({
+        id: 'task-001',
+        recurrence: { toText: () => 'every week' },
+      });
       adapter.normalize([withBody(existingTask)], (t) => t.id || null);
 
       await expect(adapter.applyChanges([{
