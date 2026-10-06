@@ -115,6 +115,27 @@ export class ObsidianAdapter {
 	}
 
 	/**
+	 * Rewrite a vault task (its line and note lines) as the given CommonTask.
+	 */
+	private async writeTaskToVault(
+		existingTask: ObsidianTask,
+		task: CommonTask,
+		format: 'emoji' | 'dataview',
+		globalFilter: string,
+	): Promise<void> {
+		// startDate (🛫) is local-only and never syncs; carry the
+		// vault's value so a CalDAV rewrite doesn't erase it.
+		const localStart = this.mapper.toCommonTask(existingTask, task.uid).startDate;
+		const markdown = this.mapper.toMarkdown(
+			{ ...task, startDate: localStart },
+			this.settings.syncTag,
+			format,
+			globalFilter,
+		);
+		await this.wrapper.updateTaskInVault(existingTask, markdown);
+	}
+
+	/**
 	 * Apply sync changes to the Obsidian vault (creates, updates, deletes).
 	 * `onApplied` is called after each change is processed.
 	 */
@@ -127,7 +148,7 @@ export class ObsidianAdapter {
 			newTaskId: string;
 		}> = [];
 
-		// used by the create and update cases; the complete case delegates serialisation to obsidian-tasks
+		// used by the create and update cases, and by a non-recurring complete; a recurring complete delegates serialisation to obsidian-tasks
 		const { format, globalFilter } = await this.wrapper.getTasksPluginConfig();
 		for (const change of changes) {
 			try {
@@ -156,19 +177,7 @@ export class ObsidianAdapter {
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
 
-						// startDate (🛫) is local-only and never syncs; carry the
-						// vault's value so a CalDAV rewrite doesn't erase it.
-						const localStart = this.mapper.toCommonTask(existingTask, change.task.uid).startDate;
-						const markdown = this.mapper.toMarkdown(
-							{ ...change.task, startDate: localStart },
-							this.settings.syncTag,
-							format,
-							globalFilter,
-						);
-						await this.wrapper.updateTaskInVault(
-							existingTask,
-							markdown,
-						);
+						await this.writeTaskToVault(existingTask, change.task, format, globalFilter);
 						break;
 					}
 
@@ -177,6 +186,18 @@ export class ObsidianAdapter {
 							this.tasksById.get(change.task.uid) ??
 							this.wrapper.findTaskById(change.task.uid);
 						if (!existingTask) continue;
+
+						// A completion can carry other edits made on the server at the
+						// same time (body, title, dates, priority), and the baseline
+						// records the server version. Only toggling the vault line
+						// would drop those edits — and the note lines below it — and
+						// the next sync would push the stripped task back over them.
+						// The toggle is only needed to spawn a recurring task's next
+						// occurrence.
+						if (!existingTask.recurrence) {
+							await this.writeTaskToVault(existingTask, change.task, format, globalFilter);
+							break;
+						}
 
 						const toggleFn = this.wrapper.getToggleCommand();
 						if (!toggleFn) {
