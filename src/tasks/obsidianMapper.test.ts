@@ -108,6 +108,24 @@ describe('ObsidianMapper', () => {
       expect(mapper.toCommonTask(task, 'id').title).toBe('Fix #42 and #1');
     });
 
+    // obsidian-tasks reports any `#` run up to whitespace or a few punctuation
+    // marks as a tag, so `#123;` arrives in tags[] while the title keeps it.
+    // Re-emitting it from tags[] appended another copy on every sync.
+    it('should drop issue references that obsidian-tasks reports as tags', () => {
+      const task = makeTask({
+        description: 'Follow up on #123; then close #42',
+        tags: ['#123;', '#42'],
+      });
+      const common = mapper.toCommonTask(task, 'id');
+      expect(common.title).toBe('Follow up on #123; then close #42');
+      expect(common.tags).toEqual([]);
+    });
+
+    it('should keep real tags next to issue references', () => {
+      const task = makeTask({ description: 'Review #42 #work #home;', tags: ['#42', '#work', '#home;'] });
+      expect(mapper.toCommonTask(task, 'id').tags).toEqual(['work', 'home']);
+    });
+
     it('should format moment-like dates', () => {
       const mockDate = { format: () => '2025-01-15' };
       const task = makeTask({
