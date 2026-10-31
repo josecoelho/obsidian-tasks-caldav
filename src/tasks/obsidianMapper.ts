@@ -1,7 +1,7 @@
 import { RRule } from 'rrule';
 import { CommonTask, TaskStatus, TaskPriority } from '../sync/types';
 import { ObsidianTask } from './obsidianTasksWrapper';
-import { stripInlineTags } from '../utils/inlineTags';
+import { inlineTagName, stripInlineTags } from '../utils/inlineTags';
 
 /**
  * Maps between obsidian-tasks Task objects and CommonTask.
@@ -180,7 +180,9 @@ export class ObsidianMapper {
   }
 
   private cleanTags(tags: string[]): string[] {
-    return tags.map(tag => tag.replace(/^#/, ''));
+    return tags
+      .map(inlineTagName)
+      .filter((tag): tag is string => tag !== null);
   }
 
   private mapStatus(task: ObsidianTask): TaskStatus {
